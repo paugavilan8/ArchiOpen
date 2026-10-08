@@ -445,3 +445,41 @@ export function removeControlPoints(g: Geometry, indices: Set<number>): Geometry
   const degree = Math.min(g.degree, points.length - 1)
   return { type: 'curve', degree, points, knots: clampedKnots(points.length, degree) }
 }
+
+// --- Circles through points ------------------------------------------------------------
+
+/** Center of the circle through three points, and the normal of their plane; null if collinear. */
+function circleCenter(p1: Vector3, p2: Vector3, p3: Vector3): { center: Vector3; normal: Vector3 } | null {
+  const a = p1.clone().sub(p3)
+  const b = p2.clone().sub(p3)
+  const axb = a.clone().cross(b)
+  const d = 2 * axb.lengthSq()
+  if (d < 1e-24) return null
+  const num = b.clone().multiplyScalar(a.lengthSq()).sub(a.clone().multiplyScalar(b.lengthSq())).cross(axb)
+  return { center: p3.clone().add(num.divideScalar(d)), normal: axb.normalize() }
+}
+
+/** The circle through three points (starting at the first), or null if they are collinear. */
+export function circleThrough(p1: Vector3, p2: Vector3, p3: Vector3): CircleGeometry | null {
+  const c = circleCenter(p1, p2, p3)
+  if (!c) return null
+  const xaxis = p1.clone().sub(c.center)
+  const radius = xaxis.length()
+  xaxis.normalize()
+  return { type: 'circle', center: c.center, xaxis, yaxis: c.normal.clone().cross(xaxis).normalize(), radius }
+}
+
+/** The arc from `start` through `through` to `end`, or null if the points are collinear. */
+export function arcThrough(start: Vector3, through: Vector3, end: Vector3): ArcGeometry | null {
+  const circle = circleThrough(start, through, end)
+  if (!circle) return null
+  const angleOf = (p: Vector3, y: Vector3) => {
+    const d = p.clone().sub(circle.center)
+    const t = Math.atan2(d.dot(y), d.dot(circle.xaxis))
+    return t < 0 ? t + TWO_PI : t
+  }
+  let yaxis = circle.yaxis
+  // Turn the way that passes through the middle point.
+  if (angleOf(through, yaxis) > angleOf(end, yaxis)) yaxis = yaxis.clone().negate()
+  return { type: 'arc', center: circle.center, xaxis: circle.xaxis, yaxis, radius: circle.radius, angle: angleOf(end, yaxis) }
+}
