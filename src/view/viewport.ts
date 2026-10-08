@@ -48,6 +48,8 @@ export class Viewport {
   readonly cplane: Plane
   readonly grid: THREE.Group
   readonly target = new THREE.Vector3()
+  /** Shaded viewports draw surfaces and solids filled; wireframe ones only draw their edges. */
+  shaded: boolean
   private readonly gizmo: { group: SVGGElement; line: SVGLineElement; text: SVGTextElement }[] = []
 
   private viewHeight = DEFAULT_HEIGHT
@@ -67,6 +69,7 @@ export class Viewport {
     this.camera =
       kind === 'Perspective' ? new THREE.PerspectiveCamera(FOV, 1, 0.1, 1e5) : new THREE.OrthographicCamera()
     this.grid = buildGrid(this.cplane)
+    this.shaded = kind === 'Perspective'
 
     this.el = document.createElement('div')
     this.el.className = 'viewport'

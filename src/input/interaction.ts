@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import type { Document } from '../core/document'
 import { controlPoints } from '../core/curves'
-import { snapPoints, tessellate, type SnapPoints } from '../core/geometry'
+import { snapPoints, wireframe, type SnapPoints } from '../core/geometry'
 import { editedIds, transformSelection, transformedSelection, translation } from '../core/selectionEdit'
 import type { Settings, SnapKind } from '../core/settings'
 import type { Display } from '../view/display'
@@ -313,7 +313,7 @@ export class Interaction {
     drag.delta = target.clone().sub(anchor)
     this.showMarker(vp, snap ? target : null, snap?.label ?? null)
     const moved = transformedSelection(this.doc, translation(drag.delta))
-    this.display.setPreview([...moved.values()].map((g) => tessellate(g)), true)
+    this.display.setPreview([...moved.values()].flatMap((g) => wireframe(g)), true)
     const d = target.clone().sub(plane.origin)
     this.ui.setCoords(d.dot(plane.xaxis), d.dot(plane.yaxis), d.dot(plane.normal))
   }
@@ -505,10 +505,12 @@ export class Interaction {
         }
       }
       if (enabled.near && !best) {
-        const hit = this.closestOnPolyline(vp, tessellate(obj.geometry), sx, sy)
-        if (hit && hit.distance < nearDistance) {
-          nearDistance = hit.distance
-          near = hit.point
+        for (const line of wireframe(obj.geometry)) {
+          const hit = this.closestOnPolyline(vp, line, sx, sy)
+          if (hit && hit.distance < nearDistance) {
+            nearDistance = hit.distance
+            near = hit.point
+          }
         }
       }
     }
@@ -555,13 +557,16 @@ export class Interaction {
     let result: { id: number; point: Vector3 } | null = null
     for (const obj of this.doc.objects.values()) {
       if (!this.doc.isSelectable(obj)) continue
-      const hit = this.closestOnPolyline(vp, tessellate(obj.geometry), sx, sy)
-      if (hit && hit.distance < best) {
-        best = hit.distance
-        result = { id: obj.id, point: hit.point }
+      for (const line of wireframe(obj.geometry)) {
+        const hit = this.closestOnPolyline(vp, line, sx, sy)
+        if (hit && hit.distance < best) {
+          best = hit.distance
+          result = { id: obj.id, point: hit.point }
+        }
       }
     }
-    return result
+    // In shaded views, clicking on a surface picks it too.
+    return result ?? this.display.pickShaded(vp, sx, sy, (id) => this.doc.isSelectable(this.doc.objects.get(id)!))
   }
 
   private pickWindow(vp: Viewport, x0: number, y0: number, x1: number, y1: number, crossing: boolean): number[] {
@@ -574,18 +579,20 @@ export class Interaction {
     const ids: number[] = []
     for (const obj of this.doc.objects.values()) {
       if (!this.doc.isSelectable(obj)) continue
-      const pts = tessellate(obj.geometry)
-      let allInside = pts.length > 0
+      const lines = wireframe(obj.geometry)
+      let allInside = lines.some((pts) => pts.length > 0)
       let anyTouch = false
-      let prevVisible = false
-      for (let i = 0; i < pts.length; i++) {
-        const visible = vp.project(pts[i], this.b)
-        if (!visible || !inside(this.b)) allInside = false
-        if (visible && inside(this.b)) anyTouch = true
-        if (i > 0 && visible && prevVisible && segmentHitsRect(this.a, this.b, minX, minY, maxX, maxY)) anyTouch = true
-        this.a.x = this.b.x
-        this.a.y = this.b.y
-        prevVisible = visible
+      for (const pts of lines) {
+        let prevVisible = false
+        for (let i = 0; i < pts.length; i++) {
+          const visible = vp.project(pts[i], this.b)
+          if (!visible || !inside(this.b)) allInside = false
+          if (visible && inside(this.b)) anyTouch = true
+          if (i > 0 && visible && prevVisible && segmentHitsRect(this.a, this.b, minX, minY, maxX, maxY)) anyTouch = true
+          this.a.x = this.b.x
+          this.a.y = this.b.y
+          prevVisible = visible
+        }
       }
       if (crossing ? anyTouch : allInside) ids.push(obj.id)
     }

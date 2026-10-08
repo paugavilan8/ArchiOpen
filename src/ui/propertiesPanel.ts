@@ -46,6 +46,11 @@ function geometryRows(g: Geometry): Row[] {
         ['Start', point(startPoint(g))],
         ['End', point(endPoint(g))],
       ]
+    case 'brep':
+      return [
+        ['Faces', String(g.faces)],
+        ['Kind', g.kind === 'solid' ? 'Closed solid' : g.kind === 'surface' ? 'Surface' : 'Open polysurface'],
+      ]
     case 'polycurve':
       return [
         ['Length', fmt(length(g))],

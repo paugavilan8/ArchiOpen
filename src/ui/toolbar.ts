@@ -36,6 +36,19 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'FilletCorners', tip: 'Fillet the corners of polylines', icon: 'filletCorners' },
     { macro: 'Delete', tip: 'Delete  (Del)', icon: 'delete' },
   ],
+  [
+    { macro: 'Box', tip: 'Box', icon: 'box' },
+    { macro: 'Cylinder', tip: 'Cylinder', icon: 'cylinder' },
+    { macro: 'Sphere', tip: 'Sphere', icon: 'sphere' },
+    { macro: 'ExtrudeCrv', tip: 'Extrude curve  (EXT)', icon: 'extrude' },
+    { macro: 'Revolve', tip: 'Revolve  (REV)', icon: 'revolve' },
+    { macro: 'Loft', tip: 'Loft', icon: 'loft' },
+    { macro: 'PlanarSrf', tip: 'Planar surface from closed curves', icon: 'planarSrf' },
+    { macro: 'FilletEdge', tip: 'Fillet edges  (FE)', icon: 'filletEdge' },
+    { macro: 'BooleanUnion', tip: 'Boolean union  (BU)', icon: 'booleanUnion' },
+    { macro: 'BooleanDifference', tip: 'Boolean difference  (BD)', icon: 'booleanDifference' },
+    { macro: 'BooleanIntersection', tip: 'Boolean intersection  (BI)', icon: 'booleanIntersection' },
+  ],
 ]
 
 /** File, history and view tools, in the horizontal bar under the command line. */

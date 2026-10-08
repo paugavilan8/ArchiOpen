@@ -1,8 +1,8 @@
 import { Vector3 } from 'three'
-import type { Curve, RhinoModule } from 'rhino3dm'
+import type { Curve, GeometryBase, RhinoModule } from 'rhino3dm'
 import { chain } from '../core/curves'
 import type { Layer } from '../core/document'
-import type { Geometry, SegmentGeometry } from '../core/geometry'
+import type { AnyCurve, BrepGeometry, Geometry, SegmentGeometry } from '../core/geometry'
 import { interpolate } from '../math/nurbs'
 
 /** Content read from a .3dm file, ready to be added to a document. */
@@ -52,7 +52,7 @@ interface RhinoPlane {
   yAxis: Triple
 }
 
-function arcFrom(plane: RhinoPlane, radius: number, a0: number, a1: number): Geometry {
+function arcFrom(plane: RhinoPlane, radius: number, a0: number, a1: number): AnyCurve {
   const x = vec(plane.xAxis)
   const y = vec(plane.yAxis)
   const center = vec(plane.origin)
@@ -63,14 +63,14 @@ function arcFrom(plane: RhinoPlane, radius: number, a0: number, a1: number): Geo
   return { type: 'arc', center, xaxis, yaxis, radius, angle: a1 - a0 }
 }
 
-function polylineFrom(points: Vector3[]): Geometry | null {
+function polylineFrom(points: Vector3[]): AnyCurve | null {
   if (points.length < 2) return null
   const closed = points.length > 3 && points[0].distanceTo(points[points.length - 1]) < 1e-9
   return { type: 'polyline', points: closed ? points.slice(0, -1) : points, closed }
 }
 
 /** Converts a Rhino curve, or returns null for a kind of curve that cannot be represented. */
-function readCurve(rhino: RhinoModule, c: Curve): Geometry | null {
+function readCurve(rhino: RhinoModule, c: Curve): AnyCurve | null {
   if (c instanceof rhino.LineCurve) return polylineFrom([vec(c.pointAtStart), vec(c.pointAtEnd)])
   if (c instanceof rhino.PolylineCurve) {
     const pts: Vector3[] = []
@@ -198,7 +198,7 @@ function withPlane<T extends { plane: unknown }>(shape: T, center: Vector3, xaxi
   return shape
 }
 
-function writeCurve(rhino: RhinoModule, g: Geometry): Curve {
+function writeCurve(rhino: RhinoModule, g: AnyCurve): Curve {
   switch (g.type) {
     case 'polyline': {
       if (g.points.length === 2 && !g.closed) return new rhino.LineCurve(triple(g.points[0]), triple(g.points[1]))
@@ -225,6 +225,17 @@ function writeCurve(rhino: RhinoModule, g: Geometry): Curve {
       return poly
     }
   }
+}
+
+/** A surface or solid as a Rhino mesh of its display triangles (exact breps cannot be written yet). */
+function writeMesh(rhino: RhinoModule, g: BrepGeometry): GeometryBase {
+  const mesh = new rhino.Mesh()
+  const { vertices, triangles } = g.display
+  for (let i = 0; i < vertices.length; i += 3) mesh.vertices().add(vertices[i], vertices[i + 1], vertices[i + 2])
+  for (let i = 0; i < triangles.length; i += 3) mesh.faces().addTriFace(triangles[i], triangles[i + 1], triangles[i + 2])
+  mesh.normals().computeNormals()
+  mesh.compact()
+  return mesh
 }
 
 export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Array {
@@ -261,7 +272,8 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Arr
     for (const obj of model.objects) {
       const attributes = new rhino.ObjectAttributes()
       attributes.layerIndex = indexOf.get(obj.layerId) ?? 0
-      file.objects().add(writeCurve(rhino, obj.geometry), attributes)
+      const g = obj.geometry
+      file.objects().add(g.type === 'brep' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
     }
     return file.toByteArray()
   } finally {

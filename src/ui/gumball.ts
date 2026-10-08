@@ -2,7 +2,7 @@ import { Matrix4, Vector3 } from 'three'
 import { rotationAbout, scaleAbout } from '../commands/helpers'
 import type { Command, CommandRunner } from '../commands/runner'
 import type { Document } from '../core/document'
-import { tessellate } from '../core/geometry'
+import { wireframe } from '../core/geometry'
 import { editBox, editedIds, transformedSelection, translation } from '../core/selectionEdit'
 import type { Settings } from '../core/settings'
 import type { Display } from '../view/display'
@@ -230,7 +230,7 @@ export class Gumball {
     drag.matrix = result.matrix
     drag.label = result.label
     const moved = transformedSelection(this.doc, drag.matrix)
-    this.display.setPreview([...moved.values()].map((g) => tessellate(g)), true)
+    this.display.setPreview([...moved.values()].flatMap((g) => wireframe(g)), true)
   }
 
   private dragMatrix(drag: DragState, x: number, y: number, shift: boolean): { matrix: Matrix4; label: string } | null {
@@ -266,10 +266,15 @@ export class Gumball {
         if (Math.abs(drag.startParam) < 1e-9) return null
         let f = this.axisParam(vp, origin, AXES[axis], x, y) / drag.startParam
         if (Math.abs(f) < 1e-3) f = 1e-3
-        if (shift) return { matrix: scaleAbout(origin, f), label: `×${fmt(f)}` }
+        // Surfaces and solids cannot be stretched along one axis yet, so they scale uniformly.
+        if (shift || this.hasBreps()) return { matrix: scaleAbout(origin, f), label: `×${fmt(f)}` }
         return { matrix: axisScale(origin, axis, f), label: `${AXIS_NAMES[axis]} ×${fmt(f)}` }
       }
     }
+  }
+
+  private hasBreps(): boolean {
+    return editedIds(this.doc).some((id) => this.doc.objects.get(id)?.geometry.type === 'brep')
   }
 
   private onUp(e: PointerEvent): void {
@@ -323,7 +328,9 @@ export class Gumball {
             ? translation(AXES[axis].clone().multiplyScalar(value))
             : mode === 'rotate'
               ? rotationAbout(origin, AXES[axis], (value * Math.PI) / 180)
-              : axisScale(origin, axis, value)
+              : this.hasBreps()
+                ? scaleAbout(origin, value)
+                : axisScale(origin, axis, value)
         for (const [id, g] of transformedSelection(doc, matrix)) doc.setGeometry(id, g)
       },
     }

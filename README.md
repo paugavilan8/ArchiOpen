@@ -28,10 +28,17 @@ se adjuntan a un borrador de *release*.
 - Transformación: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array`, `ArrayPolar`.
 - Edición de curvas: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet` (entre dos líneas),
   `FilletCorners` (todas las esquinas de una polilínea).
+- Superficies y sólidos (núcleo [Open CASCADE](https://dev.opencascade.org) a través de
+  [replicad](https://replicad.xyz), cargado la primera vez que se usa):
+  `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (con opción `Solid` para tapar curvas cerradas
+  planas), `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`,
+  `BooleanIntersection` y `FilletEdge` (elige aristas con clic). Se ven sombreados en Perspective
+  (cambia Wireframe/Shaded desde el menú de cada vista) y se mueven, giran, escalan y copian como
+  cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`.
 - Alias: `M`, `RO`, `SC`, `MI`, `AR`, `AP`, `TR`, `J`, `X`, `OF`, `F`, `REC`, `A`, `U`, `Z`, `ZE`,
-  `ZEA`, `ZS`.
+  `ZEA`, `ZS`, `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
 - Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
   número antes de hacer clic.
 - Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda).
@@ -50,6 +57,7 @@ se adjuntan a un borrador de *release*.
     Las superficies, mallas, textos y bloques aún no se cargan y se avisa de cuántos hay.
   - `Save` nunca sobrescribe un `.3dm` abierto (podría perder lo que no se cargó): guarda un `.archi`.
   - `Export` escribe un `.3dm` con las curvas, las capas (también las anidadas) y las unidades.
+    Las superficies y sólidos se exportan como mallas.
   - `Import` añade un `.3dm` al modelo actual, escalándolo a sus unidades.
   - `Units` cambia las unidades del modelo (sin escalar la geometría).
 

@@ -1,7 +1,7 @@
 import type { Vector3 } from 'three'
 import { closestPoint, explode as explodeCurve, join as joinCurves, split as splitCurve } from '../core/curves'
 import { filletCorners as roundCorners, filletLines } from '../core/fillet'
-import { Geometry, PolylineGeometry, tessellate } from '../core/geometry'
+import { AnyCurve, Geometry, isCurve, PolylineGeometry, tessellate } from '../core/geometry'
 import { intersect } from '../core/intersect'
 import { offset as offsetCurve } from '../core/offset'
 import { CancelError } from '../input/interaction'
@@ -9,15 +9,21 @@ import { isOption, memory, plural, valueOption } from './helpers'
 import type { Command, CommandContext } from './runner'
 
 /** Parameters where `target` meets any of the cutting objects (other than itself). */
-function cutParams(ctx: CommandContext, targetId: number, cutterIds: Iterable<number>): number[] {
-  const target = ctx.doc.objects.get(targetId)!.geometry
+function cutParams(ctx: CommandContext, target: AnyCurve, targetId: number, cutterIds: Iterable<number>): number[] {
   const params: number[] = []
   for (const id of cutterIds) {
     if (id === targetId) continue
-    const cutter = ctx.doc.objects.get(id)
-    if (cutter) for (const hit of intersect(target, cutter.geometry)) params.push(hit.ta)
+    const cutter = ctx.doc.objects.get(id)?.geometry
+    // Cutting with surfaces and solids is not supported yet.
+    if (cutter && isCurve(cutter)) for (const hit of intersect(target, cutter)) params.push(hit.ta)
   }
   return params
+}
+
+/** The geometry of an object if it is a curve. */
+function curveOf(ctx: CommandContext, id: number): AnyCurve | null {
+  const g = ctx.doc.objects.get(id)?.geometry
+  return g && isCurve(g) ? g : null
 }
 
 /** Replaces an object by several pieces on its layer, returning the new ids. */
@@ -37,12 +43,17 @@ const trim: Command = {
     for (;;) {
       const pick = await input.getPick('Select object to trim. Press Enter when done')
       if (pick.kind !== 'pick') return
-      const params = cutParams(ctx, pick.id, cutters)
+      const target = curveOf(ctx, pick.id)
+      if (!target) {
+        log('Trim works on curves for now')
+        continue
+      }
+      const params = cutParams(ctx, target, pick.id, cutters)
       if (params.length === 0) {
         log('That object does not cross any cutting object')
         continue
       }
-      const pieces = splitCurve(doc.objects.get(pick.id)!.geometry, params)
+      const pieces = splitCurve(target, params)
       // Remove the piece that was clicked; keep the others.
       let removed = 0
       let best = Infinity
@@ -71,9 +82,11 @@ const split: Command = {
     const cutters = await input.getObjects('Select cutting objects')
     let count = 0
     for (const id of targets) {
-      const params = cutParams(ctx, id, cutters)
+      const target = curveOf(ctx, id)
+      if (!target) continue
+      const params = cutParams(ctx, target, id, cutters)
       if (params.length === 0) continue
-      const pieces = splitCurve(doc.objects.get(id)!.geometry, params)
+      const pieces = splitCurve(target, params)
       if (pieces.length < 2) continue
       replaceWith(ctx, id, pieces)
       count++
@@ -87,8 +100,8 @@ const join: Command = {
   name: 'Join',
   async run(ctx) {
     const { doc, input, log } = ctx
-    const ids = await input.getObjects('Select curves to join')
-    const geometries = ids.map((id) => doc.objects.get(id)!.geometry)
+    const ids = (await input.getObjects('Select curves to join')).filter((id) => curveOf(ctx, id))
+    const geometries = ids.map((id) => curveOf(ctx, id)!)
     const chains = joinCurves(geometries)
     let joined = 0
     const result: number[] = []
@@ -114,7 +127,9 @@ const explode: Command = {
     const ids = await input.getObjects('Select curves to explode')
     let pieces = 0
     for (const id of ids) {
-      const parts = explodeCurve(doc.objects.get(id)!.geometry)
+      const curve = curveOf(ctx, id)
+      if (!curve) continue
+      const parts = explodeCurve(curve)
       if (parts.length < 2) continue
       replaceWith(ctx, id, parts)
       pieces += parts.length
@@ -144,6 +159,11 @@ const offset: Command = {
       }
       if (pick.kind !== 'pick') return
       const obj = doc.objects.get(pick.id)!
+      const curve = curveOf(ctx, pick.id)
+      if (!curve) {
+        log('Offset works on curves for now')
+        continue
+      }
       const n = pick.viewport.cplane.normal
 
       for (;;) {
@@ -152,7 +172,7 @@ const offset: Command = {
           acceptNumber: true,
           options: [valueOption('Distance', memory.offsetDistance)],
           preview: (p: Vector3) => {
-            const r = offsetCurve(obj.geometry, memory.offsetDistance, p, n)
+            const r = offsetCurve(curve, memory.offsetDistance, p, n)
             return r ? [tessellate(r)] : []
           },
         })
@@ -165,7 +185,7 @@ const offset: Command = {
           continue
         }
         if (side.kind !== 'point') return
-        const result = offsetCurve(obj.geometry, memory.offsetDistance, side.point, n)
+        const result = offsetCurve(curve, memory.offsetDistance, side.point, n)
         if (result) doc.add(result, obj.layerId)
         else log('The offset distance is too large for this curve')
         return

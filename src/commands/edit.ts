@@ -1,11 +1,11 @@
 import type { Vector3 } from 'three'
 import { removeControlPoints, translate } from '../core/curves'
-import { tessellate } from '../core/geometry'
+import { wireframe } from '../core/geometry'
 import type { Command, CommandContext } from './runner'
 
 /** Preview callback that draws the given objects displaced from `from` to the cursor. */
 function movedPreview({ doc }: CommandContext, ids: number[], from: Vector3) {
-  const outlines = ids.map((id) => tessellate(doc.objects.get(id)!.geometry))
+  const outlines = ids.flatMap((id) => wireframe(doc.objects.get(id)!.geometry))
   return (p: Vector3) => {
     const delta = p.clone().sub(from)
     return outlines.map((pts) => pts.map((q) => q.clone().add(delta)))

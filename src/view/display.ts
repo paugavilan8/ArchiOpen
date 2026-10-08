@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { Document } from '../core/document'
 import { controlPoints } from '../core/curves'
-import { expandBox, tessellate } from '../core/geometry'
+import { BrepGeometry, expandBox, wireframe } from '../core/geometry'
 import { Viewport, ViewKind } from './viewport'
 
 const GAP_COLOR = 0x15171a
@@ -12,6 +12,8 @@ const PREVIEW_COLOR = '#1b2330'
 const POINT_COLOR = '#14181d'
 const POLYGON_COLOR = '#6b7280'
 const POINT_SIZE = 7
+/** Three.js layer for shaded surfaces, so only shaded viewports draw them. */
+const SHADED_LAYER = 1
 
 const VIEW_ORDER: ViewKind[] = ['Top', 'Perspective', 'Front', 'Right']
 
@@ -26,6 +28,10 @@ export class Display {
   private readonly previewGroup = new THREE.Group()
   private readonly materials = new Map<string, THREE.LineBasicMaterial>()
   private readonly pointsGroup = new THREE.Group()
+  private readonly surfaceGroup = new THREE.Group()
+  private readonly surfaceMaterials = new Map<string, THREE.MeshStandardMaterial>()
+  private readonly headlight = new THREE.DirectionalLight(0xffffff, 1.6)
+  private readonly raycaster = new THREE.Raycaster()
   private readonly previewMaterial = new THREE.LineBasicMaterial({ color: PREVIEW_COLOR, depthTest: false })
   private readonly selectedPreviewMaterial = new THREE.LineBasicMaterial({ color: SELECTED_COLOR, depthTest: false })
   private readonly polygonMaterial = new THREE.LineBasicMaterial({ color: POLYGON_COLOR, depthTest: false })
@@ -59,7 +65,13 @@ export class Display {
     this.active.el.classList.add('active')
 
     this.previewGroup.renderOrder = 2
-    this.scene.add(this.objectsGroup, this.pointsGroup, this.previewGroup)
+    this.scene.add(this.objectsGroup, this.surfaceGroup, this.pointsGroup, this.previewGroup)
+    // Ambient sky/ground light plus a light at the camera, as in most modelers' shaded modes.
+    const ambient = new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.1)
+    ambient.layers.set(SHADED_LAYER)
+    this.headlight.layers.set(SHADED_LAYER)
+    this.scene.add(ambient, this.headlight, this.headlight.target)
+    this.raycaster.layers.set(SHADED_LAYER)
 
     new ResizeObserver(() => this.resize()).observe(container)
     doc.on(() => this.rebuildObjects())
@@ -136,14 +148,23 @@ export class Display {
 
   private rebuildObjects(): void {
     this.clearGroup(this.objectsGroup)
+    this.clearGroup(this.surfaceGroup)
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
       if (!layer.visible || this.hidden.has(obj.id)) continue
-      const color = this.doc.selection.has(obj.id) ? SELECTED_COLOR : layer.locked ? LOCKED_COLOR : layer.color
-      const geometry = new THREE.BufferGeometry().setFromPoints(tessellate(obj.geometry))
-      const line = new THREE.Line(geometry, this.material(color))
-      line.renderOrder = this.doc.selection.has(obj.id) ? 1 : 0
-      this.objectsGroup.add(line)
+      const selected = this.doc.selection.has(obj.id)
+      const color = selected ? SELECTED_COLOR : layer.locked ? LOCKED_COLOR : layer.color
+      for (const pts of wireframe(obj.geometry)) {
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), this.material(color))
+        line.renderOrder = selected ? 1 : 0
+        this.objectsGroup.add(line)
+      }
+      if (obj.geometry.type === 'brep') {
+        const mesh = new THREE.Mesh(surfaceGeometry(obj.geometry), this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked))
+        mesh.layers.set(SHADED_LAYER)
+        mesh.userData.id = obj.id
+        this.surfaceGroup.add(mesh)
+      }
     }
     this.rebuildPoints()
     this.requestRender()
@@ -176,6 +197,41 @@ export class Display {
     }
   }
 
+  /** Surface color: the layer color blended towards light gray, so dark layers still read as shapes. */
+  private surfaceMaterial(color: string, locked: boolean): THREE.MeshStandardMaterial {
+    const key = `${color}${locked ? ':locked' : ''}`
+    let material = this.surfaceMaterials.get(key)
+    if (!material) {
+      const tint = new THREE.Color(color).lerp(new THREE.Color(0xdde1e6), color === SELECTED_COLOR ? 0.35 : 0.7)
+      material = new THREE.MeshStandardMaterial({
+        color: tint,
+        roughness: 0.75,
+        metalness: 0,
+        side: THREE.DoubleSide,
+        transparent: locked,
+        opacity: locked ? 0.55 : 1,
+        // Pushed back slightly so edges drawn on the surface stay visible.
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
+      })
+      this.surfaceMaterials.set(key, material)
+    }
+    return material
+  }
+
+  /** The surface under the cursor in a shaded viewport, and the point hit on it. */
+  pickShaded(vp: Viewport, sx: number, sy: number, accept: (id: number) => boolean): { id: number; point: THREE.Vector3 } | null {
+    if (!vp.shaded) return null
+    const ndc = new THREE.Vector2((sx / vp.width) * 2 - 1, -(sy / vp.height) * 2 + 1)
+    this.raycaster.setFromCamera(ndc, vp.camera)
+    for (const hit of this.raycaster.intersectObjects(this.surfaceGroup.children, false)) {
+      const id = hit.object.userData.id as number
+      if (accept(id)) return { id, point: hit.point.clone() }
+    }
+    return null
+  }
+
   private material(color: string): THREE.LineBasicMaterial {
     let material = this.materials.get(color)
     if (!material) {
@@ -186,7 +242,7 @@ export class Display {
   }
 
   private clearGroup(group: THREE.Group): void {
-    for (const child of group.children) (child as THREE.Line | THREE.Points).geometry.dispose()
+    for (const child of group.children) (child as THREE.Line | THREE.Points | THREE.Mesh).geometry.dispose()
     group.clear()
   }
 
@@ -217,6 +273,13 @@ export class Display {
       r.setScissor(x, y, vp.width, vp.height)
       r.clear()
       for (const other of this.viewports) other.grid.visible = other === vp
+      vp.camera.layers.set(0)
+      if (vp.shaded) {
+        vp.camera.layers.enable(SHADED_LAYER)
+        this.headlight.position.copy(vp.camera.position)
+        this.headlight.target.position.copy(vp.target)
+        this.headlight.target.updateMatrixWorld()
+      }
       r.render(this.scene, vp.camera)
       for (const overlay of this.overlays) overlay(vp)
     }
@@ -230,4 +293,19 @@ function pointMaterial(color: string, size: number): THREE.PointsMaterial {
     sizeAttenuation: false,
     depthTest: false,
   })
+}
+
+const surfaceCache = new WeakMap<BrepGeometry, THREE.BufferGeometry>()
+
+/** Triangles of a brep's display mesh. Rebuilt (and disposed) with the scene, so not shared. */
+function surfaceGeometry(g: BrepGeometry): THREE.BufferGeometry {
+  const cached = surfaceCache.get(g)
+  if (cached) return cached.clone()
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(g.display.vertices, 3))
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(g.display.normals, 3))
+  geometry.setIndex(g.display.triangles)
+  geometry.computeBoundingSphere()
+  surfaceCache.set(g, geometry)
+  return geometry.clone()
 }

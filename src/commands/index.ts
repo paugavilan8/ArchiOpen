@@ -2,6 +2,7 @@ import { curveEditCommands } from './curveEdit'
 import { drawCommands } from './draw'
 import { editCommands } from './edit'
 import { fileCommands } from './file'
+import { solidCommands } from './solids'
 import { transformCommands } from './transform'
 import type { CommandRunner } from './runner'
 import { viewCommands } from './view'
@@ -21,6 +22,12 @@ const ALIASES: Record<string, string> = {
   F: 'Fillet',
   REC: 'Rectangle',
   A: 'Arc',
+  EXT: 'ExtrudeCrv',
+  REV: 'Revolve',
+  BU: 'BooleanUnion',
+  BD: 'BooleanDifference',
+  BI: 'BooleanIntersection',
+  FE: 'FilletEdge',
   U: 'Undo',
   S: 'Snap',
   O: 'Ortho',
@@ -31,6 +38,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }

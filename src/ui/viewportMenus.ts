@@ -13,8 +13,15 @@ export function installViewportMenus(display: Display, runner: CommandRunner): v
     title.addEventListener('click', () => {
       if (menuAnchor() === title) return closeMenu()
       display.setActive(vp)
+      const setShaded = (shaded: boolean) => {
+        vp.shaded = shaded
+        display.requestRender()
+      }
       openMenu(title, [
         { label: 'Maximize', action: () => display.toggleMaximize(vp), checked: () => display.isMaximized },
+        'separator',
+        { label: 'Wireframe', action: () => setShaded(false), checked: () => !vp.shaded },
+        { label: 'Shaded', action: () => setShaded(true), checked: () => vp.shaded },
         'separator',
         { label: 'Zoom Extents', shortcut: 'ZE', action: () => void runner.run('Zoom Extents') },
         { label: 'Zoom Selected', shortcut: 'ZS', action: () => void runner.run('Zoom Selected') },

@@ -1,7 +1,9 @@
 import { Matrix3, Matrix4, Vector3 } from 'three'
 import { clampedKnots, interpolate, reverseBSpline, splitBSpline } from '../math/nurbs'
 import {
+  AnyCurve,
   ArcGeometry,
+  BrepGeometry,
   CircleGeometry,
   CurveGeometry,
   domain,
@@ -45,7 +47,9 @@ function arcAsCurve(g: CircleGeometry | ArcGeometry): CurveGeometry {
  * Applies an affine transform. Under a non-uniform scale, circles and arcs cannot stay circular, so
  * they become (closely approximating) curves.
  */
+export function transform<G extends Geometry>(g: G, m: Matrix4): G extends BrepGeometry ? BrepGeometry : AnyCurve
 export function transform(g: Geometry, m: Matrix4): Geometry {
+  if (g.type === 'brep') return transformBrep(g, m)
   const linear = new Matrix3().setFromMatrix4(m)
   const point = (p: Vector3) => p.clone().applyMatrix4(m)
   switch (g.type) {
@@ -65,13 +69,46 @@ export function transform(g: Geometry, m: Matrix4): Geometry {
   }
 }
 
+/** Records the transform on the brep and moves its display data; the exact shape is updated lazily. */
+function transformBrep(g: BrepGeometry, m: Matrix4): BrepGeometry {
+  const matrix = g.matrix ? m.clone().multiply(new Matrix4().fromArray(g.matrix)) : m.clone()
+  const normalMatrix = new Matrix3().getNormalMatrix(m)
+  const p = new Vector3()
+  const mapPoints = (flat: number[], apply: (v: Vector3) => Vector3) => {
+    const out = new Array<number>(flat.length)
+    for (let i = 0; i < flat.length; i += 3) {
+      apply(p.set(flat[i], flat[i + 1], flat[i + 2]))
+      out[i] = p.x
+      out[i + 1] = p.y
+      out[i + 2] = p.z
+    }
+    return out
+  }
+  const toWorld = (v: Vector3) => v.applyMatrix4(m)
+  const toNormal = (v: Vector3) => v.applyMatrix3(normalMatrix).normalize()
+  // A mirror flips the winding of the triangles, so they are reversed to keep facing outwards.
+  const flips = m.determinant() < 0
+  const triangles = flips ? g.display.triangles.map((_, i, t) => t[i - (i % 3) + 2 - (i % 3)]) : g.display.triangles
+  return {
+    ...g,
+    matrix: matrix.toArray(),
+    display: {
+      vertices: mapPoints(g.display.vertices, toWorld),
+      normals: mapPoints(g.display.normals, toNormal),
+      triangles,
+      edges: g.display.edges.map((e) => mapPoints(e, toWorld)),
+    },
+  }
+}
+
+export function translate<G extends Geometry>(g: G, delta: Vector3): G extends BrepGeometry ? BrepGeometry : AnyCurve
 export function translate(g: Geometry, delta: Vector3): Geometry {
   return transform(g, new Matrix4().makeTranslation(delta.x, delta.y, delta.z))
 }
 
 /** Same curve, opposite direction. */
-export function reverse<G extends Geometry>(g: G): G
-export function reverse(g: Geometry): Geometry {
+export function reverse<G extends AnyCurve>(g: G): G
+export function reverse(g: AnyCurve): AnyCurve {
   switch (g.type) {
     case 'polyline':
       return { ...g, points: [...g.points].reverse() }
@@ -117,7 +154,7 @@ function subCurveOfSpline(g: CurveGeometry, t0: number, t1: number): CurveGeomet
 }
 
 /** The part of an open interval [t0, t1] of the curve, with t0 < t1. */
-function openPiece(g: Geometry, t0: number, t1: number): Geometry | null {
+function openPiece(g: AnyCurve, t0: number, t1: number): AnyCurve | null {
   if (t1 - t0 <= 1e-12) return null
   switch (g.type) {
     case 'polyline': {
@@ -145,14 +182,14 @@ function openPiece(g: Geometry, t0: number, t1: number): Geometry | null {
         i0++
         s0 = domain(g.segments[i0])[0]
       }
-      const pieces: (Geometry | null)[] = []
+      const pieces: (AnyCurve | null)[] = []
       if (i0 === i1) pieces.push(openPiece(g.segments[i0], s0, s1))
       else {
         pieces.push(openPiece(g.segments[i0], s0, domain(g.segments[i0])[1]))
         for (let i = i0 + 1; i < i1; i++) pieces.push(g.segments[i])
         pieces.push(openPiece(g.segments[i1], domain(g.segments[i1])[0], s1))
       }
-      return chain(pieces.filter((p): p is Geometry => p !== null))
+      return chain(pieces.filter((p): p is AnyCurve => p !== null))
     }
   }
 }
@@ -161,16 +198,16 @@ function openPiece(g: Geometry, t0: number, t1: number): Geometry | null {
  * The part of the curve from t0 to t1. On a closed curve, t0 >= t1 means the piece that runs
  * through the seam.
  */
-export function subCurve(g: Geometry, t0: number, t1: number): Geometry | null {
+export function subCurve(g: AnyCurve, t0: number, t1: number): AnyCurve | null {
   const [d0, d1] = domain(g)
   if (t0 < t1 || !isClosed(g)) return openPiece(g, Math.max(d0, t0), Math.min(d1, t1))
   if (g.type === 'circle') return rotatedArc(g, t0, TWO_PI - t0 + t1)
-  const pieces = [openPiece(g, t0, d1), openPiece(g, d0, t1)].filter((p): p is Geometry => p !== null)
+  const pieces = [openPiece(g, t0, d1), openPiece(g, d0, t1)].filter((p): p is AnyCurve => p !== null)
   return chain(pieces)
 }
 
 /** Cuts the curve at the given parameters. A closed curve cut at n points gives n pieces. */
-export function split(g: Geometry, params: number[]): Geometry[] {
+export function split(g: AnyCurve, params: number[]): AnyCurve[] {
   const [d0, d1] = domain(g)
   const eps = (d1 - d0) * 1e-9
   const closed = isClosed(g)
@@ -181,7 +218,7 @@ export function split(g: Geometry, params: number[]): Geometry[] {
     .filter((t, i, all) => i === 0 || t - all[i - 1] > eps)
 
   if (cuts.length === 0) return [g]
-  const pieces: (Geometry | null)[] = []
+  const pieces: (AnyCurve | null)[] = []
   if (closed) {
     for (let i = 0; i < cuts.length - 1; i++) pieces.push(subCurve(g, cuts[i], cuts[i + 1]))
     pieces.push(subCurve(g, cuts[cuts.length - 1], cuts[0]))
@@ -189,15 +226,15 @@ export function split(g: Geometry, params: number[]): Geometry[] {
     const bounds = [d0, ...cuts, d1]
     for (let i = 0; i < bounds.length - 1; i++) pieces.push(openPiece(g, bounds[i], bounds[i + 1]))
   }
-  return pieces.filter((p): p is Geometry => p !== null)
+  return pieces.filter((p): p is AnyCurve => p !== null)
 }
 
 /** Flattens curves into their segments, with polylines broken into lines. */
-export function explode(g: Geometry): Geometry[] {
+export function explode(g: AnyCurve): AnyCurve[] {
   switch (g.type) {
     case 'polyline': {
       if (g.points.length === 2 && !g.closed) return [g]
-      const lines: Geometry[] = []
+      const lines: AnyCurve[] = []
       const n = g.points.length
       for (let i = 0; i < (g.closed ? n : n - 1); i++) {
         lines.push({ type: 'polyline', points: [g.points[i].clone(), g.points[(i + 1) % n].clone()], closed: false })
@@ -215,7 +252,7 @@ export function explode(g: Geometry): Geometry[] {
  * Concatenates curves that already connect end to start, in order. Lines and polylines merge into
  * one polyline; anything else gives a polycurve. Returns null for an empty list.
  */
-export function chain(pieces: Geometry[]): Geometry | null {
+export function chain(pieces: AnyCurve[]): AnyCurve | null {
   const segments: SegmentGeometry[] = []
   for (const piece of pieces) {
     if (piece.type === 'polycurve') segments.push(...piece.segments)
@@ -242,9 +279,9 @@ export function chain(pieces: Geometry[]): Geometry | null {
  * Joins curves whose ends meet into chains. Returns one entry per chain, with the indices of the
  * input curves it used; curves that join nothing come back alone.
  */
-export function join(curves: Geometry[], tolerance = TOLERANCE): { geometry: Geometry; used: number[] }[] {
+export function join(curves: AnyCurve[], tolerance = TOLERANCE): { geometry: AnyCurve; used: number[] }[] {
   const used = new Set<number>()
-  const result: { geometry: Geometry; used: number[] }[] = []
+  const result: { geometry: AnyCurve; used: number[] }[] = []
   const near = (a: Vector3, b: Vector3) => a.distanceTo(b) <= tolerance
 
   for (let seed = 0; seed < curves.length; seed++) {
@@ -254,7 +291,7 @@ export function join(curves: Geometry[], tolerance = TOLERANCE): { geometry: Geo
       result.push({ geometry: curves[seed], used: [seed] })
       continue
     }
-    let pieces: Geometry[] = [curves[seed]]
+    let pieces: AnyCurve[] = [curves[seed]]
     const members = [seed]
     let grew = true
     while (grew) {
@@ -286,7 +323,7 @@ export function join(curves: Geometry[], tolerance = TOLERANCE): { geometry: Geo
 }
 
 /** Moves the start of a curve onto `point` (for closing tolerance-sized gaps). */
-function snapStart(g: Geometry, point: Vector3): Geometry {
+function snapStart(g: AnyCurve, point: Vector3): AnyCurve {
   if (g.type === 'polyline') return { ...g, points: [point.clone(), ...g.points.slice(1)] }
   if (g.type === 'curve') return { ...g, points: [point.clone(), ...g.points.slice(1)] }
   return g
@@ -294,7 +331,7 @@ function snapStart(g: Geometry, point: Vector3): Geometry {
 
 // --- Measurement ---------------------------------------------------------------------
 
-export function length(g: Geometry): number {
+export function length(g: AnyCurve): number {
   switch (g.type) {
     case 'circle':
       return TWO_PI * g.radius
@@ -330,7 +367,7 @@ export interface CurvePoint {
 }
 
 /** Closest point of the curve to p, refined from the display samples. */
-export function closestPoint(g: Geometry, p: Vector3): CurvePoint {
+export function closestPoint(g: AnyCurve, p: Vector3): CurvePoint {
   const { points, params } = samples(g)
   let best = Infinity
   let index = 0

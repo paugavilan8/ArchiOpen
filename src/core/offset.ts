@@ -1,10 +1,10 @@
 import { Vector3 } from 'three'
 import { interpolate } from '../math/nurbs'
 import { chain, closestPoint, explode } from './curves'
-import { domain, endPoint, Geometry, isClosed, pointAt, PolylineGeometry, startPoint, tangentAt, TOLERANCE } from './geometry'
+import { domain, endPoint, AnyCurve, isClosed, pointAt, PolylineGeometry, startPoint, tangentAt, TOLERANCE } from './geometry'
 
 /** Direction to the left of the curve at t, within the plane with normal n. */
-function leftNormal(g: Geometry, t: number, n: Vector3): Vector3 {
+function leftNormal(g: AnyCurve, t: number, n: Vector3): Vector3 {
   return n.clone().cross(tangentAt(g, t)).normalize()
 }
 
@@ -16,10 +16,10 @@ function lineIntersection(p: Vector3, u: Vector3, q: Vector3, w: Vector3, n: Vec
   return p.clone().addScaledVector(u, a)
 }
 
-const isLine = (g: Geometry): g is PolylineGeometry => g.type === 'polyline' && g.points.length === 2
+const isLine = (g: AnyCurve): g is PolylineGeometry => g.type === 'polyline' && g.points.length === 2
 
 /** Offsets one smooth piece by `distance` along its left normal (negative goes right). */
-function offsetPiece(g: Geometry, distance: number, n: Vector3): Geometry | null {
+function offsetPiece(g: AnyCurve, distance: number, n: Vector3): AnyCurve | null {
   switch (g.type) {
     case 'polyline': {
       const shift = leftNormal(g, 0.5, n).multiplyScalar(distance)
@@ -54,7 +54,7 @@ function offsetPiece(g: Geometry, distance: number, n: Vector3): Geometry | null
  * Offsets a planar curve by `distance` to the side of `through`, in the plane with normal n.
  * Corners between straight segments are extended to meet; other gaps are bridged with lines.
  */
-export function offset(g: Geometry, distance: number, through: Vector3, n: Vector3): Geometry | null {
+export function offset(g: AnyCurve, distance: number, through: Vector3, n: Vector3): AnyCurve | null {
   const hit = closestPoint(g, through)
   const side = leftNormal(g, hit.t, n).dot(through.clone().sub(hit.point)) >= 0 ? 1 : -1
   const signed = side * distance
@@ -64,9 +64,9 @@ export function offset(g: Geometry, distance: number, through: Vector3, n: Vecto
   const closed = isClosed(g)
   const pieces = explode(g).map((s) => offsetPiece(s, signed, n))
   if (pieces.some((p) => p === null)) return null
-  const parts = pieces as Geometry[]
+  const parts = pieces as AnyCurve[]
 
-  const bridges: (Geometry | null)[] = parts.map(() => null)
+  const bridges: (AnyCurve | null)[] = parts.map(() => null)
   const joints = closed ? parts.length : parts.length - 1
   for (let j = 0; j < joints; j++) {
     const a = parts[j]
@@ -86,7 +86,7 @@ export function offset(g: Geometry, distance: number, through: Vector3, n: Vecto
     bridges[j] = { type: 'polyline', points: [end, start], closed: false }
   }
   // A closed curve's first piece may have changed at the closing corner after it was visited.
-  const ordered: Geometry[] = []
+  const ordered: AnyCurve[] = []
   parts.forEach((p, j) => {
     ordered.push(p)
     if (bridges[j]) ordered.push(bridges[j]!)

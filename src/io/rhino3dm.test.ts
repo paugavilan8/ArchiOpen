@@ -4,7 +4,7 @@ import rhino3dm from 'rhino3dm/rhino3dm.module.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { length } from '../core/curves'
 import type { Layer } from '../core/document'
-import { domain, Geometry, pointAt } from '../core/geometry'
+import { AnyCurve, BrepGeometry, domain, Geometry, pointAt } from '../core/geometry'
 import { clampedKnots } from '../math/nurbs'
 import { describeSkipped, readRhinoFile, writeRhinoFile } from './rhino3dm'
 
@@ -17,6 +17,7 @@ const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
 
 /** Same shape: compare points spread along both curves. */
 function expectSameCurve(a: Geometry, b: Geometry) {
+  if (a.type === 'brep' || b.type === 'brep') throw new Error('curves expected')
   expect(length(b)).toBeCloseTo(length(a), 6)
   const [a0, a1] = domain(a)
   const [b0, b1] = domain(b)
@@ -31,7 +32,7 @@ describe('.3dm round trip', () => {
     { id: 7, name: 'Walls', color: '#c0392b', visible: false, locked: true },
     { id: 9, name: 'Plans::Doors', color: '#1e5ac8', visible: true, locked: false },
   ]
-  const geometries: Geometry[] = [
+  const geometries: AnyCurve[] = [
     { type: 'polyline', points: [v(0, 0), v(10, 0)], closed: false },
     { type: 'polyline', points: [v(0, 0), v(10, 0), v(10, 5), v(0, 5)], closed: true },
     { type: 'circle', center: v(1, 2, 3), xaxis: v(0, 1), yaxis: v(-1, 0), radius: 4 },
@@ -65,6 +66,26 @@ describe('.3dm round trip', () => {
   })
 })
 
+describe('exporting surfaces and solids', () => {
+  it('writes them as meshes of their display triangles', () => {
+    const square: BrepGeometry = {
+      type: 'brep',
+      brep: '',
+      matrix: null,
+      kind: 'surface',
+      faces: 1,
+      display: { vertices: [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], normals: [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], triangles: [0, 1, 2, 0, 2, 3], edges: [] },
+    }
+    const bytes = writeRhinoFile(rhino, { units: 'Millimeters', layers: [{ id: 1, name: 'Default', color: '#000000', visible: true, locked: false }], objects: [{ layerId: 1, geometry: square }] })
+    const file = rhino.File3dm.fromByteArray(bytes)
+    const mesh = file.objects().get(0).geometry() as InstanceType<RhinoModule['Mesh']>
+    expect(mesh).toBeInstanceOf(rhino.Mesh)
+    expect(mesh.vertices().count).toBe(4)
+    expect(mesh.faces().count).toBe(2)
+    file.destroy()
+  })
+})
+
 describe('reading Rhino content', () => {
   it('recognizes rational circles and arcs, flattens polycurves and reports what it skips', () => {
     const file = new rhino.File3dm()
@@ -89,7 +110,7 @@ describe('reading Rhino content', () => {
     const result = readRhinoFile(rhino, file.toByteArray())
     file.destroy()
     expect(result.layers[1].name).toBe('Plans::Doors')
-    const [circle, arc, polyline] = result.objects.map((o) => o.geometry)
+    const [circle, arc, polyline] = result.objects.map((o) => o.geometry as AnyCurve)
     expect(circle).toMatchObject({ type: 'circle', radius: 2 })
     expect(arc.type).toBe('arc')
     expect(length(arc)).toBeCloseTo((3 * Math.PI) / 2, 6)
@@ -110,10 +131,11 @@ describe('reading Rhino content', () => {
     file.objects().add(ellipse, new rhino.ObjectAttributes())
     const [obj] = readRhinoFile(rhino, file.toByteArray()).objects
     file.destroy()
-    expect(obj.geometry.type).toBe('curve')
-    const [t0, t1] = domain(obj.geometry)
+    const curve = obj.geometry as AnyCurve
+    expect(curve.type).toBe('curve')
+    const [t0, t1] = domain(curve)
     for (const f of [0.1, 0.3, 0.6, 0.9]) {
-      const p = pointAt(obj.geometry, t0 + (t1 - t0) * f)
+      const p = pointAt(curve, t0 + (t1 - t0) * f)
       expect((p.x * p.x) / 16 + (p.y * p.y) / 4).toBeCloseTo(1, 3)
     }
   })

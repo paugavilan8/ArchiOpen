@@ -2,7 +2,7 @@ import { Matrix4, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { clampedKnots } from '../math/nurbs'
 import { chain, closestPoint, controlPoints, explode, isSimilarity, join, length, removeControlPoints, reverse, split, subCurve, transform, withControlPoints } from './curves'
-import { ArcGeometry, CircleGeometry, CurveGeometry, domain, endPoint, Geometry, isClosed, pointAt, PolylineGeometry, startPoint } from './geometry'
+import { AnyCurve, ArcGeometry, CircleGeometry, CurveGeometry, domain, endPoint, Geometry, isClosed, pointAt, PolylineGeometry, startPoint } from './geometry'
 import { intersect } from './intersect'
 
 const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
@@ -87,7 +87,7 @@ describe('splitting', () => {
 
 describe('joining and exploding', () => {
   it('joins four lines into a closed polyline, in any order and direction', () => {
-    const parts: Geometry[] = [line(v(0, 0), v(10, 0)), line(v(0, 10), v(10, 10)), line(v(0, 10), v(0, 0)), line(v(10, 0), v(10, 10))]
+    const parts: AnyCurve[] = [line(v(0, 0), v(10, 0)), line(v(0, 10), v(10, 10)), line(v(0, 10), v(0, 0)), line(v(10, 0), v(10, 10))]
     const [result] = join(parts)
     expect(result.used.sort()).toEqual([0, 1, 2, 3])
     expect(result.geometry.type).toBe('polyline')

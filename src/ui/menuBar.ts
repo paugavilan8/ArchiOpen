@@ -73,6 +73,29 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
       ],
     ],
     [
+      'Surface',
+      [
+        item('Extrude Curve', 'ExtrudeCrv', 'EXT'),
+        item('Revolve', 'Revolve', 'REV'),
+        item('Loft', 'Loft'),
+        item('Planar Surface', 'PlanarSrf'),
+      ],
+    ],
+    [
+      'Solid',
+      [
+        item('Box', 'Box'),
+        item('Cylinder', 'Cylinder'),
+        item('Sphere', 'Sphere'),
+        'separator',
+        item('Boolean Union', 'BooleanUnion', 'BU'),
+        item('Boolean Difference', 'BooleanDifference', 'BD'),
+        item('Boolean Intersection', 'BooleanIntersection', 'BI'),
+        'separator',
+        item('Fillet Edges', 'FilletEdge', 'FE'),
+      ],
+    ],
+    [
       'Transform',
       [
         item('Move', 'Move', 'M'),

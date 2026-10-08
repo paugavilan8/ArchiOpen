@@ -1,6 +1,6 @@
 import { Matrix4, Vector3 } from 'three'
 import { transform } from '../core/curves'
-import { tessellate } from '../core/geometry'
+import { wireframe } from '../core/geometry'
 import type { CommandContext } from './runner'
 
 /** Values the editing commands remember between runs, as their defaults. */
@@ -31,7 +31,7 @@ export function transformedPreview(ctx: CommandContext, ids: number[], makeMatri
   const geometries = ids.map((id) => ctx.doc.objects.get(id)!.geometry)
   return (p: Vector3) => {
     const m = makeMatrix(p)
-    return m ? geometries.map((g) => tessellate(transform(g, m))) : []
+    return m ? geometries.flatMap((g) => wireframe(transform(g, m))) : []
   }
 }
 

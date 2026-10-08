@@ -50,8 +50,35 @@ export interface PolycurveGeometry {
   segments: SegmentGeometry[]
 }
 
+/** Triangles and edge polylines for drawing a boundary representation without the kernel. */
+export interface BrepDisplay {
+  vertices: number[]
+  normals: number[]
+  triangles: number[]
+  /** One flat [x, y, z, x, y, z, ...] polyline per edge, in the kernel's edge order. */
+  edges: number[][]
+}
+
+/**
+ * A surface, polysurface or solid. `brep` is the exact shape in Open CASCADE's text format; `matrix`
+ * is a transform (column-major 4×4) still to be applied to it, so moving a solid does not need the
+ * kernel. `display` is already transformed.
+ */
+export interface BrepGeometry {
+  type: 'brep'
+  brep: string
+  matrix: number[] | null
+  kind: 'solid' | 'surface' | 'polysurface'
+  faces: number
+  display: BrepDisplay
+}
+
+export type AnyCurve = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
+
 // Geometry values are immutable: edits produce a new value, which keeps the caches below valid.
-export type Geometry = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
+export type Geometry = AnyCurve | BrepGeometry
+
+export const isCurve = (g: Geometry): g is AnyCurve => g.type !== 'brep'
 
 export interface SnapPoints {
   end: Vector3[]
@@ -72,7 +99,7 @@ const TWO_PI = Math.PI * 2
 // [0, angle], B-splines their knot domain, and polycurves [0, segment count] with each segment
 // mapped linearly onto one unit.
 
-export function domain(g: Geometry): [number, number] {
+export function domain(g: AnyCurve): [number, number] {
   switch (g.type) {
     case 'polyline':
       return [0, g.closed ? g.points.length : g.points.length - 1]
@@ -88,7 +115,7 @@ export function domain(g: Geometry): [number, number] {
 }
 
 /** Closed curves have no ends; parameters wrap around. */
-export function isClosed(g: Geometry): boolean {
+export function isClosed(g: AnyCurve): boolean {
   switch (g.type) {
     case 'polyline':
       return g.closed
@@ -116,7 +143,7 @@ export function segmentParam(g: PolycurveGeometry, t: number): [number, number] 
   return [i, s0 + (s1 - s0) * (t - i)]
 }
 
-export function pointAt(g: Geometry, t: number): Vector3 {
+export function pointAt(g: AnyCurve, t: number): Vector3 {
   switch (g.type) {
     case 'polyline': {
       const n = g.points.length
@@ -136,16 +163,16 @@ export function pointAt(g: Geometry, t: number): Vector3 {
   }
 }
 
-export function startPoint(g: Geometry): Vector3 {
+export function startPoint(g: AnyCurve): Vector3 {
   return pointAt(g, domain(g)[0])
 }
 
-export function endPoint(g: Geometry): Vector3 {
+export function endPoint(g: AnyCurve): Vector3 {
   return pointAt(g, domain(g)[1])
 }
 
 /** Unit tangent at t, by central differences (one-sided at the ends of open curves). */
-export function tangentAt(g: Geometry, t: number): Vector3 {
+export function tangentAt(g: AnyCurve, t: number): Vector3 {
   const [t0, t1] = domain(g)
   const h = (t1 - t0) * 1e-6
   const closed = isClosed(g)
@@ -168,10 +195,10 @@ export interface Samples {
   params: number[]
 }
 
-const sampleCache = new WeakMap<Geometry, Samples>()
+const sampleCache = new WeakMap<AnyCurve, Samples>()
 const snapCache = new WeakMap<Geometry, SnapPoints>()
 
-function buildSamples(g: Geometry): Samples {
+function buildSamples(g: AnyCurve): Samples {
   const params: number[] = []
   switch (g.type) {
     case 'polyline': {
@@ -212,7 +239,7 @@ function buildSamples(g: Geometry): Samples {
 }
 
 /** Points along the curve with their parameters. Cached; must not be mutated. */
-export function samples(g: Geometry): Samples {
+export function samples(g: AnyCurve): Samples {
   let s = sampleCache.get(g)
   if (!s) {
     s = buildSamples(g)
@@ -221,13 +248,31 @@ export function samples(g: Geometry): Samples {
   return s
 }
 
-/** Display polyline for a geometry. The result is cached and must not be mutated. */
-export function tessellate(g: Geometry): Vector3[] {
+/** Display polyline for a curve. The result is cached and must not be mutated. */
+export function tessellate(g: AnyCurve): Vector3[] {
   return samples(g).points
 }
 
+const wireframeCache = new WeakMap<Geometry, Vector3[][]>()
+
+/** Polylines that draw any geometry as wires: the curve itself, or every edge of a brep. Cached. */
+export function wireframe(g: Geometry): Vector3[][] {
+  let lines = wireframeCache.get(g)
+  if (!lines) {
+    lines = isCurve(g)
+      ? [tessellate(g)]
+      : g.display.edges.map((flat) => {
+          const pts: Vector3[] = []
+          for (let i = 0; i < flat.length; i += 3) pts.push(new Vector3(flat[i], flat[i + 1], flat[i + 2]))
+          return pts
+        })
+    wireframeCache.set(g, lines)
+  }
+  return lines
+}
+
 /** Point halfway along the curve, measured by length. */
-function midPoint(g: Geometry): Vector3 {
+function midPoint(g: AnyCurve): Vector3 {
   const { points } = samples(g)
   let total = 0
   for (let i = 1; i < points.length; i++) total += points[i].distanceTo(points[i - 1])
@@ -274,6 +319,14 @@ function buildSnapPoints(g: Geometry): SnapPoints {
         snaps.quad.push(...s.quad)
       }
       break
+    case 'brep':
+      // Corners and edge midpoints of surfaces and solids.
+      for (const edge of wireframe(g)) {
+        if (edge.length < 2) continue
+        for (const p of [edge[0], edge[edge.length - 1]]) if (!snaps.end.some((q) => q.distanceTo(p) < TOLERANCE)) snaps.end.push(p)
+        snaps.mid.push(edge[Math.floor(edge.length / 2)])
+      }
+      break
   }
   return snaps
 }
@@ -288,11 +341,12 @@ export function snapPoints(g: Geometry): SnapPoints {
 }
 
 export function expandBox(box: Box3, g: Geometry): void {
-  for (const p of tessellate(g)) box.expandByPoint(p)
+  for (const line of wireframe(g)) for (const p of line) box.expandByPoint(p)
 }
 
 export function typeName(g: Geometry): string {
   if (g.type === 'polyline') return g.points.length === 2 ? 'line' : 'polyline'
+  if (g.type === 'brep') return g.kind
   return g.type
 }
 
@@ -322,6 +376,8 @@ export function geometryToJSON(g: Geometry): unknown {
       return { type: g.type, degree: g.degree, points: g.points.map(toTriple), knots: g.knots }
     case 'polycurve':
       return { type: g.type, segments: g.segments.map(geometryToJSON) }
+    case 'brep':
+      return { type: g.type, brep: g.brep, matrix: g.matrix, kind: g.kind, faces: g.faces, display: g.display }
   }
 }
 
@@ -349,6 +405,8 @@ export function geometryFromJSON(j: any): Geometry {
     }
     case 'polycurve':
       return { type: 'polycurve', segments: j.segments.map(geometryFromJSON) }
+    case 'brep':
+      return { type: 'brep', brep: j.brep, matrix: j.matrix ?? null, kind: j.kind, faces: j.faces, display: j.display }
     default:
       throw new Error(`Unknown geometry type: ${j.type}`)
   }

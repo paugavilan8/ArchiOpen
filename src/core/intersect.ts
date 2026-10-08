@@ -1,5 +1,5 @@
 import { Box3, Vector3 } from 'three'
-import { domain, Geometry, isClosed, pointAt, samples, TOLERANCE } from './geometry'
+import { domain, AnyCurve, isClosed, pointAt, samples, TOLERANCE } from './geometry'
 
 export interface Intersection {
   /** Parameter on the first curve. */
@@ -10,7 +10,7 @@ export interface Intersection {
 }
 
 /** Derivative (not normalized) by central differences. */
-function derivativeAt(g: Geometry, t: number): Vector3 {
+function derivativeAt(g: AnyCurve, t: number): Vector3 {
   const [t0, t1] = domain(g)
   const h = (t1 - t0) * 1e-7
   const a = Math.max(t0, t - h)
@@ -52,7 +52,7 @@ function segmentClosest(p0: Vector3, p1: Vector3, q0: Vector3, q1: Vector3): { s
   return { s, u, distance: pa.distanceTo(pb) }
 }
 
-function clampParam(g: Geometry, t: number): number {
+function clampParam(g: AnyCurve, t: number): number {
   const [t0, t1] = domain(g)
   if (isClosed(g)) {
     const span = t1 - t0
@@ -62,7 +62,7 @@ function clampParam(g: Geometry, t: number): number {
 }
 
 /** Newton iteration on A(ta) = B(tb), in the least-squares sense for curves in 3D. */
-function refine(a: Geometry, b: Geometry, ta: number, tb: number): { ta: number; tb: number; distance: number } {
+function refine(a: AnyCurve, b: AnyCurve, ta: number, tb: number): { ta: number; tb: number; distance: number } {
   for (let iter = 0; iter < 30; iter++) {
     const F = pointAt(a, ta).sub(pointAt(b, tb))
     if (F.lengthSq() < 1e-24) break
@@ -89,7 +89,7 @@ function boxOf(points: Vector3[], margin: number): Box3 {
 }
 
 /** Points where two curves cross or touch, within the model tolerance. */
-export function intersect(a: Geometry, b: Geometry, tolerance = TOLERANCE): Intersection[] {
+export function intersect(a: AnyCurve, b: AnyCurve, tolerance = TOLERANCE): Intersection[] {
   const sa = samples(a)
   const sb = samples(b)
   if (!boxOf(sa.points, tolerance).intersectsBox(boxOf(sb.points, tolerance))) return []

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { chain } from './curves'
-import { ArcGeometry, Geometry, PolylineGeometry, TOLERANCE } from './geometry'
+import { ArcGeometry, AnyCurve, PolylineGeometry, TOLERANCE } from './geometry'
 
 export type FilletResult = { ok: true; a: PolylineGeometry; b: PolylineGeometry; arc: ArcGeometry | null } | { ok: false; error: string }
 
@@ -66,7 +66,7 @@ function line(p: Vector3, q: Vector3): PolylineGeometry {
 }
 
 /** Rounds every corner of a polyline with radius r. Returns an error if a segment is too short. */
-export function filletCorners(g: PolylineGeometry, r: number): { ok: true; geometry: Geometry } | { ok: false; error: string } {
+export function filletCorners(g: PolylineGeometry, r: number): { ok: true; geometry: AnyCurve } | { ok: false; error: string } {
   const pts = g.points
   const n = pts.length
   const closed = g.closed && n > 2
@@ -87,7 +87,7 @@ export function filletCorners(g: PolylineGeometry, r: number): { ok: true; geome
     if (needed > available + TOLERANCE) return { ok: false, error: `The radius is too large for segment ${i + 1}` }
   }
 
-  const pieces: Geometry[] = []
+  const pieces: AnyCurve[] = []
   for (let i = 0; i < segmentCount; i++) {
     const j = (i + 1) % n
     const dir = pts[j].clone().sub(pts[i]).normalize()
