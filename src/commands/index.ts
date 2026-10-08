@@ -28,6 +28,7 @@ const ALIASES: Record<string, string> = {
   BD: 'BooleanDifference',
   BI: 'BooleanIntersection',
   FE: 'FilletEdge',
+  SW: 'Sweep1',
   U: 'Undo',
   S: 'Snap',
   O: 'Ortho',

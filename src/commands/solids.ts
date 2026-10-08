@@ -2,7 +2,27 @@ import { Vector3 } from 'three'
 import type { AnyShape } from 'replicad'
 import { AnyCurve, BrepGeometry, isCurve, tessellate, wireframe } from '../core/geometry'
 import { CancelError } from '../input/interaction'
-import { boolean, BooleanKind, box, cylinder, extrudeCurve, filletEdges, loftCurves, planarFace, revolveCurve, shapeOf, sphere, toBrep } from '../kernel/brep'
+import {
+  boolean,
+  BooleanKind,
+  box,
+  cylinder,
+  explodeShape,
+  extrudeCurve,
+  filletEdges,
+  joinShapes,
+  loftCurves,
+  nearestFace,
+  planarFace,
+  revolveCurve,
+  sectionCurves,
+  shapeOf,
+  shellSolid,
+  sphere,
+  sweep,
+  toBrep,
+} from '../kernel/brep'
+import { brepHooks } from './curveEdit'
 import { kernelReady, loadKernel } from '../kernel/loadKernel'
 import { isOption, plural, valueOption, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
@@ -15,6 +35,8 @@ const memory = {
   extrudeSolid: true,
   revolveAngle: 360,
   filletRadius: 1,
+  shellThickness: 1,
+  contourSpacing: 3,
 }
 
 async function kernel(ctx: CommandContext): Promise<void> {
@@ -349,7 +371,183 @@ const filletEdge: Command = {
   },
 }
 
+const sweep1: Command = {
+  name: 'Sweep1',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const rail = await input.getPick('Select rail (the path to sweep along)')
+    if (rail.kind !== 'pick') return
+    const path = curveOf(ctx, rail.id)
+    if (!path) throw new Error('The rail must be a curve')
+    // The cross-sections are selected next, so start from an empty selection.
+    doc.clearSelection()
+    const ids = (await input.getObjects('Select cross-section curves')).filter((id) => id !== rail.id && curveOf(ctx, id))
+    if (ids.length === 0) throw new Error('Select at least one cross-section curve')
+    await kernel(ctx)
+    const created = ids.map((id) => addShape(ctx, () => sweep(curveOf(ctx, id)!, path), 'sweep the curve', doc.objects.get(id)!.layerId))
+    doc.select(created)
+    log(`${plural('object', created.length)} created`)
+  },
+}
+
+/** Triangles of one face, as small closed outlines for highlighting it. */
+function faceOutline(g: BrepGeometry, face: number): Vector3[][] {
+  const range = g.display.faceTriangles?.[face]
+  if (!range) return []
+  const { vertices: v, triangles: t } = g.display
+  const at = (i: number) => new Vector3(v[t[i] * 3], v[t[i] * 3 + 1], v[t[i] * 3 + 2])
+  const lines: Vector3[][] = []
+  for (let i = range[0]; i < range[0] + range[1]; i += 3) lines.push([at(i), at(i + 1), at(i + 2), at(i)])
+  return lines
+}
+
+const shell: Command = {
+  name: 'Shell',
+  async run(ctx) {
+    const { doc, input, display, log } = ctx
+    await kernel(ctx)
+    let target: number | null = null
+    let geometry: BrepGeometry | null = null
+    const faces: number[] = []
+    for (;;) {
+      const pick = await input.getPick(faces.length === 0 ? 'Select faces to remove (they stay open)' : 'Select more faces. Press Enter to shell')
+      if (pick.kind !== 'pick') break
+      const g = brepOf(ctx, pick.id)
+      if (!g || g.kind !== 'solid') {
+        log('Pick a face of a closed solid')
+        continue
+      }
+      if (target !== null && pick.id !== target) {
+        log('All faces must belong to the same solid')
+        continue
+      }
+      target = pick.id
+      // Breps saved before faces were tracked get their face data from the kernel.
+      geometry ??= g.display.faceTriangles ? g : toBrep(shapeOf(g))
+      const face = nearestFace(geometry, pick.point)
+      if (face >= 0 && !faces.includes(face)) faces.push(face)
+      display.setPreview(faces.flatMap((f) => faceOutline(geometry!, f)), true)
+    }
+    display.setPreview([])
+    if (target === null || faces.length === 0 || !geometry) return
+    const thickness = await input.getNumber('Wall thickness', memory.shellThickness)
+    if (typeof thickness !== 'number' || thickness <= 0) return
+    memory.shellThickness = thickness
+    const solid = geometry
+    const layerId = doc.objects.get(target)!.layerId
+    const id = addShape(ctx, () => shellSolid(shapeOf(solid), faces, thickness), 'shell the solid (the thickness may be too large)', layerId)
+    doc.remove(target)
+    doc.select([id])
+  },
+}
+
+/** Adds section curves through the selected surfaces and solids for each plane. */
+function addSections(ctx: CommandContext, ids: number[], planes: { origin: Vector3; normal: Vector3 }[]): number {
+  let count = 0
+  for (const id of ids) {
+    const g = brepOf(ctx, id)
+    if (!g) continue
+    const shape = shapeOf(g)
+    for (const { origin, normal } of planes) {
+      for (const curve of sectionCurves(shape, origin, normal)) {
+        ctx.doc.add(curve)
+        count++
+      }
+    }
+  }
+  return count
+}
+
+const section: Command = {
+  name: 'Section',
+  async run(ctx) {
+    const { input, log } = ctx
+    const ids = (await input.getObjects('Select surfaces and solids to section')).filter((id) => brepOf(ctx, id))
+    if (ids.length === 0) throw new Error('Select surfaces or solids')
+    const start = await input.getPoint({ prompt: 'Start of section plane' })
+    if (start.kind !== 'point') return
+    const end = await input.getPoint({ prompt: 'End of section plane', base: start.point })
+    if (end.kind !== 'point') return
+    // The cutting plane stands on the drawn line, perpendicular to the construction plane.
+    const normal = end.point.clone().sub(start.point).cross(start.viewport.cplane.normal)
+    if (normal.length() < 1e-9) throw new Error('The section line has no length')
+    await kernel(ctx)
+    const count = addSections(ctx, ids, [{ origin: start.point, normal: normal.normalize() }])
+    log(count === 0 ? 'The plane does not cut the selected objects' : `${plural('section curve', count)} created`)
+  },
+}
+
+const contour: Command = {
+  name: 'Contour',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = (await input.getObjects('Select surfaces and solids to contour')).filter((id) => brepOf(ctx, id))
+    if (ids.length === 0) throw new Error('Select surfaces or solids')
+    const base = await input.getPoint({ prompt: 'Base point for contours' })
+    if (base.kind !== 'point') return
+    const end = await input.getPoint({ prompt: 'Direction perpendicular to the contours (e.g. up in a side view)', base: base.point })
+    if (end.kind !== 'point') return
+    const direction = end.point.clone().sub(base.point)
+    if (direction.length() < 1e-9) throw new Error('The direction has no length')
+    direction.normalize()
+    const spacing = await input.getNumber('Distance between contours', memory.contourSpacing)
+    if (typeof spacing !== 'number' || spacing <= 0) return
+    memory.contourSpacing = spacing
+
+    // Planes every `spacing` from the base point, across the extent of the objects.
+    let min = Infinity
+    let max = -Infinity
+    for (const id of ids) {
+      const v = brepOf(ctx, id)!.display.vertices
+      for (let i = 0; i < v.length; i += 3) {
+        const t = new Vector3(v[i], v[i + 1], v[i + 2]).sub(base.point).dot(direction)
+        min = Math.min(min, t)
+        max = Math.max(max, t)
+      }
+    }
+    const planes: { origin: Vector3; normal: Vector3 }[] = []
+    for (let k = Math.ceil(min / spacing); k * spacing <= max && planes.length < 500; k++) {
+      planes.push({ origin: base.point.clone().addScaledVector(direction, k * spacing), normal: direction })
+    }
+    await kernel(ctx)
+    const count = addSections(ctx, ids, planes)
+    doc.clearSelection()
+    log(`${plural('contour curve', count)} on ${plural('plane', planes.length)}`)
+  },
+}
+
+brepHooks.join = async (ctx, ids) => {
+  if (ids.length < 2) return null
+  await kernel(ctx)
+  const layerId = ctx.doc.objects.get(ids[0])!.layerId
+  const id = addShape(ctx, () => joinShapes(ids.map((i) => shapeOf(brepOf(ctx, i)!))), 'join the surfaces', layerId)
+  for (const i of ids) ctx.doc.remove(i)
+  ctx.doc.select([id])
+  const kind = brepOf(ctx, id)!.kind
+  return `${plural('surface', ids.length)} joined into ${kind === 'solid' ? 'a closed solid' : 'an open polysurface'}`
+}
+
+brepHooks.explode = async (ctx, ids) => {
+  const multi = ids.filter((id) => brepOf(ctx, id)!.faces > 1)
+  if (multi.length === 0) return 0
+  await kernel(ctx)
+  let count = 0
+  for (const id of multi) {
+    const layerId = ctx.doc.objects.get(id)!.layerId
+    for (const face of explodeShape(shapeOf(brepOf(ctx, id)!))) {
+      ctx.doc.add(toBrep(face), layerId)
+      count++
+    }
+    ctx.doc.remove(id)
+  }
+  return count
+}
+
 export const solidCommands: Command[] = [
+  sweep1,
+  shell,
+  section,
+  contour,
   boxCommand,
   cylinderCommand,
   sphereCommand,

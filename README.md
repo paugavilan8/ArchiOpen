@@ -32,9 +32,12 @@ se adjuntan a un borrador de *release*.
   [replicad](https://replicad.xyz), cargado la primera vez que se usa):
   `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (con opción `Solid` para tapar curvas cerradas
   planas), `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`,
-  `BooleanIntersection` y `FilletEdge` (elige aristas con clic). Se ven sombreados en Perspective
+  `BooleanIntersection`, `FilletEdge` (elige aristas con clic), `Sweep1` (perfil a lo largo de
+  un carril), `Shell` (vaciar un sólido dejando abiertas las caras elegidas), `Section` (curvas de
+  corte por un plano vertical dibujado con dos puntos) y `Contour` (cortes a intervalos, p. ej.
+  plantas por niveles). `Explode` separa una polisuperficie en caras y `Join` las une de nuevo. Se ven sombreados en Perspective
   (cambia Wireframe/Shaded desde el menú de cada vista) y se mueven, giran, escalan y copian como
-  cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
+  cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`, `SW`.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.

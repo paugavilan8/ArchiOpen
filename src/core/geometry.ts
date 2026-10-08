@@ -57,6 +57,8 @@ export interface BrepDisplay {
   triangles: number[]
   /** One flat [x, y, z, x, y, z, ...] polyline per edge, in the kernel's edge order. */
   edges: number[][]
+  /** [first index, index count] into `triangles` for each face, in the kernel's face order. */
+  faceTriangles?: number[][]
 }
 
 /**

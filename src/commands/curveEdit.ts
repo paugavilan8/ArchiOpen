@@ -96,11 +96,24 @@ const split: Command = {
   },
 }
 
+/** Joins and explodes surfaces and solids; provided by the solid commands so this module needs no kernel. */
+export const brepHooks = {
+  join: async (_ctx: CommandContext, _ids: number[]): Promise<string | null> => null,
+  explode: async (_ctx: CommandContext, _ids: number[]): Promise<number> => 0,
+}
+
 const join: Command = {
   name: 'Join',
   async run(ctx) {
     const { doc, input, log } = ctx
-    const ids = (await input.getObjects('Select curves to join')).filter((id) => curveOf(ctx, id))
+    const selected = await input.getObjects('Select curves, surfaces or solids to join')
+    const brepIds = selected.filter((id) => doc.objects.get(id)?.geometry.type === 'brep')
+    if (brepIds.length > 0) {
+      const message = await brepHooks.join(ctx, brepIds)
+      if (message) log(message)
+    }
+    const ids = selected.filter((id) => curveOf(ctx, id))
+    if (ids.length === 0) return
     const geometries = ids.map((id) => curveOf(ctx, id)!)
     const chains = joinCurves(geometries)
     let joined = 0
@@ -124,8 +137,8 @@ const explode: Command = {
   name: 'Explode',
   async run(ctx) {
     const { doc, input, log } = ctx
-    const ids = await input.getObjects('Select curves to explode')
-    let pieces = 0
+    const ids = await input.getObjects('Select objects to explode')
+    let pieces = await brepHooks.explode(ctx, ids.filter((id) => doc.objects.get(id)?.geometry.type === 'brep'))
     for (const id of ids) {
       const curve = curveOf(ctx, id)
       if (!curve) continue
@@ -135,7 +148,7 @@ const explode: Command = {
       pieces += parts.length
     }
     doc.clearSelection()
-    log(pieces === 0 ? 'Nothing to explode' : `Exploded into ${plural('curve', pieces)}`)
+    log(pieces === 0 ? 'Nothing to explode' : `Exploded into ${plural('object', pieces)}`)
   },
 }
 

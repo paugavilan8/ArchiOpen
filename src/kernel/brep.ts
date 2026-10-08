@@ -1,7 +1,8 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import * as R from 'replicad'
-import { isSimilarity } from '../core/curves'
+import { isSimilarity, join } from '../core/curves'
 import { AnyCurve, BrepGeometry, endPoint, isClosed, pointAt, startPoint } from '../core/geometry'
+import { edgeToCurve } from './edges'
 
 /**
  * Bridge between ArchiOpen geometry and the Open CASCADE kernel (through replicad). Everything here
@@ -102,6 +103,10 @@ export function toBrep(shape: AnyShape): BrepGeometry {
   // Store the exact shape without its triangulation, which would make it many times larger.
   oc().BRepTools.Clean(shape.wrapped, true)
   const brep = oc().BRepToolsWrapper.Write(shape.wrapped)
+  // Which triangles belong to which face, in the order of shape.faces.
+  const faceIndex = new Map(shape.faces.map((f, i) => [f.hashCode, i]))
+  const faceTriangles: number[][] = []
+  for (const group of mesh.faceGroups) faceTriangles[faceIndex.get(group.faceId) ?? faceTriangles.length] = [group.start, group.count]
   const faces = shape.faces.length
   const solids = (shape as R.Shape3D).solids?.length ?? 0
   return {
@@ -110,7 +115,7 @@ export function toBrep(shape: AnyShape): BrepGeometry {
     matrix: null,
     kind: solids > 0 ? 'solid' : faces === 1 ? 'surface' : 'polysurface',
     faces,
-    display: { vertices: mesh.vertices, normals: mesh.normals, triangles: mesh.triangles, edges },
+    display: { vertices: mesh.vertices, normals: mesh.normals, triangles: mesh.triangles, edges, faceTriangles },
   }
 }
 
@@ -195,6 +200,104 @@ export function filletEdges(shape: AnyShape, edgeIndices: number[], r: number): 
   const all = shape.edges
   const chosen = edgeIndices.map((i) => all[i]).filter(Boolean)
   return (shape as R.Shape3D).fillet((edge) => (chosen.some((c) => c.isSame(edge)) ? r : null))
+}
+
+/** Sweeps a profile along a rail. Closed planar profiles give solids. */
+export function sweep(profile: AnyCurve, rail: AnyCurve): AnyShape {
+  return R.genericSweep(curveToWire(profile), curveToWire(rail), {})
+}
+
+/** Hollows a solid inwards by `thickness`, leaving the given faces open. */
+export function shellSolid(shape: AnyShape, openFaces: number[], thickness: number): AnyShape {
+  const all = shape.faces
+  const open = openFaces.map((i) => all[i]).filter(Boolean)
+  return (shape as R.Shape3D).shell(thickness, (finder) => finder.inList(open))
+}
+
+/** Curves where the plane through `origin` with normal `normal` cuts the shape. */
+export function sectionCurves(shape: AnyShape, origin: Vector3, normal: Vector3): AnyCurve[] {
+  const k = oc()
+  const plane = new k.gp_Pln(new k.gp_Pnt(origin.x, origin.y, origin.z), new k.gp_Dir(normal.x, normal.y, normal.z))
+  const section = new k.BRepAlgoAPI_Section(shape.wrapped, plane, true)
+  const result = R.cast(section.Shape())
+  section.delete()
+  plane.delete()
+  const pieces = result.edges.map(edgeToCurve).filter((c): c is AnyCurve => c !== null)
+  return join(pieces).map((j) => j.geometry)
+}
+
+/** The faces of a polysurface, each as its own surface. */
+export function explodeShape(shape: AnyShape): AnyShape[] {
+  return shape.faces
+}
+
+/** Sews surfaces and polysurfaces together; a closed result becomes a solid. */
+export function joinShapes(shapes: AnyShape[], tolerance = 1e-4): AnyShape {
+  const k = oc()
+  const sewing = new k.BRepBuilderAPI_Sewing(tolerance, true, true, true, false)
+  for (const shape of shapes) for (const face of shape.faces) sewing.Add(face.wrapped)
+  sewing.Perform()
+  const sewn = R.cast(sewing.SewedShape())
+  sewing.delete()
+  if (sewn instanceof R.Shell) {
+    try {
+      return R.makeSolid([sewn])
+    } catch {
+      // Not closed: it stays an open polysurface.
+    }
+  }
+  return sewn
+}
+
+/** Index of the face of a brep closest to a point (from its display mesh), or -1. */
+export function nearestFace(g: BrepGeometry, p: Vector3): number {
+  const { vertices: v, triangles: t, faceTriangles } = g.display
+  if (!faceTriangles) return -1
+  let best = Infinity
+  let index = -1
+  const a = new Vector3()
+  const b = new Vector3()
+  const c = new Vector3()
+  const q = new Vector3()
+  faceTriangles.forEach(([start, count], face) => {
+    for (let i = start; i < start + count; i += 3) {
+      a.fromArray(v, t[i] * 3)
+      b.fromArray(v, t[i + 1] * 3)
+      c.fromArray(v, t[i + 2] * 3)
+      const d = closestOnTriangle(p, a, b, c, q).distanceTo(p)
+      if (d < best) {
+        best = d
+        index = face
+      }
+    }
+  })
+  return index
+}
+
+/** Closest point to p on triangle abc (Ericson, Real-Time Collision Detection 5.1.5). */
+function closestOnTriangle(p: Vector3, a: Vector3, b: Vector3, c: Vector3, out: Vector3): Vector3 {
+  const ab = b.clone().sub(a)
+  const ac = c.clone().sub(a)
+  const ap = p.clone().sub(a)
+  const d1 = ab.dot(ap)
+  const d2 = ac.dot(ap)
+  if (d1 <= 0 && d2 <= 0) return out.copy(a)
+  const bp = p.clone().sub(b)
+  const d3 = ab.dot(bp)
+  const d4 = ac.dot(bp)
+  if (d3 >= 0 && d4 <= d3) return out.copy(b)
+  const vc = d1 * d4 - d3 * d2
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) return out.copy(a).addScaledVector(ab, d1 / (d1 - d3))
+  const cp = p.clone().sub(c)
+  const d5 = ab.dot(cp)
+  const d6 = ac.dot(cp)
+  if (d6 >= 0 && d5 <= d6) return out.copy(c)
+  const vb = d5 * d2 - d1 * d6
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) return out.copy(a).addScaledVector(ac, d2 / (d2 - d6))
+  const va = d3 * d6 - d5 * d4
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return out.copy(b).addScaledVector(c.clone().sub(b), (d4 - d3) / (d4 - d3 + (d5 - d6)))
+  const denom = 1 / (va + vb + vc)
+  return out.copy(a).addScaledVector(ab, vb * denom).addScaledVector(ac, vc * denom)
 }
 
 /** Bounding box of a brep's display mesh (no kernel needed). */

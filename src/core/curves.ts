@@ -97,6 +97,7 @@ function transformBrep(g: BrepGeometry, m: Matrix4): BrepGeometry {
       normals: mapPoints(g.display.normals, toNormal),
       triangles,
       edges: g.display.edges.map((e) => mapPoints(e, toWorld)),
+      faceTriangles: g.display.faceTriangles,
     },
   }
 }

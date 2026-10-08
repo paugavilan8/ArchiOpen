@@ -5,7 +5,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { transform } from '../core/curves'
 import type { AnyCurve, BrepGeometry } from '../core/geometry'
 import { clampedKnots } from '../math/nurbs'
-import { boolean, box, cylinder, extrudeCurve, filletEdges, loftCurves, planarFace, revolveCurve, shapeOf, sphere, toBrep } from './brep'
+import { boolean, box, cylinder, explodeShape, extrudeCurve, filletEdges, joinShapes, loftCurves, nearestFace, planarFace, revolveCurve, sectionCurves, shapeOf, shellSolid, sphere, sweep, toBrep } from './brep'
+import { length } from '../core/curves'
 
 beforeAll(async () => {
   R.setOC(await opencascade())
@@ -116,5 +117,62 @@ describe('stored breps', () => {
   it('refuses a non-uniform scale on a solid', () => {
     const g = transform(toBrep(box(v(0, 0), v(1, 0), v(0, 1), v(0, 0, 1))), new Matrix4().makeScale(2, 1, 1)) as BrepGeometry
     expect(() => shapeOf(g)).toThrow()
+  })
+})
+
+/** Volume from a triangle mesh (OCCT's integration is unreliable on some offset shapes). */
+function meshVolume(s: R.AnyShape): number {
+  const { vertices: v, triangles: t } = s.mesh({ tolerance: 0.01, angularTolerance: 0.1 })
+  let sum = 0
+  for (let i = 0; i < t.length; i += 3) {
+    const [a, b, c] = [t[i] * 3, t[i + 1] * 3, t[i + 2] * 3]
+    sum += v[a] * (v[b + 1] * v[c + 2] - v[b + 2] * v[c + 1]) - v[a + 1] * (v[b] * v[c + 2] - v[b + 2] * v[c]) + v[a + 2] * (v[b] * v[c + 1] - v[b + 1] * v[c])
+  }
+  return Math.abs(sum / 6)
+}
+
+describe('solid tools', () => {
+  it('sweeps a closed profile along a rail into a solid', () => {
+    const profile: AnyCurve = { type: 'circle', center: v(0, 0), xaxis: v(0, 1), yaxis: v(0, 0, 1), radius: 1 }
+    const rail: AnyCurve = { type: 'polyline', points: [v(0, 0), v(10, 0)], closed: false }
+    const pipe = sweep(profile, rail)
+    expect(toBrep(pipe).kind).toBe('solid')
+    expect(volume(pipe)).toBeCloseTo(Math.PI * 10, 4)
+  })
+
+  it('finds the face under a point and hollows a box through it', () => {
+    const block = toBrep(box(v(0, 0), v(10, 0), v(0, 10), v(0, 0, 10)))
+    const top = nearestFace(block, v(5, 5, 10.2))
+    expect(top).toBeGreaterThanOrEqual(0)
+    const hollow = shellSolid(shapeOf(block), [top], 1)
+    expect(hollow.faces).toHaveLength(11)
+    // 10³ minus the 8 × 8 × 9 cavity open at the top.
+    expect(meshVolume(hollow)).toBeCloseTo(1000 - 8 * 8 * 9, 3)
+  })
+
+  it('keeps face picking working after a move', () => {
+    const block = transform(toBrep(box(v(0, 0), v(10, 0), v(0, 10), v(0, 0, 10))), new Matrix4().makeTranslation(100, 0, 0)) as BrepGeometry
+    const face = nearestFace(block, v(105, 5, 10))
+    expect(shapeOf(block).faces[face].center.z).toBeCloseTo(10, 6)
+  })
+
+  it('cuts sections through solids', () => {
+    const block = box(v(0, 0), v(10, 0), v(0, 6), v(0, 0, 3))
+    const [outline] = sectionCurves(block, v(0, 0, 1.5), v(0, 0, 1))
+    expect(outline.type).toBe('polyline')
+    expect(length(outline)).toBeCloseTo(32, 6)
+    const column = cylinder(v(0, 0), 2, 3, v(0, 0, 1))
+    const [circle] = sectionCurves(column, v(0, 0, 1), v(0, 0, 1))
+    expect(circle).toMatchObject({ type: 'circle', radius: expect.closeTo(2, 9) })
+    expect(sectionCurves(block, v(0, 0, 10), v(0, 0, 1))).toHaveLength(0)
+  })
+
+  it('explodes a solid into faces and joins them back into a solid', () => {
+    const block = box(v(0, 0), v(2, 0), v(0, 3), v(0, 0, 4))
+    const faces = explodeShape(block)
+    expect(faces).toHaveLength(6)
+    const joined = joinShapes(faces.map((f) => R.cast(f.wrapped.Reversed().Reversed())))
+    expect(toBrep(joined).kind).toBe('solid')
+    expect(volume(joined)).toBeCloseTo(24, 6)
   })
 })

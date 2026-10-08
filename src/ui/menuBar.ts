@@ -81,6 +81,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Extrude Curve', 'ExtrudeCrv', 'EXT'),
         item('Revolve', 'Revolve', 'REV'),
         item('Loft', 'Loft'),
+        item('Sweep 1 Rail', 'Sweep1'),
         item('Planar Surface', 'PlanarSrf'),
       ],
     ],
@@ -96,6 +97,10 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Boolean Intersection', 'BooleanIntersection', 'BI'),
         'separator',
         item('Fillet Edges', 'FilletEdge', 'FE'),
+        item('Shell', 'Shell'),
+        'separator',
+        item('Section', 'Section'),
+        item('Contour', 'Contour'),
       ],
     ],
     [
