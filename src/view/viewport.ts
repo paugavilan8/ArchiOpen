@@ -164,6 +164,14 @@ export class Viewport {
     cam.updateMatrixWorld(true)
   }
 
+  /** World length of one pixel at the depth of `at`, for overlays that keep a constant screen size. */
+  worldPerPixel(at: THREE.Vector3): number {
+    const cam = this.camera
+    if (cam instanceof THREE.OrthographicCamera) return (cam.top - cam.bottom) / this.height
+    const depth = at.clone().sub(cam.position).dot(cam.getWorldDirection(new THREE.Vector3()))
+    return (2 * Math.max(depth, cam.near) * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) / this.height
+  }
+
   /** Projects a world point to element pixels. Returns false if it falls outside the depth range. */
   project(p: THREE.Vector3, out: ScreenPoint): boolean {
     const v = this.tmp.copy(p).project(this.camera)

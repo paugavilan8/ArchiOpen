@@ -488,6 +488,69 @@ input:focus-visible {
   dominant-baseline: central;
 }
 
+.gumball {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.gumball .handle {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.gumball .hit {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 14;
+}
+
+.gumball .shaft,
+.gumball .arc {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.gumball .box,
+.gumball .head {
+  stroke: rgb(0 0 0 / 0.35);
+  stroke-width: 0.8;
+}
+
+.gumball .center {
+  fill: #f3f4f6;
+  stroke: #1d2024;
+  stroke-width: 1.5;
+}
+
+.gumball .handle:hover .shaft,
+.gumball .handle:hover .arc,
+.gumball .handle.active .shaft,
+.gumball .handle.active .arc {
+  stroke: #ffd400;
+  stroke-width: 3.2;
+}
+
+.gumball .handle:hover .head,
+.gumball .handle:hover .box,
+.gumball .handle.active .head,
+.gumball .handle.active .box,
+.gumball .handle:hover .center {
+  fill: #ffd400;
+}
+
+.gumball .readout {
+  fill: #fff;
+  font: 600 11px var(--mono);
+  paint-order: stroke;
+  stroke: #15171a;
+  stroke-width: 3px;
+}
+
 .snap-marker {
   position: absolute;
   top: -6px;

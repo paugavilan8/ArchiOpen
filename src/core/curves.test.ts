@@ -1,8 +1,8 @@
 import { Matrix4, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { clampedKnots } from '../math/nurbs'
-import { chain, closestPoint, explode, join, length, reverse, split, subCurve, transform } from './curves'
-import { ArcGeometry, CircleGeometry, CurveGeometry, endPoint, Geometry, isClosed, pointAt, PolylineGeometry, startPoint } from './geometry'
+import { chain, closestPoint, controlPoints, explode, isSimilarity, join, length, removeControlPoints, reverse, split, subCurve, transform, withControlPoints } from './curves'
+import { ArcGeometry, CircleGeometry, CurveGeometry, domain, endPoint, Geometry, isClosed, pointAt, PolylineGeometry, startPoint } from './geometry'
 import { intersect } from './intersect'
 
 const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
@@ -139,5 +139,35 @@ describe('closest point', () => {
     const hit = closestPoint(spline, target.clone().add(v(0, 0, 1)))
     expect(hit.t).toBeCloseTo(0.37, 4)
     expect(hit.distance).toBeCloseTo(1, 4)
+  })
+})
+
+describe('affine transforms and control points', () => {
+  it('turns a circle into a curve under a non-uniform scale', () => {
+    const m = new Matrix4().makeScale(2, 1, 1)
+    const g = transform(circle, m)
+    expect(g.type).toBe('curve')
+    // Points of the ellipse x²/100 + y²/25 = 1 lie on the result.
+    for (const t of [0.1, 0.35, 0.6, 0.85]) {
+      const [t0, t1] = domain(g)
+      const p = pointAt(g, t0 + (t1 - t0) * t)
+      expect((p.x * p.x) / 100 + (p.y * p.y) / 25).toBeCloseTo(1, 2)
+    }
+  })
+
+  it('keeps arcs as arcs under a similarity', () => {
+    expect(isSimilarity(new Matrix4().makeRotationZ(0.3).scale(v(2, 2, 2)))).toBe(true)
+    expect(isSimilarity(new Matrix4().makeScale(2, 1, 1))).toBe(false)
+  })
+
+  it('edits and removes control points', () => {
+    const pts = controlPoints(spline)!
+    const moved = withControlPoints(spline, pts.map((p, i) => (i === 1 ? p.clone().add(v(0, 1)) : p)))
+    expect(controlPoints(moved)![1].y).toBe(6)
+    const fewer = removeControlPoints(spline, new Set([1])) as CurveGeometry
+    expect(fewer.points).toHaveLength(3)
+    expect(fewer.degree).toBe(2)
+    expect(removeControlPoints(line(v(0, 0), v(1, 0)), new Set([0]))).toBeNull()
+    expect(controlPoints(circle)).toBeNull()
   })
 })

@@ -13,6 +13,7 @@ const TOGGLES: [ToggleKey, string, string][] = [
   ['gridSnap', 'Grid Snap', 'F9'],
   ['ortho', 'Ortho', 'F8'],
   ['osnap', 'Osnap', 'F3'],
+  ['gumball', 'Gumball', ''],
 ]
 
 /** Bottom bar: cursor coordinates, current layer, selection, object snaps and drawing aids. */
@@ -92,7 +93,7 @@ export class StatusBar {
     button.type = 'button'
     button.className = 'status-toggle'
     button.textContent = text
-    button.dataset.tip = `${text}  (${shortcut})`
+    button.dataset.tip = shortcut ? `${text}  (${shortcut})` : text
     button.addEventListener('click', () => this.settings.toggle(key))
     const sync = () => {
       button.classList.toggle('on', this.settings[key])

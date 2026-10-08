@@ -28,13 +28,19 @@ se adjuntan a un borrador de *release*.
 - Transformación: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array`, `ArrayPolar`.
 - Edición de curvas: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet` (entre dos líneas),
   `FilletCorners` (todas las esquinas de una polilínea).
-- Otros: `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
+- Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `New`, `Open`, `Save`, `SaveAs`.
 - Alias: `M`, `RO`, `SC`, `MI`, `AR`, `AP`, `TR`, `J`, `X`, `OF`, `F`, `REC`, `A`, `U`, `Z`, `ZE`,
   `ZEA`, `ZS`.
 - Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
   número antes de hacer clic.
 - Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda).
+- Gumball sobre la selección: flechas para mover, arcos para girar (Mayús: pasos de 15°), cajas
+  para escalar en un eje (Mayús: uniforme) y centro para mover en el plano. Un clic en una
+  flecha, arco o caja sin arrastrar pide el valor exacto.
+- Arrastrar un objeto o un punto de control seleccionado lo mueve (con referencias a objetos).
+- Puntos de control: `PointsOn` (F10) y `PointsOff` (F11) en polilíneas y curvas; se seleccionan,
+  arrastran, mueven con el gumball o se borran con Supr.
 - Referencias a objetos: End, Near, Mid, Cen, Quad. Ortho (F8), forzado a rejilla (F9).
 - Capas con color, visibilidad y bloqueo; panel de propiedades del objeto seleccionado.
 - Archivos `.archi` (JSON) con Abrir/Guardar; la sesión se recupera sola si la app se cierra.

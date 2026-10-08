@@ -1,5 +1,5 @@
 import type { Vector3 } from 'three'
-import { translate } from '../core/curves'
+import { removeControlPoints, translate } from '../core/curves'
 import { tessellate } from '../core/geometry'
 import type { Command, CommandContext } from './runner'
 
@@ -54,6 +54,22 @@ const copy: Command = {
 const del: Command = {
   name: 'Delete',
   async run({ doc, input, log }) {
+    if (doc.selectedPointCount > 0) {
+      // Selected control points are removed from their curves instead.
+      let removed = 0
+      for (const [id, indices] of [...doc.pointSelection]) {
+        const result = removeControlPoints(doc.objects.get(id)!.geometry, indices)
+        if (!result) {
+          log('Not enough points would be left on a curve')
+          continue
+        }
+        removed += indices.size
+        doc.setGeometry(id, result)
+      }
+      doc.clearPointSelection()
+      log(`${removed} control point${removed === 1 ? '' : 's'} deleted`)
+      return
+    }
     const ids = await input.getObjects('Select objects to delete')
     for (const id of ids) doc.remove(id)
     log(`${ids.length} object${ids.length === 1 ? '' : 's'} deleted`)
@@ -92,4 +108,25 @@ const redo: Command = {
   },
 }
 
-export const editCommands: Command[] = [move, copy, del, selAll, selNone, undo, redo]
+const pointsOn: Command = {
+  name: 'PointsOn',
+  history: false,
+  async run({ doc, input, log }) {
+    const ids = await input.getObjects('Select objects to show control points')
+    const changed = doc.setPointsOn(ids, true)
+    doc.clearSelection()
+    const skipped = ids.filter((id) => !doc.pointsOn.has(id)).length
+    log(`Control points on for ${changed} object${changed === 1 ? '' : 's'}` + (skipped ? `. ${skipped} skipped: circles, arcs and polycurves have no editable points yet` : ''))
+  },
+}
+
+const pointsOff: Command = {
+  name: 'PointsOff',
+  history: false,
+  repeat: false,
+  run({ doc }) {
+    doc.setPointsOn([...doc.pointsOn], false)
+  },
+}
+
+export const editCommands: Command[] = [move, copy, del, selAll, selNone, undo, redo, pointsOn, pointsOff]

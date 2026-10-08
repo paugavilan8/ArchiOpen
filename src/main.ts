@@ -7,6 +7,7 @@ import { Settings } from './core/settings'
 import { Interaction } from './input/interaction'
 import { CommandLine } from './ui/commandLine'
 import { LayersPanel } from './ui/layersPanel'
+import { Gumball } from './ui/gumball'
 import { closeMenu, isMenuOpen } from './ui/menu'
 import { buildMenuBar } from './ui/menuBar'
 import { PropertiesPanel } from './ui/propertiesPanel'
@@ -37,6 +38,7 @@ new LayersPanel(layersPane, doc, ctx.log)
 buildMenuBar(document.getElementById('menus')!, runner, ctx)
 buildToolbars(document.getElementById('toolbar')!, document.getElementById('standard-bar')!, runner)
 installViewportMenus(display, runner)
+new Gumball(display, doc, settings, runner, ctx.log)
 installTooltips()
 
 input.ui = {
@@ -44,7 +46,11 @@ input.ui = {
   log: ctx.log,
   setCoords: (x, y, z) => statusBar.setCoords(x, y, z),
 }
-runner.onIdle = () => commandLine.setIdle()
+runner.onStart = () => display.requestRender()
+runner.onIdle = () => {
+  commandLine.setIdle()
+  display.requestRender()
+}
 
 // --- Window title ----------------------------------------------------------------
 
@@ -127,6 +133,7 @@ function isTextEntry(target: EventTarget | null): boolean {
 const SHORTCUTS: Record<string, string> = { z: 'Undo', y: 'Redo', a: 'SelAll', n: 'New', o: 'Open', s: 'Save' }
 const SHIFT_SHORTCUTS: Record<string, string> = { s: 'SaveAs', z: 'Redo' }
 const FUNCTION_KEYS = { F3: 'osnap', F8: 'ortho', F9: 'gridSnap' } as const
+const FUNCTION_COMMANDS: Record<string, string> = { F10: 'PointsOn', F11: 'PointsOff' }
 
 // The command line owns the keyboard: typing anywhere goes to it, as long as no other text field has focus.
 document.addEventListener('keydown', (e) => {
@@ -136,6 +143,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     commandLine.clear()
     if (runner.busy) runner.cancel()
+    else if (doc.selectedPointCount > 0) doc.clearPointSelection()
     else doc.clearSelection()
     return
   }
@@ -151,13 +159,18 @@ document.addEventListener('keydown', (e) => {
     }
     return
   }
+  if (e.key in FUNCTION_COMMANDS) {
+    e.preventDefault()
+    void runner.run(FUNCTION_COMMANDS[e.key])
+    return
+  }
   if (e.key in FUNCTION_KEYS) {
     e.preventDefault()
     settings.toggle(FUNCTION_KEYS[e.key as keyof typeof FUNCTION_KEYS])
     return
   }
   if (isMenuOpen()) return
-  if (e.key === 'Delete' && !runner.busy && commandLine.isEmpty && doc.selection.size > 0) {
+  if (e.key === 'Delete' && !runner.busy && commandLine.isEmpty && (doc.selection.size > 0 || doc.selectedPointCount > 0)) {
     e.preventDefault()
     void runner.run('Delete')
     return
