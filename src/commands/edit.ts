@@ -1,5 +1,6 @@
 import type { Vector3 } from 'three'
-import { tessellate, translate } from '../core/geometry'
+import { translate } from '../core/curves'
+import { tessellate } from '../core/geometry'
 import type { Command, CommandContext } from './runner'
 
 /** Preview callback that draws the given objects displaced from `from` to the cursor. */

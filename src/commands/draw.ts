@@ -1,5 +1,6 @@
-import type { Vector3 } from 'three'
-import { CircleGeometry, CurveGeometry, tessellate } from '../core/geometry'
+import { Vector3 } from 'three'
+import { ArcGeometry, CircleGeometry, CurveGeometry, PolylineGeometry, tessellate } from '../core/geometry'
+import { clampedKnots } from '../math/nurbs'
 import type { Command } from './runner'
 
 const line: Command = {
@@ -68,7 +69,10 @@ const curve: Command = {
     const start = await input.getPoint({ prompt: 'Start of curve' })
     if (start.kind !== 'point') return
     const points: Vector3[] = [start.point]
-    const make = (pts: Vector3[]): CurveGeometry => ({ type: 'curve', degree: 3, points: pts })
+    const make = (pts: Vector3[]): CurveGeometry => {
+      const degree = Math.min(3, pts.length - 1)
+      return { type: 'curve', degree, points: pts, knots: clampedKnots(pts.length, degree) }
+    }
 
     for (;;) {
       const next = await input.getPoint({
@@ -87,4 +91,86 @@ const curve: Command = {
   },
 }
 
-export const drawCommands: Command[] = [line, polyline, circle, curve]
+const arc: Command = {
+  name: 'Arc',
+  async run({ doc, input }) {
+    const center = await input.getPoint({ prompt: 'Center of arc' })
+    if (center.kind !== 'point') return
+    const c = center.point
+    const { normal } = center.viewport.cplane
+    const start = await input.getPoint({ prompt: 'Start of arc', base: c })
+    if (start.kind !== 'point') return
+    const toStart = start.point.clone().sub(c)
+    toStart.addScaledVector(normal, -toStart.dot(normal))
+    const radius = toStart.length()
+    if (radius < 1e-9) throw new Error('The start point is on the center')
+    const xaxis = toStart.normalize()
+    const yaxis = normal.clone().cross(xaxis).normalize()
+
+    // The sweep follows the cursor as it goes round, so the arc can turn either way and pass 180°.
+    let previous = 0
+    let sweep = 0
+    const track = (p: Vector3) => {
+      const d = p.clone().sub(c)
+      const angle = Math.atan2(d.dot(yaxis), d.dot(xaxis))
+      let delta = angle - previous
+      if (delta > Math.PI) delta -= 2 * Math.PI
+      if (delta < -Math.PI) delta += 2 * Math.PI
+      previous = angle
+      sweep = Math.max(-2 * Math.PI, Math.min(2 * Math.PI, sweep + delta))
+      return sweep
+    }
+    const make = (angle: number): ArcGeometry =>
+      angle >= 0
+        ? { type: 'arc', center: c, xaxis, yaxis, radius, angle }
+        : { type: 'arc', center: c, xaxis, yaxis: yaxis.clone().negate(), radius, angle: -angle }
+
+    const end = await input.getPoint({
+      prompt: 'End point or angle',
+      base: c,
+      acceptNumber: true,
+      preview: (p) => {
+        const angle = track(p)
+        return Math.abs(angle) > 1e-9 ? [tessellate(make(angle))] : []
+      },
+    })
+    const angle = end.kind === 'number' ? (end.value * Math.PI) / 180 : end.kind === 'point' ? track(end.point) : 0
+    if (Math.abs(angle) > 1e-9) doc.add(make(angle))
+  },
+}
+
+const rectangle: Command = {
+  name: 'Rectangle',
+  async run({ doc, input }) {
+    const first = await input.getPoint({ prompt: 'First corner of rectangle' })
+    if (first.kind !== 'point') return
+    const a = first.point
+    const { xaxis, yaxis } = first.viewport.cplane
+    const make = (p: Vector3): PolylineGeometry | null => {
+      const d = p.clone().sub(a)
+      const dx = d.dot(xaxis)
+      const dy = d.dot(yaxis)
+      if (Math.abs(dx) < 1e-9 || Math.abs(dy) < 1e-9) return null
+      const b = a.clone().addScaledVector(xaxis, dx)
+      return {
+        type: 'polyline',
+        points: [a.clone(), b, b.clone().addScaledVector(yaxis, dy), a.clone().addScaledVector(yaxis, dy)],
+        closed: true,
+      }
+    }
+    const other = await input.getPoint({
+      prompt: 'Other corner (type r20,10 for width and height)',
+      base: a,
+      rubberBand: false,
+      preview: (p) => {
+        const r = make(p)
+        return r ? [tessellate(r)] : []
+      },
+    })
+    if (other.kind !== 'point') return
+    const result = make(other.point)
+    if (result) doc.add(result)
+  },
+}
+
+export const drawCommands: Command[] = [line, polyline, rectangle, circle, arc, curve]

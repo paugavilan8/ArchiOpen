@@ -1,0 +1,238 @@
+import type { Vector3 } from 'three'
+import { closestPoint, explode as explodeCurve, join as joinCurves, split as splitCurve } from '../core/curves'
+import { filletCorners as roundCorners, filletLines } from '../core/fillet'
+import { Geometry, PolylineGeometry, tessellate } from '../core/geometry'
+import { intersect } from '../core/intersect'
+import { offset as offsetCurve } from '../core/offset'
+import { CancelError } from '../input/interaction'
+import { isOption, memory, plural, valueOption } from './helpers'
+import type { Command, CommandContext } from './runner'
+
+/** Parameters where `target` meets any of the cutting objects (other than itself). */
+function cutParams(ctx: CommandContext, targetId: number, cutterIds: Iterable<number>): number[] {
+  const target = ctx.doc.objects.get(targetId)!.geometry
+  const params: number[] = []
+  for (const id of cutterIds) {
+    if (id === targetId) continue
+    const cutter = ctx.doc.objects.get(id)
+    if (cutter) for (const hit of intersect(target, cutter.geometry)) params.push(hit.ta)
+  }
+  return params
+}
+
+/** Replaces an object by several pieces on its layer, returning the new ids. */
+function replaceWith(ctx: CommandContext, id: number, pieces: Geometry[]): number[] {
+  const obj = ctx.doc.objects.get(id)!
+  ctx.doc.remove(id)
+  return pieces.map((g) => ctx.doc.add(g, obj.layerId).id)
+}
+
+const trim: Command = {
+  name: 'Trim',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const cutters = new Set(await input.getObjects('Select cutting objects'))
+    doc.select(cutters)
+
+    for (;;) {
+      const pick = await input.getPick('Select object to trim. Press Enter when done')
+      if (pick.kind !== 'pick') return
+      const params = cutParams(ctx, pick.id, cutters)
+      if (params.length === 0) {
+        log('That object does not cross any cutting object')
+        continue
+      }
+      const pieces = splitCurve(doc.objects.get(pick.id)!.geometry, params)
+      // Remove the piece that was clicked; keep the others.
+      let removed = 0
+      let best = Infinity
+      pieces.forEach((piece, i) => {
+        const d = closestPoint(piece, pick.point).distance
+        if (d < best) {
+          best = d
+          removed = i
+        }
+      })
+      const wasCutter = cutters.delete(pick.id)
+      const kept = replaceWith(ctx, pick.id, pieces.filter((_, i) => i !== removed))
+      // A trimmed cutting object keeps cutting with what is left of it.
+      if (wasCutter) for (const id of kept) cutters.add(id)
+      doc.select(cutters)
+    }
+  },
+}
+
+const split: Command = {
+  name: 'Split',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const targets = await input.getObjects('Select objects to split')
+    doc.clearSelection()
+    const cutters = await input.getObjects('Select cutting objects')
+    let count = 0
+    for (const id of targets) {
+      const params = cutParams(ctx, id, cutters)
+      if (params.length === 0) continue
+      const pieces = splitCurve(doc.objects.get(id)!.geometry, params)
+      if (pieces.length < 2) continue
+      replaceWith(ctx, id, pieces)
+      count++
+    }
+    doc.clearSelection()
+    log(count === 0 ? 'Nothing was split: the objects do not cross the cutting objects' : `${plural('object', count)} split`)
+  },
+}
+
+const join: Command = {
+  name: 'Join',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = await input.getObjects('Select curves to join')
+    const geometries = ids.map((id) => doc.objects.get(id)!.geometry)
+    const chains = joinCurves(geometries)
+    let joined = 0
+    const result: number[] = []
+    for (const chain of chains) {
+      if (chain.used.length < 2) {
+        result.push(ids[chain.used[0]])
+        continue
+      }
+      const layerId = doc.objects.get(ids[chain.used[0]])!.layerId
+      for (const i of chain.used) doc.remove(ids[i])
+      result.push(doc.add(chain.geometry, layerId).id)
+      joined += chain.used.length
+    }
+    doc.select(result)
+    log(joined === 0 ? 'No curves could be joined: their ends do not meet' : `${plural('curve', joined)} joined into ${plural('curve', chains.filter((c) => c.used.length > 1).length)}`)
+  },
+}
+
+const explode: Command = {
+  name: 'Explode',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = await input.getObjects('Select curves to explode')
+    let pieces = 0
+    for (const id of ids) {
+      const parts = explodeCurve(doc.objects.get(id)!.geometry)
+      if (parts.length < 2) continue
+      replaceWith(ctx, id, parts)
+      pieces += parts.length
+    }
+    doc.clearSelection()
+    log(pieces === 0 ? 'Nothing to explode' : `Exploded into ${plural('curve', pieces)}`)
+  },
+}
+
+/** Asks for a positive (or, with allowZero, non-negative) value until one is given. */
+async function askDistance(ctx: CommandContext, prompt: string, value: number, allowZero = false): Promise<number> {
+  const result = await ctx.input.getNumber(prompt, value)
+  if (typeof result !== 'number') throw new CancelError()
+  if (result < 0 || (!allowZero && result === 0)) throw new Error(`${prompt} must be ${allowZero ? 'zero or more' : 'more than zero'}`)
+  return result
+}
+
+const offset: Command = {
+  name: 'Offset',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    for (;;) {
+      const pick = await input.getPick('Select curve to offset', [valueOption('Distance', memory.offsetDistance)])
+      if (pick.kind === 'option') {
+        memory.offsetDistance = await askDistance(ctx, 'Offset distance', memory.offsetDistance)
+        continue
+      }
+      if (pick.kind !== 'pick') return
+      const obj = doc.objects.get(pick.id)!
+      const n = pick.viewport.cplane.normal
+
+      for (;;) {
+        const side = await input.getPoint({
+          prompt: 'Side to offset (or type a distance)',
+          acceptNumber: true,
+          options: [valueOption('Distance', memory.offsetDistance)],
+          preview: (p: Vector3) => {
+            const r = offsetCurve(obj.geometry, memory.offsetDistance, p, n)
+            return r ? [tessellate(r)] : []
+          },
+        })
+        if (side.kind === 'number') {
+          if (side.value > 0) memory.offsetDistance = side.value
+          continue
+        }
+        if (side.kind === 'option') {
+          memory.offsetDistance = await askDistance(ctx, 'Offset distance', memory.offsetDistance)
+          continue
+        }
+        if (side.kind !== 'point') return
+        const result = offsetCurve(obj.geometry, memory.offsetDistance, side.point, n)
+        if (result) doc.add(result, obj.layerId)
+        else log('The offset distance is too large for this curve')
+        return
+      }
+    }
+  },
+}
+
+const isLine = (g: Geometry): g is PolylineGeometry => g.type === 'polyline' && g.points.length === 2 && !g.closed
+
+/** Picks a line for Fillet, handling the Radius option. Returns null when the user presses Enter. */
+async function pickLine(ctx: CommandContext, prompt: string): Promise<{ id: number; point: Vector3; line: PolylineGeometry } | null> {
+  for (;;) {
+    const pick = await ctx.input.getPick(prompt, [valueOption('Radius', memory.filletRadius)])
+    if (pick.kind === 'option') {
+      memory.filletRadius = await askDistance(ctx, 'Fillet radius', memory.filletRadius, true)
+      continue
+    }
+    if (pick.kind !== 'pick') return null
+    const g = ctx.doc.objects.get(pick.id)!.geometry
+    const type = g.type
+    if (isLine(g)) return { id: pick.id, point: pick.point, line: g }
+    ctx.log(type === 'polyline' ? 'Pick a single line. To round the corners of a polyline, use FilletCorners' : 'Fillet works with lines for now')
+  }
+}
+
+const fillet: Command = {
+  name: 'Fillet',
+  async run(ctx) {
+    const { doc } = ctx
+    const first = await pickLine(ctx, 'Select first line to fillet')
+    if (!first) return
+    doc.select([first.id])
+    const second = await pickLine(ctx, 'Select second line to fillet')
+    if (!second) return
+    if (second.id === first.id) throw new Error('Pick two different lines')
+
+    const result = filletLines(first.line, first.point, second.line, second.point, memory.filletRadius)
+    if (!result.ok) throw new Error(result.error)
+    const layerId = doc.objects.get(first.id)!.layerId
+    doc.setGeometry(first.id, result.a)
+    doc.setGeometry(second.id, result.b)
+    if (result.arc) doc.add(result.arc, layerId)
+    doc.clearSelection()
+  },
+}
+
+const filletCorners: Command = {
+  name: 'FilletCorners',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = await input.getObjects('Select polylines')
+    memory.filletRadius = await askDistance(ctx, 'Fillet radius', memory.filletRadius)
+    let count = 0
+    for (const id of ids) {
+      const g = doc.objects.get(id)!.geometry
+      if (g.type !== 'polyline' || g.points.length < 3) continue
+      const result = roundCorners(g, memory.filletRadius)
+      if (!result.ok) {
+        log(result.error)
+        continue
+      }
+      doc.setGeometry(id, result.geometry)
+      count++
+    }
+    log(`${plural('polyline', count)} filleted`)
+  },
+}
+
+export const curveEditCommands: Command[] = [trim, split, join, explode, offset, fillet, filletCorners]

@@ -12,12 +12,28 @@ const SIDE_TOOLS: Tool[][] = [
   [
     { macro: 'Line', tip: 'Line', icon: 'line' },
     { macro: 'Polyline', tip: 'Polyline', icon: 'polyline' },
+    { macro: 'Rectangle', tip: 'Rectangle  (REC)', icon: 'rectangle' },
     { macro: 'Circle', tip: 'Circle', icon: 'circle' },
+    { macro: 'Arc', tip: 'Arc: center, start, end  (A)', icon: 'arc' },
     { macro: 'Curve', tip: 'Control point curve', icon: 'curve' },
   ],
   [
     { macro: 'Move', tip: 'Move  (M)', icon: 'move' },
     { macro: 'Copy', tip: 'Copy', icon: 'copy' },
+    { macro: 'Rotate', tip: 'Rotate  (RO)', icon: 'rotate' },
+    { macro: 'Scale', tip: 'Scale  (SC)', icon: 'scale' },
+    { macro: 'Mirror', tip: 'Mirror  (MI)', icon: 'mirror' },
+    { macro: 'Array', tip: 'Rectangular array  (AR)', icon: 'array' },
+    { macro: 'ArrayPolar', tip: 'Polar array  (AP)', icon: 'arrayPolar' },
+  ],
+  [
+    { macro: 'Trim', tip: 'Trim  (TR)', icon: 'trim' },
+    { macro: 'Split', tip: 'Split', icon: 'split' },
+    { macro: 'Join', tip: 'Join  (J)', icon: 'join' },
+    { macro: 'Explode', tip: 'Explode  (X)', icon: 'explode' },
+    { macro: 'Offset', tip: 'Offset  (OF)', icon: 'offset' },
+    { macro: 'Fillet', tip: 'Fillet two lines  (F)', icon: 'fillet' },
+    { macro: 'FilletCorners', tip: 'Fillet the corners of polylines', icon: 'filletCorners' },
     { macro: 'Delete', tip: 'Delete  (Del)', icon: 'delete' },
   ],
 ]
