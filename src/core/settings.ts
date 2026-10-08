@@ -1,10 +1,11 @@
 export type SnapKind = 'end' | 'near' | 'mid' | 'cen' | 'quad'
-export type ToggleKey = 'gridSnap' | 'ortho' | 'osnap'
+export type ToggleKey = 'gridSnap' | 'ortho' | 'osnap' | 'gumball'
 
 export class Settings {
   gridSnap = false
   ortho = false
   osnap = true
+  gumball = true
   gridSpacing = 1
   readonly snaps: Record<SnapKind, boolean> = { end: true, near: false, mid: true, cen: true, quad: false }
 

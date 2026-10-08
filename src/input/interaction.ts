@@ -1,6 +1,8 @@
 import { Vector3 } from 'three'
 import type { Document } from '../core/document'
+import { controlPoints } from '../core/curves'
 import { snapPoints, tessellate, type SnapPoints } from '../core/geometry'
+import { editedIds, transformSelection, transformedSelection, translation } from '../core/selectionEdit'
 import type { Settings, SnapKind } from '../core/settings'
 import type { Display } from '../view/display'
 import type { ScreenPoint, Viewport } from '../view/viewport'
@@ -44,6 +46,10 @@ interface Request {
 }
 
 interface Drag {
+  /** Set when the drag started on a selected object or control point: the drag moves the selection. */
+  anchor?: Vector3
+  /** Where the dragged selection currently goes, relative to the anchor. */
+  delta?: Vector3
   button: number
   startX: number
   startY: number
@@ -237,7 +243,8 @@ export class Interaction {
   }
 
   private onDown(vp: Viewport, e: PointerEvent): void {
-    if (vp.titleEl.contains(e.target as Node)) return
+    // Overlays with their own handling (viewport title, gumball) opt out of picking.
+    if (vp.titleEl.contains(e.target as Node) || (e.target as Element).closest('[data-no-pick]')) return
     this.display.setActive(vp)
     vp.updateCamera()
     const pos = localPosition(vp, e)
@@ -256,6 +263,65 @@ export class Interaction {
 
     vp.el.setPointerCapture(e.pointerId)
     this.drag = { button: e.button, startX: pos.x, startY: pos.y, lastX: pos.x, lastY: pos.y, moved: false }
+    // With no command running, pressing on a control point or an object grabs it, so a drag moves it.
+    if (e.button === 0 && !this.request && !e.shiftKey && !e.ctrlKey) this.drag.anchor = this.grab(vp, pos.x, pos.y) ?? undefined
+  }
+
+  /** Selects what is under the cursor for dragging, and returns the point it is held by. */
+  private grab(vp: Viewport, sx: number, sy: number): Vector3 | null {
+    const cp = this.pickControlPoint(vp, sx, sy)
+    if (cp) {
+      if (!this.doc.pointSelection.get(cp.id)?.has(cp.index)) {
+        this.doc.clearSelection()
+        this.doc.selectPoints([cp])
+      }
+      return cp.point
+    }
+    const hit = this.pickPoint(vp, sx, sy)
+    if (!hit) return null
+    if (!this.doc.selection.has(hit.id)) {
+      this.doc.clearPointSelection()
+      this.doc.select([hit.id])
+    }
+    return this.doc.selectedPointCount > 0 ? null : hit.point
+  }
+
+  /** Moves the grabbed selection with the cursor, in the construction plane through the grab point. */
+  private dragSelection(vp: Viewport, drag: Drag, sx: number, sy: number, shift: boolean): void {
+    const anchor = drag.anchor!
+    if (!drag.delta) this.display.setHidden(editedIds(this.doc))
+    const snap = this.settings.osnap ? this.findSnap(vp, sx, sy) : null
+    let target = snap?.point ?? vp.screenToPlane(sx, sy, anchor, vp.cplane.normal)
+    if (!target) return
+    const plane = vp.cplane
+    if (!snap) {
+      if (this.settings.gridSnap) {
+        const s = this.settings.gridSpacing
+        const d = target.clone().sub(anchor)
+        target = anchor
+          .clone()
+          .addScaledVector(plane.xaxis, Math.round(d.dot(plane.xaxis) / s) * s)
+          .addScaledVector(plane.yaxis, Math.round(d.dot(plane.yaxis) / s) * s)
+      }
+      if (this.settings.ortho !== shift) {
+        const d = target.clone().sub(anchor)
+        const dx = d.dot(plane.xaxis)
+        const dy = d.dot(plane.yaxis)
+        target = anchor.clone().addScaledVector(Math.abs(dx) >= Math.abs(dy) ? plane.xaxis : plane.yaxis, Math.abs(dx) >= Math.abs(dy) ? dx : dy)
+      }
+    }
+    drag.delta = target.clone().sub(anchor)
+    this.showMarker(vp, snap ? target : null, snap?.label ?? null)
+    const moved = transformedSelection(this.doc, translation(drag.delta))
+    this.display.setPreview([...moved.values()].map((g) => tessellate(g)), true)
+    const d = target.clone().sub(plane.origin)
+    this.ui.setCoords(d.dot(plane.xaxis), d.dot(plane.yaxis), d.dot(plane.normal))
+  }
+
+  private endSelectionDrag(): void {
+    this.display.setHidden([])
+    this.display.setPreview([])
+    this.marker.hidden = true
   }
 
   private onMove(vp: Viewport, e: PointerEvent): void {
@@ -265,7 +331,10 @@ export class Interaction {
 
     if (drag) {
       if (Math.hypot(pos.x - drag.startX, pos.y - drag.startY) > DRAG_THRESHOLD) drag.moved = true
-      if (drag.moved && drag.button === 0) this.showSelectionBox(vp, drag, pos)
+      if (drag.moved && drag.button === 0) {
+        if (drag.anchor) this.dragSelection(vp, drag, pos.x, pos.y, e.shiftKey)
+        else this.showSelectionBox(vp, drag, pos)
+      }
       if (drag.moved && drag.button !== 0) {
         // Right drag orbits the perspective view and pans the parallel ones; Shift or the middle button always pan.
         if (drag.button === 1 || vp.isOrtho || e.shiftKey) vp.pan(drag.lastX, drag.lastY, pos.x, pos.y)
@@ -301,15 +370,67 @@ export class Interaction {
     if (drag.button === 2 && !drag.moved) return this.onRightClick()
     if (drag.button !== 0) return
 
+    if (drag.anchor && drag.moved) {
+      // endDrag() above already removed the preview.
+      if (drag.delta && drag.delta.lengthSq() > 0) transformSelection(this.doc, translation(drag.delta))
+      return
+    }
+
     const mode = e.shiftKey ? 'add' : e.ctrlKey ? 'remove' : 'replace'
     if (drag.moved) {
       // Dragging left to right selects what is fully inside; right to left also takes what it crosses.
       const crossing = pos.x < drag.startX
+      const points = this.pickPointsInWindow(vp, drag.startX, drag.startY, pos.x, pos.y)
+      if (points.length > 0 && this.request?.kind !== 'objects') {
+        if (mode === 'replace') this.doc.clearSelection()
+        this.doc.selectPoints(points, mode)
+        return
+      }
+      if (mode === 'replace') this.doc.clearPointSelection()
       this.doc.select(this.pickWindow(vp, drag.startX, drag.startY, pos.x, pos.y, crossing), mode)
-    } else {
-      const id = this.pickObject(vp, pos.x, pos.y)
-      this.doc.select(id === null ? [] : [id], mode)
+      return
     }
+    const cp = this.request?.kind === 'objects' ? null : this.pickControlPoint(vp, pos.x, pos.y)
+    if (cp) {
+      if (mode === 'replace') this.doc.clearSelection()
+      this.doc.selectPoints([cp], mode)
+      return
+    }
+    if (mode === 'replace') this.doc.clearPointSelection()
+    const id = this.pickObject(vp, pos.x, pos.y)
+    this.doc.select(id === null ? [] : [id], mode)
+  }
+
+  /** The control point under the cursor, among objects with points on. */
+  private pickControlPoint(vp: Viewport, sx: number, sy: number): { id: number; index: number; point: Vector3 } | null {
+    let best = PICK_TOLERANCE + 2
+    let result: { id: number; index: number; point: Vector3 } | null = null
+    for (const id of this.doc.pointsOn) {
+      const pts = controlPoints(this.doc.objects.get(id)!.geometry) ?? []
+      pts.forEach((p, index) => {
+        if (!vp.project(p, this.a)) return
+        const d = Math.hypot(this.a.x - sx, this.a.y - sy)
+        if (d < best) {
+          best = d
+          result = { id, index, point: p.clone() }
+        }
+      })
+    }
+    return result
+  }
+
+  private pickPointsInWindow(vp: Viewport, x0: number, y0: number, x1: number, y1: number): { id: number; index: number }[] {
+    const found: { id: number; index: number }[] = []
+    for (const id of this.doc.pointsOn) {
+      const pts = controlPoints(this.doc.objects.get(id)!.geometry) ?? []
+      pts.forEach((p, index) => {
+        if (!vp.project(p, this.a)) return
+        if (this.a.x >= Math.min(x0, x1) && this.a.x <= Math.max(x0, x1) && this.a.y >= Math.min(y0, y1) && this.a.y <= Math.max(y0, y1)) {
+          found.push({ id, index })
+        }
+      })
+    }
+    return found
   }
 
   /** Set by the command runner: a right click with no pending request repeats the last command. */
@@ -321,6 +442,7 @@ export class Interaction {
   }
 
   private endDrag(): void {
+    if (this.drag?.anchor && this.drag.moved) this.endSelectionDrag()
     this.drag = null
     this.selectionBox.hidden = true
   }
@@ -369,7 +491,7 @@ export class Interaction {
     let nearDistance = SNAP_TOLERANCE
 
     for (const obj of this.doc.objects.values()) {
-      if (!this.doc.isVisible(obj)) continue
+      if (!this.doc.isVisible(obj) || this.display.isHidden(obj.id)) continue
       const snaps = snapPoints(obj.geometry)
       for (const kind of POINT_SNAPS) {
         if (!enabled[kind]) continue

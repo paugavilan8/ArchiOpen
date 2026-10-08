@@ -1,3 +1,4 @@
+import { controlPoints } from './curves'
 import { Geometry, geometryFromJSON, geometryToJSON } from './geometry'
 
 export interface Layer {
@@ -32,6 +33,10 @@ function defaultLayers(): Layer[] {
 export class Document {
   readonly objects = new Map<number, CadObject>()
   readonly selection = new Set<number>()
+  /** Objects whose control points are shown and editable. */
+  readonly pointsOn = new Set<number>()
+  /** Selected control points, by object id. */
+  readonly pointSelection = new Map<number, Set<number>>()
   layers: Layer[] = defaultLayers()
   currentLayerId = 1
   /** True when there are changes since the document was created, opened or saved. */
@@ -178,6 +183,62 @@ export class Document {
       const obj = this.objects.get(id)
       if (!obj || !this.isSelectable(obj)) this.selection.delete(id)
     }
+    for (const id of this.pointsOn) {
+      const obj = this.objects.get(id)
+      if (!obj || !this.isSelectable(obj) || !controlPoints(obj.geometry)) this.pointsOn.delete(id)
+    }
+    for (const [id, indices] of this.pointSelection) {
+      const count = this.pointsOn.has(id) ? controlPoints(this.objects.get(id)!.geometry)!.length : 0
+      for (const i of indices) if (i >= count) indices.delete(i)
+      if (indices.size === 0) this.pointSelection.delete(id)
+    }
+  }
+
+  // --- Control points ----------------------------------------------------------------
+
+  /** Shows or hides the control points of objects. Returns how many objects changed. */
+  setPointsOn(ids: Iterable<number>, on: boolean): number {
+    let changed = 0
+    for (const id of ids) {
+      const obj = this.objects.get(id)
+      if (on && obj && this.isSelectable(obj) && controlPoints(obj.geometry) && !this.pointsOn.has(id)) {
+        this.pointsOn.add(id)
+        changed++
+      } else if (!on && this.pointsOn.delete(id)) {
+        this.pointSelection.delete(id)
+        changed++
+      }
+    }
+    if (changed) this.emit('selection')
+    return changed
+  }
+
+  get selectedPointCount(): number {
+    let n = 0
+    for (const indices of this.pointSelection.values()) n += indices.size
+    return n
+  }
+
+  selectPoints(points: Iterable<{ id: number; index: number }>, mode: SelectMode = 'replace'): void {
+    if (mode === 'replace') this.pointSelection.clear()
+    for (const { id, index } of points) {
+      if (!this.pointsOn.has(id)) continue
+      let indices = this.pointSelection.get(id)
+      if (mode === 'remove') {
+        indices?.delete(index)
+        if (indices?.size === 0) this.pointSelection.delete(id)
+        continue
+      }
+      if (!indices) this.pointSelection.set(id, (indices = new Set()))
+      indices.add(index)
+    }
+    this.emit('selection')
+  }
+
+  clearPointSelection(): void {
+    if (this.pointSelection.size === 0) return
+    this.pointSelection.clear()
+    this.emit('selection')
   }
 
   // --- Layers ----------------------------------------------------------------
@@ -257,6 +318,8 @@ export class Document {
     this.objects.clear()
     for (const obj of objects) this.objects.set(obj.id, obj)
     this.selection.clear()
+    this.pointsOn.clear()
+    this.pointSelection.clear()
     this.nextObjectId = Math.max(0, ...objects.map((o) => o.id)) + 1
     this.nextLayerId = Math.max(0, ...layers.map((l) => l.id)) + 1
     this.undoStack = []

@@ -31,6 +31,9 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Join', 'Join', 'J'),
         item('Explode', 'Explode', 'X'),
         'separator',
+        item('Control Points On', 'PointsOn', 'F10'),
+        item('Control Points Off', 'PointsOff', 'F11'),
+        'separator',
         item('Delete', 'Delete', 'Del'),
         'separator',
         item('Select All', 'SelAll', `${mod}A`),
@@ -85,6 +88,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         { label: 'Grid Snap', shortcut: 'F9', action: () => settings.toggle('gridSnap'), checked: () => settings.gridSnap },
         { label: 'Ortho', shortcut: 'F8', action: () => settings.toggle('ortho'), checked: () => settings.ortho },
         { label: 'Object Snap', shortcut: 'F3', action: () => settings.toggle('osnap'), checked: () => settings.osnap },
+        'separator',
+        { label: 'Gumball', action: () => settings.toggle('gumball'), checked: () => settings.gumball },
       ],
     ],
     [
@@ -96,6 +101,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
           action: () =>
             log(
               'Right drag: orbit (Perspective) or pan. Shift+right drag or middle drag: pan. Wheel: zoom. ' +
+                'Drag a selected object or control point to move it; use the gumball to move, rotate or scale. ' +
                 'Enter, Space or right click: repeat the last command. Double-click a viewport title: maximize.',
             ),
         },

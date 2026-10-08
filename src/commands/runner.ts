@@ -23,6 +23,7 @@ export interface Command {
 }
 
 export class CommandRunner {
+  onStart: () => void = () => {}
   onIdle: () => void = () => {}
 
   private readonly commands = new Map<string, Command>()
@@ -82,10 +83,21 @@ export class CommandRunner {
     await this.current
   }
 
+  /** Runs a command object that is not registered by name, such as an edit made with the gumball. */
+  async runCommand(command: Command): Promise<void> {
+    if (this.current) {
+      this.cancel()
+      await this.current
+    }
+    this.current = this.execute(command, [])
+    await this.current
+  }
+
   private async execute(command: Command, script: string[]): Promise<void> {
     const { doc, input, log } = this.ctx
     const tracked = command.history !== false
     log(`Command: ${command.name}`)
+    this.onStart()
     input.setScript(script)
     if (tracked) doc.begin()
     try {

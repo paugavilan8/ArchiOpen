@@ -1,5 +1,5 @@
 import { Matrix3, Matrix4, Vector3 } from 'three'
-import { reverseBSpline, splitBSpline } from '../math/nurbs'
+import { clampedKnots, interpolate, reverseBSpline, splitBSpline } from '../math/nurbs'
 import {
   ArcGeometry,
   CircleGeometry,
@@ -21,9 +21,29 @@ const TWO_PI = Math.PI * 2
 
 // --- Transforms ----------------------------------------------------------------------
 
+/** True when the matrix keeps angles and only scales uniformly (move, rotate, mirror, uniform scale). */
+export function isSimilarity(m: Matrix4): boolean {
+  const e = m.elements
+  const x = new Vector3(e[0], e[1], e[2])
+  const y = new Vector3(e[4], e[5], e[6])
+  const z = new Vector3(e[8], e[9], e[10])
+  const s = x.lengthSq()
+  const eps = 1e-9 * Math.max(1, s)
+  return Math.abs(y.lengthSq() - s) < eps && Math.abs(z.lengthSq() - s) < eps && Math.abs(x.dot(y)) < eps && Math.abs(y.dot(z)) < eps && Math.abs(x.dot(z)) < eps
+}
+
+/** A cubic curve through points of a circle or arc, for transforms that would not keep it circular. */
+function arcAsCurve(g: CircleGeometry | ArcGeometry): CurveGeometry {
+  const sweep = g.type === 'circle' ? TWO_PI : g.angle
+  const count = Math.max(8, Math.ceil((48 * sweep) / TWO_PI))
+  const pts: Vector3[] = []
+  for (let i = 0; i <= count; i++) pts.push(pointAt(g, (sweep * i) / count))
+  return { type: 'curve', ...interpolate(pts, 3) }
+}
+
 /**
- * Applies a similarity transform (move, rotate, mirror, uniform scale). Circles and arcs would not
- * stay circular under a non-uniform scale, so those transforms are not supported here.
+ * Applies an affine transform. Under a non-uniform scale, circles and arcs cannot stay circular, so
+ * they become (closely approximating) curves.
  */
 export function transform(g: Geometry, m: Matrix4): Geometry {
   const linear = new Matrix3().setFromMatrix4(m)
@@ -33,6 +53,7 @@ export function transform(g: Geometry, m: Matrix4): Geometry {
       return { ...g, points: g.points.map(point) }
     case 'circle':
     case 'arc': {
+      if (!isSimilarity(m)) return transform(arcAsCurve(g), m)
       const x = g.xaxis.clone().applyMatrix3(linear)
       const y = g.yaxis.clone().applyMatrix3(linear)
       return { ...g, center: point(g.center), radius: g.radius * x.length(), xaxis: x.normalize(), yaxis: y.normalize() }
@@ -359,4 +380,31 @@ export function closestPoint(g: Geometry, p: Vector3): CurvePoint {
   }
   const point = pointAt(g, t)
   return { t, point, distance: point.distanceTo(p) }
+}
+
+// --- Control points ------------------------------------------------------------------
+
+/** The points that define a polyline or curve, which the user can edit directly. Null for other types. */
+export function controlPoints(g: Geometry): Vector3[] | null {
+  return g.type === 'polyline' || g.type === 'curve' ? g.points : null
+}
+
+/** The same polyline or curve with new control points (same count). */
+export function withControlPoints(g: Geometry, points: Vector3[]): Geometry {
+  if (g.type === 'polyline' || g.type === 'curve') return { ...g, points }
+  return g
+}
+
+/** Removes control points, or returns null if too few would be left. */
+export function removeControlPoints(g: Geometry, indices: Set<number>): Geometry | null {
+  if (g.type !== 'polyline' && g.type !== 'curve') return null
+  const points = g.points.filter((_, i) => !indices.has(i))
+  if (g.type === 'polyline') {
+    if (points.length < 2) return null
+    return { ...g, points, closed: g.closed && points.length > 2 }
+  }
+  if (points.length < 2) return null
+  // Fewer points may force a lower degree; the knots become uniform again.
+  const degree = Math.min(g.degree, points.length - 1)
+  return { type: 'curve', degree, points, knots: clampedKnots(points.length, degree) }
 }
