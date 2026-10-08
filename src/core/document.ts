@@ -199,7 +199,7 @@ export class Document {
   }
 
   setCurrentLayer(id: number): void {
-    if (!this.layers.some((l) => l.id === id)) return
+    if (id === this.currentLayerId || !this.layers.some((l) => l.id === id)) return
     this.currentLayerId = id
     this.emit('layers')
   }

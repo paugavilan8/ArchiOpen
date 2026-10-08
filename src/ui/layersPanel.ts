@@ -17,6 +17,12 @@ export class LayersPanel {
     header.append(title, this.button('+', 'New layer', () => doc.addLayer()), this.button('−', 'Delete current layer', () => this.removeCurrent()))
 
     this.list.className = 'layer-list'
+    // Delegated, because the click that precedes a double-click can re-render the rows.
+    this.list.addEventListener('dblclick', (e) => {
+      const label = (e.target as Element).closest<HTMLElement>('.layer-name')
+      const layer = doc.layers.find((l) => String(l.id) === label?.dataset.layerId)
+      if (label && layer) this.rename(layer, label)
+    })
     section.append(header, this.list)
     container.appendChild(section)
 
@@ -49,7 +55,7 @@ export class LayersPanel {
     const name = document.createElement('span')
     name.className = 'layer-name'
     name.textContent = layer.name
-    name.addEventListener('dblclick', () => this.rename(layer, name))
+    name.dataset.layerId = String(layer.id)
 
     const visible = this.toggle(layer.visible ? 'On' : 'Off', 'Show or hide the layer', layer.visible, () =>
       doc.updateLayer(layer.id, { visible: !layer.visible }),
