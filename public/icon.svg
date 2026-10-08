@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d333c"/>
+      <stop offset="1" stop-color="#16191e"/>
+    </linearGradient>
+    <linearGradient id="curve" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#3d8bfd"/>
+      <stop offset="1" stop-color="#6fd3ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="8"/>
+  <path d="M232 772 L360 268 L664 756 L792 252" fill="none" stroke="#8b939d" stroke-width="10" stroke-dasharray="28 22"/>
+  <path d="M232 772 C 360 268, 664 756, 792 252" fill="none" stroke="url(#curve)" stroke-width="64" stroke-linecap="round"/>
+  <g fill="#16191e" stroke="#e6e9ed" stroke-width="12">
+    <rect x="204" y="744" width="56" height="56" rx="8"/>
+    <rect x="332" y="240" width="56" height="56" rx="8"/>
+    <rect x="636" y="728" width="56" height="56" rx="8"/>
+    <rect x="764" y="224" width="56" height="56" rx="8"/>
+  </g>
+</svg>
