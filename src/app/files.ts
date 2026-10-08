@@ -1,9 +1,17 @@
 import type { Document } from '../core/document'
+import { describeSkipped, readRhinoFile, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
+import { loadRhino } from '../io/loadRhino'
+import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
 
-export const FILE_EXTENSION = 'archi'
+interface FileType {
+  name: string
+  extension: string
+  mime: string
+}
+
+export const ARCHI: FileType = { name: 'ArchiOpen model', extension: 'archi', mime: 'application/json' }
+export const RHINO: FileType = { name: 'Rhino 3D model', extension: '3dm', mime: 'application/octet-stream' }
 const UNTITLED = 'Untitled'
-const FILTERS = [{ name: 'ArchiOpen model', extensions: [FILE_EXTENSION] }]
-const PICKER_TYPES = [{ description: 'ArchiOpen model', accept: { 'application/json': [`.${FILE_EXTENSION}`] } }]
 
 /** True when running inside the desktop shell rather than a plain browser tab. */
 export const isDesktop = '__TAURI_INTERNALS__' in window
@@ -12,7 +20,7 @@ export const isDesktop = '__TAURI_INTERNALS__' in window
 interface PickerFileHandle {
   name: string
   getFile(): Promise<File>
-  createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }>
+  createWritable(): Promise<{ write(data: BufferSource | Blob): Promise<void>; close(): Promise<void> }>
 }
 type PickerWindow = Window & {
   showOpenFilePicker?: (options: object) => Promise<PickerFileHandle[]>
@@ -20,13 +28,127 @@ type PickerWindow = Window & {
 }
 const pickers = window as PickerWindow
 
-/** Where the current document lives: a path on the desktop, a picker handle in the browser, or nowhere yet. */
-type Location = { kind: 'path'; path: string } | { kind: 'handle'; handle: PickerFileHandle } | null
+/** Where a file lives: a path on the desktop, or a picker handle in the browser. */
+type Location = { kind: 'path'; path: string } | { kind: 'handle'; handle: PickerFileHandle }
 
-/** New / Open / Save for the document, with a desktop and a browser implementation. */
+interface PickedFile {
+  /** File name with its extension. */
+  fileName: string
+  location: Location | null
+  read(): Promise<Uint8Array>
+}
+
+// --- Platform file access ------------------------------------------------------------
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
+}
+
+function fromBase64(text: string): Uint8Array {
+  const binary = atob(text)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+const dialogFilters = (types: FileType[]) => types.map((t) => ({ name: t.name, extensions: [t.extension] }))
+const pickerTypes = (types: FileType[]) => types.map((t) => ({ description: t.name, accept: { [t.mime]: [`.${t.extension}`] } }))
+
+async function pickFile(types: FileType[]): Promise<PickedFile | null> {
+  if (isDesktop) {
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const filters = types.length > 1 ? [{ name: 'Models', extensions: types.map((t) => t.extension) }, ...dialogFilters(types)] : dialogFilters(types)
+    const path = await open({ multiple: false, directory: false, filters })
+    if (typeof path !== 'string') return null
+    const { invoke } = await import('@tauri-apps/api/core')
+    return {
+      fileName: fileNameOf(path),
+      location: { kind: 'path', path },
+      read: async () => fromBase64(await invoke<string>('read_binary_file', { path })),
+    }
+  }
+  if (pickers.showOpenFilePicker) {
+    try {
+      const [handle] = await pickers.showOpenFilePicker({ types: pickerTypes(types) })
+      return { fileName: handle.name, location: { kind: 'handle', handle }, read: async () => new Uint8Array(await (await handle.getFile()).arrayBuffer()) }
+    } catch {
+      return null // The user closed the picker.
+    }
+  }
+  const file = await pickWithInput(types)
+  return file ? { fileName: file.name, location: null, read: async () => new Uint8Array(await file.arrayBuffer()) } : null
+}
+
+/** Asks where to save. Null means cancelled; 'download' means the browser can only offer a download. */
+async function pickSaveLocation(suggestedName: string, type: FileType): Promise<Location | 'download' | null> {
+  if (isDesktop) {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const path = await save({ defaultPath: `${suggestedName}.${type.extension}`, filters: dialogFilters([type]) })
+    return path ? { kind: 'path', path: withExtension(path, type) } : null
+  }
+  if (pickers.showSaveFilePicker) {
+    try {
+      return { kind: 'handle', handle: await pickers.showSaveFilePicker({ suggestedName: `${suggestedName}.${type.extension}`, types: pickerTypes([type]) }) }
+    } catch {
+      return null
+    }
+  }
+  return 'download'
+}
+
+async function writeFile(location: Location | 'download', data: Uint8Array, fileName: string, type: FileType): Promise<void> {
+  if (location === 'download') {
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([data as BlobPart], { type: type.mime }))
+    link.download = fileName
+    link.click()
+    URL.revokeObjectURL(link.href)
+  } else if (location.kind === 'path') {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('write_binary_file', { path: location.path, base64: toBase64(data) })
+  } else {
+    const writable = await location.handle.createWritable()
+    await writable.write(new Blob([data as BlobPart], { type: type.mime }))
+    await writable.close()
+  }
+}
+
+function pickWithInput(types: FileType[]): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = types.map((t) => `.${t.extension}`).join(',')
+    input.addEventListener('change', () => resolve(input.files?.[0] ?? null))
+    input.addEventListener('cancel', () => resolve(null))
+    input.click()
+  })
+}
+
+function fileNameOf(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path
+}
+
+function extensionOf(fileName: string): string {
+  return fileName.split('.').pop()?.toLowerCase() ?? ''
+}
+
+function withExtension(path: string, type: FileType): string {
+  return path.toLowerCase().endsWith(`.${type.extension}`) ? path : `${path}.${type.extension}`
+}
+
+function baseName(fileName: string): string {
+  return fileName.replace(/\.[^.\\/]+$/, '')
+}
+
+// --- Document files ------------------------------------------------------------------
+
+/** New / Open / Save / Import / Export for the document, with a desktop and a browser implementation. */
 export class FileManager {
   name = UNTITLED
-  private location: Location = null
+  /** Where Save writes. Only ever an .archi file: an opened .3dm is never overwritten by Save. */
+  private location: Location | null = null
   private listeners = new Set<() => void>()
 
   constructor(private readonly doc: Document) {}
@@ -64,83 +186,75 @@ export class FileManager {
     return true
   }
 
-  async open(): Promise<boolean> {
-    if (!(await this.confirmDiscard())) return false
-    const file = await this.pickAndRead()
-    if (!file) return false
-    this.doc.load(JSON.parse(file.text))
-    this.setLocation(file.name, file.location)
-    return true
+  /**
+   * Opens an .archi or .3dm file in place of the current document. Resolves to a message for the
+   * command history, or null if nothing was opened.
+   */
+  async open(): Promise<string | null> {
+    if (!(await this.confirmDiscard())) return null
+    const file = await pickFile([ARCHI, RHINO])
+    if (!file) return null
+    const bytes = await file.read()
+    if (extensionOf(file.fileName) === RHINO.extension) {
+      const result = await this.readRhino(bytes)
+      applyRhinoImport(this.doc, result)
+      // Saving must not overwrite the Rhino file (it may hold objects that were not loaded).
+      this.setLocation(baseName(file.fileName), null)
+      return `Opened ${file.fileName}: ${this.rhinoSummary(result)}. Save stores it as an .archi file; use Export to write a .3dm`
+    }
+    this.doc.load(JSON.parse(new TextDecoder().decode(bytes)))
+    this.setLocation(baseName(file.fileName), file.location)
+    return `Opened ${file.fileName}`
   }
 
   /** Saves to the current file, or asks for one if there is none yet (or if `saveAs` is set). */
   async save(saveAs = false): Promise<boolean> {
-    const text = JSON.stringify(this.doc.toJSON(), null, 1)
-    let location = saveAs ? null : this.location
-    let name = this.name
-
-    if (isDesktop) {
-      if (!location) {
-        const { save } = await import('@tauri-apps/plugin-dialog')
-        const path = await save({ defaultPath: `${this.name}.${FILE_EXTENSION}`, filters: FILTERS })
-        if (!path) return false
-        location = { kind: 'path', path: withExtension(path) }
-      }
-      if (location.kind !== 'path') return false
-      const { invoke } = await import('@tauri-apps/api/core')
-      await invoke('write_text_file', { path: location.path, contents: text })
-      name = baseName(location.path)
-    } else if (pickers.showSaveFilePicker) {
-      if (!location) {
-        try {
-          const handle = await pickers.showSaveFilePicker({ suggestedName: `${this.name}.${FILE_EXTENSION}`, types: PICKER_TYPES })
-          location = { kind: 'handle', handle }
-        } catch {
-          return false // The user closed the picker.
-        }
-      }
-      if (location.kind !== 'handle') return false
-      const writable = await location.handle.createWritable()
-      await writable.write(text)
-      await writable.close()
-      name = baseName(location.handle.name)
-    } else {
-      // No way to write to disk: hand the file over as a download.
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
-      link.download = `${this.name}.${FILE_EXTENSION}`
-      link.click()
-      URL.revokeObjectURL(link.href)
-    }
-
+    const location = !saveAs && this.location ? this.location : await pickSaveLocation(this.name, ARCHI)
+    if (!location) return false
+    const data = new TextEncoder().encode(JSON.stringify(this.doc.toJSON(), null, 1))
+    await writeFile(location, data, `${this.name}.${ARCHI.extension}`, ARCHI)
     this.doc.modified = false
-    this.setLocation(name, location)
+    if (location === 'download') this.emit()
+    else this.setLocation(baseName(location.kind === 'path' ? fileNameOf(location.path) : location.handle.name), location)
     return true
   }
 
-  private async pickAndRead(): Promise<{ name: string; text: string; location: Location } | null> {
-    if (isDesktop) {
-      const { open } = await import('@tauri-apps/plugin-dialog')
-      const path = await open({ multiple: false, directory: false, filters: FILTERS })
-      if (typeof path !== 'string') return null
-      const { invoke } = await import('@tauri-apps/api/core')
-      const text = await invoke<string>('read_text_file', { path })
-      return { name: baseName(path), text, location: { kind: 'path', path } }
-    }
-    if (pickers.showOpenFilePicker) {
-      try {
-        const [handle] = await pickers.showOpenFilePicker({ types: PICKER_TYPES })
-        const text = await (await handle.getFile()).text()
-        return { name: baseName(handle.name), text, location: { kind: 'handle', handle } }
-      } catch {
-        return null
-      }
-    }
-    const file = await pickWithInput()
-    return file ? { name: baseName(file.name), text: await file.text(), location: null } : null
+  /** Adds the contents of a .3dm file to the document. Resolves to the new object ids, or null. */
+  async importRhino(): Promise<{ ids: number[]; message: string } | null> {
+    const file = await pickFile([RHINO])
+    if (!file) return null
+    const result = await this.readRhino(await file.read())
+    const { ids, scaledFrom } = mergeRhinoImport(this.doc, result)
+    const scaled = scaledFrom ? `, scaled from ${scaledFrom.toLowerCase()} to ${this.doc.units.toLowerCase()}` : ''
+    return { ids, message: `Imported ${file.fileName}: ${this.rhinoSummary(result)}${scaled}` }
   }
 
-  private setLocation(name: string, location: Location): void {
+  /** Writes the document's curves to a .3dm file. Resolves to the file name, or null if cancelled. */
+  async exportRhino(): Promise<string | null> {
+    const location = await pickSaveLocation(this.name, RHINO)
+    if (!location) return null
+    const rhino = await loadRhino()
+    const bytes = writeRhinoFile(rhino, {
+      units: this.doc.units,
+      layers: this.doc.layers,
+      objects: [...this.doc.objects.values()].map((o) => ({ layerId: o.layerId, geometry: o.geometry })),
+    })
+    const fileName = location === 'download' ? `${this.name}.${RHINO.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
+    await writeFile(location, bytes, fileName, RHINO)
+    return fileName
+  }
+
+  private async readRhino(bytes: Uint8Array): Promise<RhinoImport> {
+    return readRhinoFile(await loadRhino(), bytes)
+  }
+
+  private rhinoSummary(result: RhinoImport): string {
+    const curves = `${result.objects.length} curve${result.objects.length === 1 ? '' : 's'} on ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}`
+    const skipped = describeSkipped(result.skipped)
+    return skipped ? `${curves}. Not loaded yet: ${skipped}` : curves
+  }
+
+  private setLocation(name: string, location: Location | null): void {
     this.name = name
     this.location = location
     this.emit()
@@ -149,24 +263,4 @@ export class FileManager {
   private emit(): void {
     for (const listener of this.listeners) listener()
   }
-}
-
-function pickWithInput(): Promise<File | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = `.${FILE_EXTENSION},application/json`
-    input.addEventListener('change', () => resolve(input.files?.[0] ?? null))
-    input.addEventListener('cancel', () => resolve(null))
-    input.click()
-  })
-}
-
-function withExtension(path: string): string {
-  return path.toLowerCase().endsWith(`.${FILE_EXTENSION}`) ? path : `${path}.${FILE_EXTENSION}`
-}
-
-function baseName(path: string): string {
-  const file = path.split(/[\\/]/).pop() ?? path
-  return file.replace(new RegExp(`\\.${FILE_EXTENSION}$`, 'i'), '')
 }

@@ -22,6 +22,7 @@ export class StatusBar {
   private readonly swatch = document.createElement('i')
   private readonly layerName = document.createElement('span')
   private readonly selection = document.createElement('span')
+  private readonly units = document.createElement('span')
 
   constructor(
     bar: HTMLElement,
@@ -33,10 +34,8 @@ export class StatusBar {
     cplane.className = 'status-label'
     cplane.textContent = 'CPlane'
     this.coords.className = 'status-value'
-    const units = document.createElement('span')
-    units.className = 'status-label'
-    units.textContent = 'mm'
-    coordsGroup.append(cplane, this.coords, units)
+    this.units.className = 'status-label'
+    coordsGroup.append(cplane, this.coords, this.units)
 
     const layerGroup = this.group('status-layer')
     layerGroup.dataset.tip = 'Current layer'
@@ -109,8 +108,23 @@ export class StatusBar {
     this.swatch.style.background = layer.color
     this.layerName.textContent = layer.name
     const n = this.doc.selection.size
-    this.selection.textContent = n === 0 ? '' : `${n} selected`
+    const points = this.doc.selectedPointCount
+    this.selection.textContent = points > 0 ? `${points} point${points === 1 ? '' : 's'} selected` : n === 0 ? '' : `${n} selected`
+    this.units.textContent = UNIT_ABBREVIATIONS[this.doc.units] ?? this.doc.units
   }
+}
+
+const UNIT_ABBREVIATIONS: Record<string, string> = {
+  Microns: 'µm',
+  Millimeters: 'mm',
+  Centimeters: 'cm',
+  Decimeters: 'dm',
+  Meters: 'm',
+  Kilometers: 'km',
+  Inches: 'in',
+  Feet: 'ft',
+  Yards: 'yd',
+  Miles: 'mi',
 }
 
 /** Fixed width so the numbers do not jitter as the cursor moves. */

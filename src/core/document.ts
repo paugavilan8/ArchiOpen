@@ -39,6 +39,8 @@ export class Document {
   readonly pointSelection = new Map<number, Set<number>>()
   layers: Layer[] = defaultLayers()
   currentLayerId = 1
+  /** Model units, named as in Rhino ("Millimeters", "Meters", ...). */
+  units = 'Millimeters'
   /** True when there are changes since the document was created, opened or saved. */
   modified = false
 
@@ -291,9 +293,15 @@ export class Document {
 
   // --- Persistence -----------------------------------------------------------
 
+  setUnits(units: string): void {
+    this.units = units
+    this.emit('layers')
+  }
+
   toJSON(): unknown {
     return {
       version: 1,
+      units: this.units,
       layers: this.layers,
       currentLayerId: this.currentLayerId,
       objects: [...this.objects.values()].map((o) => ({
@@ -314,6 +322,7 @@ export class Document {
     }))
 
     this.layers = layers
+    this.units = typeof json.units === 'string' ? json.units : 'Millimeters'
     this.currentLayerId = layers.some((l) => l.id === json.currentLayerId) ? json.currentLayerId : layers[0].id
     this.objects.clear()
     for (const obj of objects) this.objects.set(obj.id, obj)

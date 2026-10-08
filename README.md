@@ -29,7 +29,7 @@ se adjuntan a un borrador de *release*.
 - Edición de curvas: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet` (entre dos líneas),
   `FilletCorners` (todas las esquinas de una polilínea).
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
-  `Osnap`, `New`, `Open`, `Save`, `SaveAs`.
+  `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`.
 - Alias: `M`, `RO`, `SC`, `MI`, `AR`, `AP`, `TR`, `J`, `X`, `OF`, `F`, `REC`, `A`, `U`, `Z`, `ZE`,
   `ZEA`, `ZS`.
 - Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
@@ -44,6 +44,14 @@ se adjuntan a un borrador de *release*.
 - Referencias a objetos: End, Near, Mid, Cen, Quad. Ortho (F8), forzado a rejilla (F9).
 - Capas con color, visibilidad y bloqueo; panel de propiedades del objeto seleccionado.
 - Archivos `.archi` (JSON) con Abrir/Guardar; la sesión se recupera sola si la app se cierra.
+- Archivos de Rhino `.3dm` (con [rhino3dm](https://github.com/mcneel/rhino3dm), MIT):
+  - `Open` abre `.archi` o `.3dm`. De un `.3dm` se cargan las curvas (líneas, polilíneas, arcos,
+    círculos, NURBS y polycurves), las capas con su color, visibilidad y bloqueo, y las unidades.
+    Las superficies, mallas, textos y bloques aún no se cargan y se avisa de cuántos hay.
+  - `Save` nunca sobrescribe un `.3dm` abierto (podría perder lo que no se cargó): guarda un `.archi`.
+  - `Export` escribe un `.3dm` con las curvas, las capas (también las anidadas) y las unidades.
+  - `Import` añade un `.3dm` al modelo actual, escalándolo a sus unidades.
+  - `Units` cambia las unidades del modelo (sin escalar la geometría).
 
 ## Desarrollo
 
