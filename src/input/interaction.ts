@@ -15,6 +15,7 @@ export type GetResult =
   | { kind: 'point'; point: Vector3; viewport: Viewport }
   | { kind: 'option'; option: string }
   | { kind: 'number'; value: number }
+  | { kind: 'pick'; id: number; point: Vector3; viewport: Viewport }
   | { kind: 'enter' }
 
 export interface GetPointOptions {
@@ -35,7 +36,7 @@ export interface InteractionUI {
 }
 
 interface Request {
-  kind: 'point' | 'objects' | 'option'
+  kind: 'point' | 'objects' | 'option' | 'number' | 'pick'
   opts: GetPointOptions
   resolve: (result: GetResult) => void
   reject: (error: Error) => void
@@ -103,6 +104,22 @@ export class Interaction {
     return result.kind === 'option' ? result.option : null
   }
 
+  /**
+   * Asks for a number; Enter accepts the default. Resolves to the number, or to the name of an
+   * option if one is chosen.
+   */
+  async getNumber(prompt: string, defaultValue: number, options: string[] = []): Promise<number | string> {
+    const result = await this.start('number', { prompt: `${prompt} <${formatNumber(defaultValue)}>`, options })
+    if (result.kind === 'number') return result.value
+    if (result.kind === 'option') return result.option
+    return defaultValue
+  }
+
+  /** Asks the user to click on one object; the result also says where on the object they clicked. */
+  getPick(prompt: string, options: string[] = []): Promise<GetResult> {
+    return this.start('pick', { prompt, options })
+  }
+
   /** Uses the current selection if there is one; otherwise lets the user select until Enter. */
   async getObjects(prompt: string): Promise<number[]> {
     if (this.doc.selection.size === 0) {
@@ -159,6 +176,7 @@ export class Interaction {
     const text = raw.trim()
     if (text === '') return this.enter()
 
+    if (request.kind === 'number' && SINGLE_NUMBER.test(text)) return this.finish({ kind: 'number', value: parseFloat(text) })
     if (request.kind === 'point') {
       const coords = COORDINATE.exec(text)
       if (coords) return this.finishPoint(this.parsePoint(coords, request), this.display.active)
@@ -229,7 +247,12 @@ export class Interaction {
       if (hit) this.finishPoint(hit.point, vp)
       return
     }
-    if (e.button === 0 && this.request?.kind === 'option') return
+    if (e.button === 0 && this.request?.kind === 'pick') {
+      const hit = this.pickPoint(vp, pos.x, pos.y)
+      if (hit) this.finish({ kind: 'pick', id: hit.id, point: hit.point, viewport: vp })
+      return
+    }
+    if (e.button === 0 && (this.request?.kind === 'option' || this.request?.kind === 'number')) return
 
     vp.el.setPointerCapture(e.pointerId)
     this.drag = { button: e.button, startX: pos.x, startY: pos.y, lastX: pos.x, lastY: pos.y, moved: false }
@@ -401,17 +424,22 @@ export class Interaction {
   // --- Picking ---------------------------------------------------------------
 
   private pickObject(vp: Viewport, sx: number, sy: number): number | null {
+    return this.pickPoint(vp, sx, sy)?.id ?? null
+  }
+
+  /** The selectable object nearest the cursor, and the point on it under the cursor. */
+  private pickPoint(vp: Viewport, sx: number, sy: number): { id: number; point: Vector3 } | null {
     let best = PICK_TOLERANCE
-    let id: number | null = null
+    let result: { id: number; point: Vector3 } | null = null
     for (const obj of this.doc.objects.values()) {
       if (!this.doc.isSelectable(obj)) continue
       const hit = this.closestOnPolyline(vp, tessellate(obj.geometry), sx, sy)
       if (hit && hit.distance < best) {
         best = hit.distance
-        id = obj.id
+        result = { id: obj.id, point: hit.point }
       }
     }
-    return id
+    return result
   }
 
   private pickWindow(vp: Viewport, x0: number, y0: number, x1: number, y1: number, crossing: boolean): number[] {
@@ -471,6 +499,10 @@ export class Interaction {
 function localPosition(vp: Viewport, e: MouseEvent): ScreenPoint {
   const rect = vp.el.getBoundingClientRect()
   return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+}
+
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
 }
 
 /** Exact match first, then a unique prefix, ignoring case. */

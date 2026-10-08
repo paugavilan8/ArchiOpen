@@ -24,9 +24,14 @@ se adjuntan a un borrador de *release*.
 - Cuatro vistas (Top, Front, Right, Perspective) con rejilla, gizmo de ejes y menú por vista.
 - Órbita (botón derecho en Perspective), encuadre (Shift + botón derecho o botón central) y zoom
   con la rueda.
-- Comandos: `Line`, `Polyline`, `Circle`, `Curve`, `Move`, `Copy`, `Delete`, `SelAll`, `SelNone`,
-  `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`, `Osnap`, `New`, `Open`, `Save`, `SaveAs`.
-  Alias: `M`, `U`, `Z`, `ZE`, `ZEA`, `ZS`.
+- Dibujo: `Line`, `Polyline`, `Rectangle`, `Circle`, `Arc`, `Curve`.
+- Transformación: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array`, `ArrayPolar`.
+- Edición de curvas: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet` (entre dos líneas),
+  `FilletCorners` (todas las esquinas de una polilínea).
+- Otros: `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
+  `Osnap`, `New`, `Open`, `Save`, `SaveAs`.
+- Alias: `M`, `RO`, `SC`, `MI`, `AR`, `AP`, `TR`, `J`, `X`, `OF`, `F`, `REC`, `A`, `U`, `Z`, `ZE`,
+  `ZEA`, `ZS`.
 - Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
   número antes de hacer clic.
 - Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda).
@@ -45,6 +50,7 @@ npm run dev        # interfaz en el navegador, http://localhost:5173
 npm run app:dev    # aplicación de escritorio con recarga en caliente
 npm run app:build  # instaladores en src-tauri/target/release/bundle
 npm run typecheck
+npm test           # pruebas de la geometría
 ```
 
 ## Licencia

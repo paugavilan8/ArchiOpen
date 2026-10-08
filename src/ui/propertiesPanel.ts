@@ -1,7 +1,8 @@
 import type { Vector3 } from 'three'
 import type { CommandRunner } from '../commands/runner'
 import type { CadObject, Document } from '../core/document'
-import { Geometry, tessellate, typeName } from '../core/geometry'
+import { length } from '../core/curves'
+import { endPoint, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
 
 type Row = [label: string, value: string]
 
@@ -35,6 +36,21 @@ function geometryRows(g: Geometry): Row[] {
         ['Control points', String(g.points.length)],
         ['Start', point(g.points[0])],
         ['End', point(g.points[g.points.length - 1])],
+      ]
+    case 'arc':
+      return [
+        ['Center', point(g.center)],
+        ['Radius', fmt(g.radius)],
+        ['Angle', `${fmt((g.angle * 180) / Math.PI)}°`],
+        ['Length', fmt(g.radius * g.angle)],
+        ['Start', point(startPoint(g))],
+        ['End', point(endPoint(g))],
+      ]
+    case 'polycurve':
+      return [
+        ['Length', fmt(length(g))],
+        ['Segments', String(g.segments.length)],
+        ['Closed', isClosed(g) ? 'Yes' : 'No'],
       ]
   }
 }

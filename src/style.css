@@ -62,7 +62,7 @@ input:focus-visible {
     'standard standard standard' 34px
     'toolbar viewports side' minmax(0, 1fr)
     'status status status' 26px
-    / 40px minmax(0, 1fr) 264px;
+    / 72px minmax(0, 1fr) 264px;
   height: 100%;
   background: var(--bg-0);
   user-select: none;
@@ -348,8 +348,8 @@ input:focus-visible {
 }
 
 #toolbar .tool-group {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 30px);
   gap: 2px;
   padding: 6px 0;
   border-bottom: 1px solid var(--border);
