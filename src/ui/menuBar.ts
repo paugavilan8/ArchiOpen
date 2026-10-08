@@ -14,10 +14,13 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
       'File',
       [
         item('New', 'New', `${mod}N`),
-        item('Open…', 'Open', `${mod}O`),
+        item('Open (.archi, .3dm)…', 'Open', `${mod}O`),
         'separator',
         item('Save', 'Save', `${mod}S`),
         item('Save As…', 'SaveAs', `${mod}Shift+S`),
+        'separator',
+        item('Import .3dm…', 'Import'),
+        item('Export .3dm…', 'Export'),
       ],
     ],
     [
@@ -90,6 +93,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         { label: 'Object Snap', shortcut: 'F3', action: () => settings.toggle('osnap'), checked: () => settings.osnap },
         'separator',
         { label: 'Gumball', action: () => settings.toggle('gumball'), checked: () => settings.gumball },
+        'separator',
+        item('Model Units…', 'Units'),
       ],
     ],
     [

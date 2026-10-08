@@ -14,9 +14,11 @@ const open: Command = {
   history: false,
   repeat: false,
   async run({ files, display, log }) {
-    if (!(await files.open())) return
+    log('Choose an .archi or .3dm file')
+    const message = await files.open()
+    if (!message) return
     display.fit(display.viewports)
-    log(`Opened ${files.name}`)
+    log(message)
   },
 }
 
@@ -38,4 +40,25 @@ const saveAs: Command = {
   },
 }
 
-export const fileCommands: Command[] = [newFile, open, save, saveAs]
+const importRhino: Command = {
+  name: 'Import',
+  async run({ doc, files, display, log }) {
+    const result = await files.importRhino()
+    if (!result) return
+    doc.select(result.ids)
+    display.fit(display.viewports, result.ids)
+    log(result.message)
+  },
+}
+
+const exportRhino: Command = {
+  name: 'Export',
+  history: false,
+  repeat: false,
+  async run({ files, log }) {
+    const fileName = await files.exportRhino()
+    if (fileName) log(`Exported ${fileName}`)
+  },
+}
+
+export const fileCommands: Command[] = [newFile, open, save, saveAs, importRhino, exportRhino]

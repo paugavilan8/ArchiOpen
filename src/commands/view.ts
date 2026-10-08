@@ -41,4 +41,19 @@ const osnap: Command = {
   run: ({ settings, log }) => log(`Object snap ${settings.toggle('osnap') ? 'on' : 'off'}`),
 }
 
-export const viewCommands: Command[] = [zoom, maxViewport, snap, ortho, osnap]
+const UNITS = ['Millimeters', 'Centimeters', 'Meters', 'Inches', 'Feet']
+
+const units: Command = {
+  name: 'Units',
+  history: false,
+  repeat: false,
+  async run({ doc, input, log }) {
+    // Changing units relabels the model; it does not rescale it (as with Rhino's "No" to scaling).
+    const option = await input.getOption(`Model units are ${doc.units}. New units`, UNITS)
+    if (!option || option === doc.units) return
+    doc.setUnits(option)
+    log(`Model units set to ${option}. Geometry was not scaled`)
+  },
+}
+
+export const viewCommands: Command[] = [zoom, maxViewport, snap, ortho, osnap, units]

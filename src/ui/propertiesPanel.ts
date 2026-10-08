@@ -90,7 +90,7 @@ export class PropertiesPanel {
       sections.push(empty, this.section('Document', [
         ['Objects', String(this.doc.objects.size)],
         ['Layers', String(this.doc.layers.length)],
-        ['Units', 'Millimeters'],
+        ['Units', this.doc.units],
       ]))
     } else {
       const counts = new Map<string, number>()
