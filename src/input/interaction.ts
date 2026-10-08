@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import type { Document } from '../core/document'
-import { snapPoints, tessellate } from '../core/geometry'
+import { snapPoints, tessellate, type SnapPoints } from '../core/geometry'
 import type { Settings, SnapKind } from '../core/settings'
 import type { Display } from '../view/display'
 import type { ScreenPoint, Viewport } from '../view/viewport'
@@ -56,7 +56,7 @@ const SNAP_TOLERANCE = 12
 const DRAG_THRESHOLD = 4
 const ZOOM_STEP = 1.15
 const SNAP_LABELS: Record<SnapKind, string> = { end: 'End', near: 'Near', mid: 'Mid', cen: 'Cen', quad: 'Quad' }
-const POINT_SNAPS: SnapKind[] = ['end', 'mid', 'cen', 'quad']
+const POINT_SNAPS: (keyof SnapPoints)[] = ['end', 'mid', 'cen', 'quad']
 
 const NUMBER = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)`
 const COORDINATE = new RegExp(String.raw`^(r|@|w)?\s*(${NUMBER})\s*,\s*(${NUMBER})(?:\s*,\s*(${NUMBER}))?$`, 'i')
