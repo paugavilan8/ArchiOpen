@@ -1,0 +1,163 @@
+import * as THREE from 'three'
+import type { Document } from '../core/document'
+import { expandBox, tessellate } from '../core/geometry'
+import { Viewport, ViewKind } from './viewport'
+
+const GAP_COLOR = 0x4b5057
+const BACKGROUND_COLOR = 0xaeb3ba
+const SELECTED_COLOR = '#ffee00'
+const LOCKED_COLOR = '#6b7280'
+const PREVIEW_COLOR = '#1b2330'
+
+const VIEW_ORDER: ViewKind[] = ['Top', 'Perspective', 'Front', 'Right']
+
+/** Owns the WebGL canvas and draws the document into every visible viewport. */
+export class Display {
+  readonly viewports: Viewport[]
+  active: Viewport
+
+  private readonly renderer: THREE.WebGLRenderer
+  private readonly scene = new THREE.Scene()
+  private readonly objectsGroup = new THREE.Group()
+  private readonly previewGroup = new THREE.Group()
+  private readonly materials = new Map<string, THREE.LineBasicMaterial>()
+  private readonly previewMaterial = new THREE.LineBasicMaterial({ color: PREVIEW_COLOR, depthTest: false })
+  private frame = 0
+
+  constructor(
+    private readonly container: HTMLElement,
+    private readonly doc: Document,
+  ) {
+    const canvas = document.createElement('canvas')
+    canvas.className = 'viewport-canvas'
+    container.appendChild(canvas)
+
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+    this.renderer.setPixelRatio(window.devicePixelRatio)
+    this.renderer.autoClear = false
+
+    this.viewports = VIEW_ORDER.map((kind) => new Viewport(kind))
+    for (const vp of this.viewports) {
+      container.appendChild(vp.el)
+      this.scene.add(vp.grid)
+      vp.titleEl.addEventListener('dblclick', () => this.toggleMaximize(vp))
+    }
+    this.active = this.viewports[1]
+    this.active.el.classList.add('active')
+
+    this.previewGroup.renderOrder = 2
+    this.scene.add(this.objectsGroup, this.previewGroup)
+
+    new ResizeObserver(() => this.resize()).observe(container)
+    doc.on(() => this.rebuildObjects())
+    this.resize()
+    this.rebuildObjects()
+  }
+
+  setActive(vp: Viewport): void {
+    if (vp === this.active) return
+    this.active.el.classList.remove('active')
+    this.active = vp
+    vp.el.classList.add('active')
+    if (this.container.classList.contains('maximized')) this.setMaximized(vp)
+    this.requestRender()
+  }
+
+  toggleMaximize(vp: Viewport = this.active): void {
+    this.setActive(vp)
+    this.setMaximized(this.container.classList.contains('maximized') ? null : vp)
+  }
+
+  private setMaximized(vp: Viewport | null): void {
+    this.container.classList.toggle('maximized', vp !== null)
+    for (const v of this.viewports) v.el.classList.toggle('maximized', v === vp)
+    this.renderNow()
+  }
+
+  /** Dynamic geometry shown while a command is picking points. */
+  setPreview(polylines: THREE.Vector3[][]): void {
+    this.clearGroup(this.previewGroup)
+    for (const pts of polylines) {
+      if (pts.length < 2) continue
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), this.previewMaterial)
+      line.renderOrder = 2
+      this.previewGroup.add(line)
+    }
+    this.requestRender()
+  }
+
+  /** Frames the given objects (all visible ones by default) in the given viewports. */
+  fit(viewports: Viewport[], ids?: Iterable<number>): void {
+    const box = new THREE.Box3()
+    const objects = ids ? [...ids].map((id) => this.doc.objects.get(id)) : [...this.doc.objects.values()]
+    for (const obj of objects) if (obj && this.doc.isVisible(obj)) expandBox(box, obj.geometry)
+    for (const vp of viewports) vp.fit(box)
+    this.requestRender()
+  }
+
+  requestRender(): void {
+    if (this.frame) return
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0
+      this.renderNow()
+    })
+  }
+
+  private rebuildObjects(): void {
+    this.clearGroup(this.objectsGroup)
+    for (const obj of this.doc.objects.values()) {
+      const layer = this.doc.layerOf(obj)
+      if (!layer.visible) continue
+      const color = this.doc.selection.has(obj.id) ? SELECTED_COLOR : layer.locked ? LOCKED_COLOR : layer.color
+      const geometry = new THREE.BufferGeometry().setFromPoints(tessellate(obj.geometry))
+      const line = new THREE.Line(geometry, this.material(color))
+      line.renderOrder = this.doc.selection.has(obj.id) ? 1 : 0
+      this.objectsGroup.add(line)
+    }
+    this.requestRender()
+  }
+
+  private material(color: string): THREE.LineBasicMaterial {
+    let material = this.materials.get(color)
+    if (!material) {
+      material = new THREE.LineBasicMaterial({ color })
+      this.materials.set(color, material)
+    }
+    return material
+  }
+
+  private clearGroup(group: THREE.Group): void {
+    for (const child of group.children) (child as THREE.Line).geometry.dispose()
+    group.clear()
+  }
+
+  private resize(): void {
+    const w = this.container.clientWidth
+    const h = this.container.clientHeight
+    if (w === 0 || h === 0) return
+    this.renderer.setSize(w, h, false)
+    this.renderNow()
+  }
+
+  private renderNow(): void {
+    const r = this.renderer
+    const fullHeight = this.container.clientHeight
+    r.setScissorTest(false)
+    r.setClearColor(GAP_COLOR)
+    r.clear()
+    r.setScissorTest(true)
+    r.setClearColor(BACKGROUND_COLOR)
+
+    for (const vp of this.viewports) {
+      if (!vp.isVisible) continue
+      vp.updateCamera()
+      const x = vp.el.offsetLeft
+      const y = fullHeight - vp.el.offsetTop - vp.height
+      r.setViewport(x, y, vp.width, vp.height)
+      r.setScissor(x, y, vp.width, vp.height)
+      r.clear()
+      for (const other of this.viewports) other.grid.visible = other === vp
+      r.render(this.scene, vp.camera)
+    }
+  }
+}

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NURBS CAD</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="command-area">
+        <div id="cmd-history"></div>
+        <div id="cmd-row">
+          <span id="cmd-prompt"></span>
+          <input id="cmd-input" autocomplete="off" spellcheck="false" />
+          <ul id="cmd-suggest" hidden></ul>
+        </div>
+      </header>
+      <aside id="toolbar"></aside>
+      <main id="viewports"></main>
+      <aside id="side"></aside>
+      <footer id="osnap-bar"></footer>
+      <footer id="status-bar"></footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
