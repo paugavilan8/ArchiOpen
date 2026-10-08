@@ -21,6 +21,9 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         'separator',
         item('Import .3dm…', 'Import'),
         item('Export .3dm…', 'Export'),
+        'separator',
+        item('Import STEP…', 'ImportSTEP'),
+        item('Export STEP…', 'ExportSTEP'),
       ],
     ],
     [

@@ -61,4 +61,33 @@ const exportRhino: Command = {
   },
 }
 
-export const fileCommands: Command[] = [newFile, open, save, saveAs, importRhino, exportRhino]
+const exportStep: Command = {
+  name: 'ExportSTEP',
+  history: false,
+  repeat: false,
+  async run({ doc, files, log }) {
+    // The selection if there is one, otherwise everything visible.
+    const chosen = doc.selection.size > 0 ? [...doc.selection].map((id) => doc.objects.get(id)!) : [...doc.objects.values()].filter((o) => doc.isVisible(o))
+    if (chosen.length === 0) throw new Error('There is nothing to export')
+    const objects = chosen.map((o) => {
+      const layer = doc.layerOf(o)
+      return { geometry: o.geometry, name: layer.name, color: layer.color }
+    })
+    log(`Exporting ${objects.length} object${objects.length === 1 ? '' : 's'} to STEP…`)
+    const fileName = await files.exportStep(objects)
+    if (fileName) log(`Exported ${fileName}`)
+  },
+}
+
+const importStep: Command = {
+  name: 'ImportSTEP',
+  async run({ doc, files, display, log }) {
+    const result = await files.importStep()
+    if (!result) return
+    doc.select(result.ids)
+    display.fit(display.viewports, result.ids)
+    log(result.message)
+  },
+}
+
+export const fileCommands: Command[] = [newFile, open, save, saveAs, importRhino, exportRhino, importStep, exportStep]

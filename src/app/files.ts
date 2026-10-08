@@ -4,16 +4,21 @@ import { loadRhino } from '../io/loadRhino'
 import { toBrep } from '../kernel/brep'
 import { shapeFromRhino } from '../kernel/fromRhino'
 import { loadKernel } from '../kernel/loadKernel'
+import { readStep, StepObject, writeStep } from '../kernel/step'
 import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
 
 interface FileType {
   name: string
+  /** Extension used when saving. */
   extension: string
+  /** Every extension accepted when opening, if more than one. */
+  extensions?: string[]
   mime: string
 }
 
 export const ARCHI: FileType = { name: 'ArchiOpen model', extension: 'archi', mime: 'application/json' }
 export const RHINO: FileType = { name: 'Rhino 3D model', extension: '3dm', mime: 'application/octet-stream' }
+export const STEP: FileType = { name: 'STEP model', extension: 'step', extensions: ['step', 'stp'], mime: 'model/step' }
 const UNTITLED = 'Untitled'
 const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']
 
@@ -57,13 +62,14 @@ function fromBase64(text: string): Uint8Array {
   return bytes
 }
 
-const dialogFilters = (types: FileType[]) => types.map((t) => ({ name: t.name, extensions: [t.extension] }))
-const pickerTypes = (types: FileType[]) => types.map((t) => ({ description: t.name, accept: { [t.mime]: [`.${t.extension}`] } }))
+const extensionsOf = (t: FileType) => t.extensions ?? [t.extension]
+const dialogFilters = (types: FileType[]) => types.map((t) => ({ name: t.name, extensions: extensionsOf(t) }))
+const pickerTypes = (types: FileType[]) => types.map((t) => ({ description: t.name, accept: { [t.mime]: extensionsOf(t).map((e) => `.${e}`) } }))
 
 async function pickFile(types: FileType[]): Promise<PickedFile | null> {
   if (isDesktop) {
     const { open } = await import('@tauri-apps/plugin-dialog')
-    const filters = types.length > 1 ? [{ name: 'Models', extensions: types.map((t) => t.extension) }, ...dialogFilters(types)] : dialogFilters(types)
+    const filters = types.length > 1 ? [{ name: 'Models', extensions: types.flatMap(extensionsOf) }, ...dialogFilters(types)] : dialogFilters(types)
     const path = await open({ multiple: false, directory: false, filters })
     if (typeof path !== 'string') return null
     const { invoke } = await import('@tauri-apps/api/core')
@@ -123,7 +129,7 @@ function pickWithInput(types: FileType[]): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = types.map((t) => `.${t.extension}`).join(',')
+    input.accept = types.flatMap(extensionsOf).map((e) => `.${e}`).join(',')
     input.addEventListener('change', () => resolve(input.files?.[0] ?? null))
     input.addEventListener('cancel', () => resolve(null))
     input.click()
@@ -246,6 +252,28 @@ export class FileManager {
     const fileName = location === 'download' ? `${this.name}.${RHINO.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
     await writeFile(location, bytes, fileName, RHINO)
     return fileName
+  }
+
+  /** Writes objects to a STEP file. Resolves to the file name, or null if cancelled. */
+  async exportStep(objects: StepObject[]): Promise<string | null> {
+    const location = await pickSaveLocation(this.name, STEP)
+    if (!location) return null
+    await loadKernel()
+    const bytes = await writeStep(objects, this.doc.units)
+    const fileName = location === 'download' ? `${this.name}.${STEP.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
+    await writeFile(location, bytes, fileName, STEP)
+    return fileName
+  }
+
+  /** Adds the solids and surfaces of a STEP file to the current layer. Resolves to the new ids, or null. */
+  async importStep(): Promise<{ ids: number[]; message: string } | null> {
+    const file = await pickFile([STEP])
+    if (!file) return null
+    const bytes = await file.read()
+    await loadKernel()
+    const shapes = await readStep(bytes, this.doc.units)
+    const ids = shapes.map((shape) => this.doc.add(toBrep(shape)).id)
+    return { ids, message: `Imported ${file.fileName}: ${ids.length} object${ids.length === 1 ? '' : 's'} in ${this.doc.units.toLowerCase()}` }
   }
 
   /** Reads a .3dm; its polysurfaces are rebuilt as exact shapes with the geometry kernel. */

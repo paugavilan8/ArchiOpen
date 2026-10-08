@@ -36,7 +36,8 @@ se adjuntan a un borrador de *release*.
   (cambia Wireframe/Shaded desde el menú de cada vista) y se mueven, giran, escalan y copian como
   cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
-  `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`.
+  `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
+  `ExportSTEP`.
 - Alias: `M`, `RO`, `SC`, `MI`, `AR`, `AP`, `TR`, `J`, `X`, `OF`, `F`, `REC`, `A`, `U`, `Z`, `ZE`,
   `ZEA`, `ZS`, `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
 - Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
@@ -62,6 +63,12 @@ se adjuntan a un borrador de *release*.
     Las superficies y sólidos se exportan como mallas.
   - `Import` añade un `.3dm` al modelo actual, escalándolo a sus unidades.
   - `Units` cambia las unidades del modelo (sin escalar la geometría).
+- Archivos STEP (`.step`, `.stp`, AP242), el formato que leen casi todos los programas de CAD:
+  - `ExportSTEP` escribe la selección (o todo lo visible) con geometría exacta: sólidos y
+    superficies como B-rep y curvas como curvas, con el nombre y el color de su capa y las
+    unidades del modelo.
+  - `ImportSTEP` añade los sólidos y superficies de un STEP a la capa actual, convertidos a las
+    unidades del modelo.
 
 ## Desarrollo
 
