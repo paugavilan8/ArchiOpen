@@ -3,8 +3,8 @@ import type { Document } from '../core/document'
 import { expandBox, tessellate } from '../core/geometry'
 import { Viewport, ViewKind } from './viewport'
 
-const GAP_COLOR = 0x4b5057
-const BACKGROUND_COLOR = 0xaeb3ba
+const GAP_COLOR = 0x15171a
+const BACKGROUND_COLOR = 0xb1b6bd
 const SELECTED_COLOR = '#ffee00'
 const LOCKED_COLOR = '#6b7280'
 const PREVIEW_COLOR = '#1b2330'
@@ -59,13 +59,17 @@ export class Display {
     this.active.el.classList.remove('active')
     this.active = vp
     vp.el.classList.add('active')
-    if (this.container.classList.contains('maximized')) this.setMaximized(vp)
+    if (this.isMaximized) this.setMaximized(vp)
     this.requestRender()
+  }
+
+  get isMaximized(): boolean {
+    return this.container.classList.contains('maximized')
   }
 
   toggleMaximize(vp: Viewport = this.active): void {
     this.setActive(vp)
-    this.setMaximized(this.container.classList.contains('maximized') ? null : vp)
+    this.setMaximized(this.isMaximized ? null : vp)
   }
 
   private setMaximized(vp: Viewport | null): void {
@@ -151,6 +155,7 @@ export class Display {
     for (const vp of this.viewports) {
       if (!vp.isVisible) continue
       vp.updateCamera()
+      vp.updateGizmo()
       const x = vp.el.offsetLeft
       const y = fullHeight - vp.el.offsetTop - vp.height
       r.setViewport(x, y, vp.width, vp.height)

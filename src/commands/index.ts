@@ -1,5 +1,6 @@
 import { drawCommands } from './draw'
 import { editCommands } from './edit'
+import { fileCommands } from './file'
 import type { CommandRunner } from './runner'
 import { viewCommands } from './view'
 
@@ -16,6 +17,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...drawCommands, ...editCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }

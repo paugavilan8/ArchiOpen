@@ -27,6 +27,15 @@ const GRID_EXTENT = 100
 const GRID_MAJOR = 10
 const GRID_COLORS = { minor: 0x9da3aa, major: 0x878d95, xaxis: 0x9b3a34, yaxis: 0x3b7d3f }
 
+const GIZMO_SIZE = 56
+const GIZMO_LENGTH = 20
+const GIZMO_AXES = [
+  { dir: X, label: 'X', color: '#c8463d' },
+  { dir: Y, label: 'Y', color: '#3f9a45' },
+  { dir: Z, label: 'Z', color: '#3a6fd8' },
+]
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
 export interface ScreenPoint {
   x: number
   y: number
@@ -39,6 +48,7 @@ export class Viewport {
   readonly cplane: Plane
   readonly grid: THREE.Group
   readonly target = new THREE.Vector3()
+  private readonly gizmo: { group: SVGGElement; line: SVGLineElement; text: SVGTextElement }[] = []
 
   private viewHeight = DEFAULT_HEIGHT
   private distance = DEFAULT_DISTANCE
@@ -64,7 +74,46 @@ export class Viewport {
     this.titleEl = document.createElement('span')
     this.titleEl.className = 'viewport-title'
     this.titleEl.textContent = kind
-    this.el.appendChild(this.titleEl)
+    this.el.append(this.titleEl, this.buildGizmo())
+  }
+
+  private buildGizmo(): SVGSVGElement {
+    const svg = document.createElementNS(SVG_NS, 'svg')
+    svg.setAttribute('class', 'axis-gizmo')
+    svg.setAttribute('viewBox', `${-GIZMO_SIZE / 2} ${-GIZMO_SIZE / 2} ${GIZMO_SIZE} ${GIZMO_SIZE}`)
+    for (const axis of GIZMO_AXES) {
+      const group = document.createElementNS(SVG_NS, 'g')
+      const line = document.createElementNS(SVG_NS, 'line')
+      line.setAttribute('stroke', axis.color)
+      const text = document.createElementNS(SVG_NS, 'text')
+      text.setAttribute('fill', axis.color)
+      text.textContent = axis.label
+      group.append(line, text)
+      svg.appendChild(group)
+      this.gizmo.push({ group, line, text })
+    }
+    return svg
+  }
+
+  /** Points the corner axis triad along the current view. */
+  updateGizmo(): void {
+    const view = this.camera.matrixWorldInverse
+    const ends = GIZMO_AXES.map((axis, i) => ({ i, v: this.tmp.copy(axis.dir).transformDirection(view).clone() }))
+    // Draw the axes pointing away from the viewer first, so the nearer ones stay on top.
+    ends.sort((a, b) => a.v.z - b.v.z)
+    for (const { i, v } of ends) {
+      const { group, line, text } = this.gizmo[i]
+      const x = v.x * GIZMO_LENGTH
+      const y = -v.y * GIZMO_LENGTH
+      line.setAttribute('x2', x.toFixed(2))
+      line.setAttribute('y2', y.toFixed(2))
+      // An axis that points straight at the viewer collapses to a dot, so its label is hidden.
+      const visible = Math.hypot(v.x, v.y) > 0.15
+      text.style.display = visible ? '' : 'none'
+      text.setAttribute('x', (x * 1.3).toFixed(2))
+      text.setAttribute('y', (y * 1.3).toFixed(2))
+      group.parentNode!.appendChild(group)
+    }
   }
 
   get isOrtho(): boolean {

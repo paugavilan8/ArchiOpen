@@ -1,3 +1,4 @@
+import type { FileManager } from '../app/files'
 import type { Document } from '../core/document'
 import type { Settings } from '../core/settings'
 import { CancelError, Interaction } from '../input/interaction'
@@ -8,6 +9,7 @@ export interface CommandContext {
   display: Display
   input: Interaction
   settings: Settings
+  files: FileManager
   log(text: string): void
 }
 
