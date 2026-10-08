@@ -1,7 +1,7 @@
 import { Matrix4, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { clampedKnots } from '../math/nurbs'
-import { chain, closestPoint, controlPoints, explode, isSimilarity, join, length, removeControlPoints, reverse, split, subCurve, transform, withControlPoints } from './curves'
+import { arcThrough, chain, circleThrough, closestPoint, controlPoints, explode, isSimilarity, join, length, removeControlPoints, reverse, split, subCurve, transform, withControlPoints } from './curves'
 import { AnyCurve, ArcGeometry, CircleGeometry, CurveGeometry, domain, endPoint, Geometry, isClosed, pointAt, PolylineGeometry, startPoint } from './geometry'
 import { intersect } from './intersect'
 
@@ -169,5 +169,31 @@ describe('affine transforms and control points', () => {
     expect(fewer.degree).toBe(2)
     expect(removeControlPoints(line(v(0, 0), v(1, 0)), new Set([0]))).toBeNull()
     expect(controlPoints(circle)).toBeNull()
+  })
+})
+
+describe('circles through points', () => {
+  it('finds the circle through three points', () => {
+    const c = circleThrough(v(5, 0), v(0, 5), v(-5, 0))!
+    expectPoint(c.center, v(0, 0))
+    expect(c.radius).toBeCloseTo(5)
+    expectPoint(startPoint(c), v(5, 0))
+  })
+
+  it('makes arcs that pass through the middle point, either way round', () => {
+    const ccw = arcThrough(v(5, 0), v(0, 5), v(-5, 0))!
+    expect(ccw.angle).toBeCloseTo(Math.PI)
+    expectPoint(pointAt(ccw, ccw.angle / 2), v(0, 5))
+    const cw = arcThrough(v(5, 0), v(0, -5), v(-5, 0))!
+    expectPoint(pointAt(cw, cw.angle / 2), v(0, -5))
+    const big = arcThrough(v(5, 0), v(-5, 0), v(0, -5))!
+    expect(big.angle).toBeCloseTo(1.5 * Math.PI)
+    expectPoint(endPoint(big), v(0, -5))
+  })
+
+  it('works in any plane and rejects collinear points', () => {
+    const tilted = arcThrough(v(0, 0, 0), v(1, 1, 1), v(2, 0, 2))!
+    expectPoint(pointAt(tilted, tilted.angle / 2), v(1, 1, 1))
+    expect(circleThrough(v(0, 0), v(1, 1), v(2, 2))).toBeNull()
   })
 })

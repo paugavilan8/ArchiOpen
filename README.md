@@ -67,8 +67,8 @@ se adjuntan a un borrador de *release*.
   - `ExportSTEP` escribe la selección (o todo lo visible) con geometría exacta: sólidos y
     superficies como B-rep y curvas como curvas, con el nombre y el color de su capa y las
     unidades del modelo.
-  - `ImportSTEP` añade los sólidos y superficies de un STEP a la capa actual, convertidos a las
-    unidades del modelo.
+  - `ImportSTEP` añade los sólidos, superficies y curvas de un STEP a la capa actual, convertidos
+    a las unidades del modelo. Líneas, círculos y arcos llegan exactos; otras curvas, ajustadas.
 
 ## Desarrollo
 

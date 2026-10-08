@@ -271,9 +271,11 @@ export class FileManager {
     if (!file) return null
     const bytes = await file.read()
     await loadKernel()
-    const shapes = await readStep(bytes, this.doc.units)
-    const ids = shapes.map((shape) => this.doc.add(toBrep(shape)).id)
-    return { ids, message: `Imported ${file.fileName}: ${ids.length} object${ids.length === 1 ? '' : 's'} in ${this.doc.units.toLowerCase()}` }
+    const { shapes, curves } = await readStep(bytes, this.doc.units)
+    const ids = [...shapes.map((shape) => this.doc.add(toBrep(shape)).id), ...curves.map((curve) => this.doc.add(curve).id)]
+    const parts = [`${shapes.length} solid${shapes.length === 1 ? '' : 's'} or surface${shapes.length === 1 ? '' : 's'}`]
+    if (curves.length > 0) parts.push(`${curves.length} curve${curves.length === 1 ? '' : 's'}`)
+    return { ids, message: `Imported ${file.fileName}: ${parts.join(' and ')}, in ${this.doc.units.toLowerCase()}` }
   }
 
   /** Reads a .3dm; its polysurfaces are rebuilt as exact shapes with the geometry kernel. */

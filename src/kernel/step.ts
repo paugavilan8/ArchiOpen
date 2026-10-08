@@ -1,7 +1,8 @@
-import { Matrix4 } from 'three'
+import { Matrix4, Vector3 } from 'three'
 import * as R from 'replicad'
-import { transform } from '../core/curves'
-import type { Geometry } from '../core/geometry'
+import { arcThrough, circleThrough, join, transform } from '../core/curves'
+import type { AnyCurve, Geometry } from '../core/geometry'
+import { interpolate } from '../math/nurbs'
 import { curveToWire, shapeOf } from './brep'
 
 /** STEP unit codes understood by Open CASCADE, by model unit name. */
@@ -61,21 +62,58 @@ function inFileUnits(g: Geometry, toFile: Matrix4, scale: number): R.AnyShape {
   return scaled.type === 'brep' ? shapeOf(scaled) : curveToWire(scaled)
 }
 
-/**
- * Reads a STEP file in the given model units. Each solid becomes its own shape; anything that is not
- * part of a solid (open surfaces, loose curves) comes as one more shape.
- */
-export async function readStep(bytes: Uint8Array, units: string): Promise<R.AnyShape[]> {
+const vec = (v: R.Vector) => new Vector3(v.x, v.y, v.z)
+
+/** One edge as a curve: lines, circles and arcs exactly, anything else as a fitted cubic. */
+function edgeToCurve(edge: R.Edge): AnyCurve | null {
+  const at = (t: number) => vec(edge.pointAt(t))
+  const start = vec(edge.startPoint)
+  const end = vec(edge.endPoint)
+  switch (edge.geomType) {
+    case 'LINE':
+      return start.distanceTo(end) > 1e-12 ? { type: 'polyline', points: [start, end], closed: false } : null
+    case 'CIRCLE':
+      return edge.isClosed ? circleThrough(at(0), at(1 / 3), at(2 / 3)) : arcThrough(start, at(0.5), end)
+    default: {
+      const points: Vector3[] = []
+      for (let i = 0; i <= 64; i++) points.push(at(i / 64))
+      return { type: 'curve', ...interpolate(points, 3) }
+    }
+  }
+}
+
+export interface StepContent {
+  /** Each solid on its own, plus one shape for faces that belong to no solid. */
+  shapes: R.AnyShape[]
+  /** Edges that bound no face, joined into chains where their ends meet. */
+  curves: AnyCurve[]
+}
+
+/** Reads a STEP file in the given model units. */
+export async function readStep(bytes: Uint8Array, units: string): Promise<StepContent> {
   // The reader converts to this global unit, which writing a STEP file also changes.
   const { code, scale } = unitOf(units)
   R.getOC().Interface_Static.SetCVal('xstep.cascade.unit', code)
   const read = await R.importSTEP(new Blob([bytes as BlobPart]))
   const shape = scale === 1 ? read : read.scale(1 / scale, [0, 0, 0])
-  const solids = (shape as R.Shape3D).solids ?? []
-  if (solids.length === 0) return [shape]
-  const solidFaces = solids.reduce((n, s) => n + s.faces.length, 0)
-  if (solidFaces === shape.faces.length) return solids
-  // Keep faces that belong to no solid, so nothing in the file is dropped.
-  const loose = shape.faces.filter((f) => !solids.some((s) => s.faces.some((g) => g.isSame(f))))
-  return loose.length > 0 ? [...solids, R.makeCompound(loose)] : solids
+
+  const faces = shape.faces
+  // Edges of faces are part of those surfaces; the others are curves in their own right. (Read them
+  // before the faces go into compounds, which takes them over.)
+  const faceEdges = new Map<number, R.Edge[]>()
+  for (const face of faces) for (const e of face.edges) faceEdges.set(e.hashCode, [...(faceEdges.get(e.hashCode) ?? []), e])
+  const free = shape.edges.filter((e) => !(faceEdges.get(e.hashCode) ?? []).some((f) => f.isSame(e)))
+  const pieces = free.map(edgeToCurve).filter((c): c is AnyCurve => c !== null)
+
+  const shapes: R.AnyShape[] = []
+  if (faces.length > 0) {
+    const solids = (shape as R.Shape3D).solids ?? []
+    shapes.push(...solids)
+    // Keep faces that belong to no solid, so nothing in the file is dropped.
+    const loose = faces.filter((f) => !solids.some((s) => s.faces.some((g) => g.isSame(f))))
+    if (solids.length === 0) shapes.push(R.makeCompound(faces))
+    else if (loose.length > 0) shapes.push(R.makeCompound(loose))
+  }
+
+  return { shapes, curves: join(pieces).map((j) => j.geometry) }
 }
