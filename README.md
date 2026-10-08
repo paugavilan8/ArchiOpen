@@ -53,8 +53,10 @@ se adjuntan a un borrador de *release*.
 - Archivos `.archi` (JSON) con Abrir/Guardar; la sesión se recupera sola si la app se cierra.
 - Archivos de Rhino `.3dm` (con [rhino3dm](https://github.com/mcneel/rhino3dm), MIT):
   - `Open` abre `.archi` o `.3dm`. De un `.3dm` se cargan las curvas (líneas, polilíneas, arcos,
-    círculos, NURBS y polycurves), las capas con su color, visibilidad y bloqueo, y las unidades.
-    Las superficies, mallas, textos y bloques aún no se cargan y se avisa de cuántos hay.
+    círculos, NURBS y polycurves), las polisuperficies, superficies y extrusiones (reconstruidas
+    como geometría exacta y editable: sólidos cerrados, caras recortadas y agujeros), las capas
+    con su color, visibilidad y bloqueo, y las unidades. Las mallas, SubD, textos y bloques aún no
+    se cargan y se avisa de cuántos hay.
   - `Save` nunca sobrescribe un `.3dm` abierto (podría perder lo que no se cargó): guarda un `.archi`.
   - `Export` escribe un `.3dm` con las curvas, las capas (también las anidadas) y las unidades.
     Las superficies y sólidos se exportan como mallas.

@@ -1,9 +1,10 @@
 import { Vector3 } from 'three'
-import type { Curve, GeometryBase, RhinoModule } from 'rhino3dm'
+import type { Brep, Curve, GeometryBase, NurbsCurve, RhinoModule } from 'rhino3dm'
 import { chain } from '../core/curves'
 import type { Layer } from '../core/document'
 import type { AnyCurve, BrepGeometry, Geometry, SegmentGeometry } from '../core/geometry'
 import { interpolate } from '../math/nurbs'
+import type { BrepFaceData, NurbsCurveData, NurbsSurfaceData, RhinoBrepData } from './rhinoBrepData'
 
 /** Content read from a .3dm file, ready to be added to a document. */
 export interface RhinoImport {
@@ -11,6 +12,10 @@ export interface RhinoImport {
   layers: Omit<Layer, 'id'>[]
   /** Geometry with the index of its layer in `layers`. */
   objects: { layer: number; geometry: Geometry }[]
+  /** Polysurfaces, surfaces and extrusions, to be rebuilt by the geometry kernel. */
+  breps: { layer: number; data: RhinoBrepData }[]
+  /** The file's absolute tolerance, used when joining the faces of polysurfaces. */
+  tolerance: number
   /** Objects that could not be read, counted by kind (surfaces, meshes, text, ...). */
   skipped: Map<[string, string], number>
 }
@@ -45,6 +50,92 @@ function rgbColor(hex: string): { r: number; g: number; b: number; a: number } {
 }
 
 // --- Reading -------------------------------------------------------------------------
+
+/** Rhino leaves out the first and last knot of a clamped knot vector; this puts them back. */
+const fullKnots = (knots: number[]) => [knots[0], ...knots, knots[knots.length - 1]]
+
+/** Rhino gives rational control points premultiplied by their weight, as (x·w, y·w, z·w, w). */
+function euclidean(p: number[]): { point: number[]; weight: number } {
+  const w = p[3] ?? 1
+  return { point: [p[0] / w, p[1] / w, p[2] / w], weight: w }
+}
+
+function curveData(c: NurbsCurve): NurbsCurveData {
+  const points: number[][] = []
+  const weights: number[] = []
+  for (let i = 0; i < c.points().count; i++) {
+    const { point, weight } = euclidean(c.points().get(i))
+    points.push(point)
+    weights.push(weight)
+  }
+  const [t0, t1] = c.domain
+  const samples: number[][] = []
+  for (let i = 0; i <= 32; i++) samples.push(c.pointAt(t0 + ((t1 - t0) * i) / 32))
+  return { degree: c.degree, points, weights: c.isRational ? weights : null, knots: fullKnots(c.knots().toList()), samples }
+}
+
+function surfaceData(rhino: RhinoModule, surface: InstanceType<RhinoModule['Surface']>): NurbsSurfaceData {
+  const s = surface.toNurbsSurface()
+  const list = s.points()
+  const points: number[][][] = []
+  const weights: number[][] = []
+  for (let u = 0; u < list.countU; u++) {
+    points.push([])
+    weights.push([])
+    for (let v = 0; v < list.countV; v++) {
+      const { point, weight } = euclidean(list.get(u, v))
+      points[u].push(point)
+      weights[u].push(weight)
+    }
+  }
+  return {
+    degreeU: s.orderU - 1,
+    degreeV: s.orderV - 1,
+    points,
+    weights: s.isRational ? weights : null,
+    knotsU: fullKnots(s.knotsU().toList()),
+    knotsV: fullKnots(s.knotsV().toList()),
+  }
+}
+
+/** Faces, boundary loops and edges of a polysurface, as plain data. */
+function brepData(rhino: RhinoModule, brep: Brep): RhinoBrepData {
+  // BrepLoopType exists at runtime but is missing from the package's typings.
+  const outer = (rhino as unknown as { BrepLoopType: { Outer: { value: number } } }).BrepLoopType.Outer.value
+  const faces: BrepFaceData[] = []
+  for (let i = 0; i < brep.faces().count; i++) {
+    const face = brep.faces().get(i)
+    const loops = []
+    for (let l = 0; l < face.loops.count; l++) {
+      const loop = face.loops.get(l)
+      const trims = []
+      for (let t = 0; t < loop.trimCount; t++) {
+        const trim = loop.trims.get(t)
+        trims.push({ edge: trim.edgeIndex, reversed: trim.isReversed })
+      }
+      loops.push({ outer: (loop.loopType as unknown as { value: number }).value === outer, trims })
+    }
+    faces.push({ surface: surfaceData(rhino, face.underlyingSurface()), reversed: face.orientationIsReversed, loops })
+  }
+  const edges: NurbsCurveData[] = []
+  for (let i = 0; i < brep.edges().count; i++) edges.push(curveData(brep.edges().get(i).toNurbsCurve()))
+  return { faces, edges, solid: brep.isSolid }
+}
+
+/** Polysurface data for breps, extrusions and single surfaces; null for anything else. */
+function readBrep(rhino: RhinoModule, g: GeometryBase): RhinoBrepData | null {
+  let brep: Brep | null = null
+  if (g instanceof rhino.Brep) brep = g
+  else if (g instanceof rhino.Extrusion) brep = g.toBrep(false)
+  else if (g instanceof rhino.Surface) brep = rhino.Brep.createFromSurface(g)
+  if (!brep) return null
+  try {
+    return brepData(rhino, brep)
+  } catch (error) {
+    console.warn('Could not read a polysurface', error)
+    return null
+  }
+}
 
 interface RhinoPlane {
   origin: Triple
@@ -161,6 +252,7 @@ export function readRhinoFile(rhino: RhinoModule, bytes: Uint8Array): RhinoImpor
     }
 
     const objects: RhinoImport['objects'] = []
+    const breps: RhinoImport['breps'] = []
     const skipped = new Map<[string, string], number>()
     const skip = (kind: [string, string]) => skipped.set(kind, (skipped.get(kind) ?? 0) + 1)
     const table = file.objects()
@@ -170,17 +262,19 @@ export function readRhinoFile(rhino: RhinoModule, bytes: Uint8Array): RhinoImpor
       // Geometry inside block definitions is not placed in the model by itself.
       if (attributes.isInstanceDefinitionObject) continue
       const geometry = obj.geometry()
+      const layer = Math.min(Math.max(0, attributes.layerIndex), Math.max(0, layers.length - 1))
       const converted = geometry instanceof rhino.Curve ? readCurve(rhino, geometry) : null
-      if (converted) {
-        const layer = Math.min(Math.max(0, attributes.layerIndex), Math.max(0, layers.length - 1))
-        objects.push({ layer, geometry: converted })
-      } else {
+      const brep = converted ? null : readBrep(rhino, geometry)
+      if (converted) objects.push({ layer, geometry: converted })
+      else if (brep) breps.push({ layer, data: brep })
+      else {
         const name = geometry?.constructor?.name ?? 'Unknown'
         skip(geometry instanceof rhino.Curve ? UNSUPPORTED_CURVE : (KIND_NAMES[name] ?? OTHER))
       }
     }
     if (layers.length === 0) layers.push({ name: 'Default', color: '#000000', visible: true, locked: false })
-    return { units, layers, objects, skipped }
+    const tolerance = file.settings().modelAbsoluteTolerance || 0.001
+    return { units, layers, objects, breps, tolerance, skipped }
   } finally {
     file.destroy()
   }

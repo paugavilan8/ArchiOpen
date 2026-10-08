@@ -87,7 +87,7 @@ describe('exporting surfaces and solids', () => {
 })
 
 describe('reading Rhino content', () => {
-  it('recognizes rational circles and arcs, flattens polycurves and reports what it skips', () => {
+  it('recognizes rational circles and arcs, flattens polycurves and keeps surfaces for the kernel', () => {
     const file = new rhino.File3dm()
     const parent = new rhino.Layer()
     parent.name = 'Plans'
@@ -117,7 +117,10 @@ describe('reading Rhino content', () => {
     expect(polyline).toMatchObject({ type: 'polyline' })
     expect(polyline.type === 'polyline' && polyline.points.length).toBe(3)
     expect(result.objects.every((o) => o.layer === 1)).toBe(true)
-    expect(describeSkipped(result.skipped)).toBe('1 surface')
+    // The sphere is kept as polysurface data for the kernel, not skipped.
+    expect(result.breps).toHaveLength(1)
+    expect(result.breps[0].data.faces).toHaveLength(1)
+    expect(describeSkipped(result.skipped)).toBe('')
   })
 
   it('fits rational curves that are not arcs', () => {

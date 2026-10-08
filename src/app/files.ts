@@ -1,6 +1,9 @@
 import type { Document } from '../core/document'
 import { describeSkipped, readRhinoFile, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
 import { loadRhino } from '../io/loadRhino'
+import { toBrep } from '../kernel/brep'
+import { shapeFromRhino } from '../kernel/fromRhino'
+import { loadKernel } from '../kernel/loadKernel'
 import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
 
 interface FileType {
@@ -12,6 +15,7 @@ interface FileType {
 export const ARCHI: FileType = { name: 'ArchiOpen model', extension: 'archi', mime: 'application/json' }
 export const RHINO: FileType = { name: 'Rhino 3D model', extension: '3dm', mime: 'application/octet-stream' }
 const UNTITLED = 'Untitled'
+const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']
 
 /** True when running inside the desktop shell rather than a plain browser tab. */
 export const isDesktop = '__TAURI_INTERNALS__' in window
@@ -244,12 +248,28 @@ export class FileManager {
     return fileName
   }
 
+  /** Reads a .3dm; its polysurfaces are rebuilt as exact shapes with the geometry kernel. */
   private async readRhino(bytes: Uint8Array): Promise<RhinoImport> {
-    return readRhinoFile(await loadRhino(), bytes)
+    const result = readRhinoFile(await loadRhino(), bytes)
+    if (result.breps.length === 0) return result
+    await loadKernel()
+    for (const { layer, data } of result.breps) {
+      try {
+        result.objects.push({ layer, geometry: toBrep(shapeFromRhino(data, result.tolerance)) })
+      } catch (error) {
+        console.warn('Could not rebuild a polysurface', error)
+        result.skipped.set(NOT_REBUILT, (result.skipped.get(NOT_REBUILT) ?? 0) + 1)
+      }
+    }
+    return result
   }
 
   private rhinoSummary(result: RhinoImport): string {
-    const curves = `${result.objects.length} curve${result.objects.length === 1 ? '' : 's'} on ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}`
+    const breps = result.objects.filter((o) => o.geometry.type === 'brep').length
+    const curveCount = result.objects.length - breps
+    const parts = [`${curveCount} curve${curveCount === 1 ? '' : 's'}`]
+    if (breps > 0) parts.push(`${breps} polysurface${breps === 1 ? '' : 's'}`)
+    const curves = `${parts.join(' and ')} on ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}`
     const skipped = describeSkipped(result.skipped)
     return skipped ? `${curves}. Not loaded yet: ${skipped}` : curves
   }
