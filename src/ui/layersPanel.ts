@@ -1,4 +1,5 @@
 import type { Document, Layer } from '../core/document'
+import { iconButton } from './icons'
 
 export class LayersPanel {
   private readonly list = document.createElement('ul')
@@ -8,13 +9,16 @@ export class LayersPanel {
     private readonly doc: Document,
     private readonly log: (text: string) => void,
   ) {
-    const section = document.createElement('section')
-    section.className = 'panel'
-
-    const header = document.createElement('header')
-    const title = document.createElement('h2')
-    title.textContent = 'Layers'
-    header.append(title, this.button('+', 'New layer', () => doc.addLayer()), this.button('−', 'Delete current layer', () => this.removeCurrent()))
+    const header = document.createElement('div')
+    header.className = 'panel-toolbar'
+    const hint = document.createElement('span')
+    hint.className = 'panel-hint'
+    hint.textContent = 'Click to make current'
+    header.append(
+      hint,
+      iconButton('plus', 'New layer', () => doc.addLayer()),
+      iconButton('minus', 'Delete current layer', () => this.removeCurrent()),
+    )
 
     this.list.className = 'layer-list'
     // Delegated, because the click that precedes a double-click can re-render the rows.
@@ -23,11 +27,10 @@ export class LayersPanel {
       const layer = doc.layers.find((l) => String(l.id) === label?.dataset.layerId)
       if (label && layer) this.rename(layer, label)
     })
-    section.append(header, this.list)
-    container.appendChild(section)
+    container.append(header, this.list)
 
     doc.on((kind) => {
-      if (kind === 'layers') this.render()
+      if (kind !== 'selection') this.render()
     })
     this.render()
   }
@@ -38,40 +41,50 @@ export class LayersPanel {
   }
 
   private render(): void {
-    this.list.replaceChildren(...this.doc.layers.map((layer) => this.row(layer)))
+    const counts = new Map<number, number>()
+    for (const obj of this.doc.objects.values()) counts.set(obj.layerId, (counts.get(obj.layerId) ?? 0) + 1)
+    this.list.replaceChildren(...this.doc.layers.map((layer) => this.row(layer, counts.get(layer.id) ?? 0)))
   }
 
-  private row(layer: Layer): HTMLLIElement {
+  private row(layer: Layer, count: number): HTMLLIElement {
     const { doc } = this
     const row = document.createElement('li')
-    row.classList.toggle('current', layer.id === doc.currentLayerId)
-    row.title = 'Click to make current, double-click the name to rename'
+    const isCurrent = layer.id === doc.currentLayerId
+    row.classList.toggle('current', isCurrent)
+    row.classList.toggle('hidden-layer', !layer.visible)
     row.addEventListener('click', () => doc.setCurrentLayer(layer.id))
 
     const current = document.createElement('span')
     current.className = 'layer-current'
-    current.textContent = layer.id === doc.currentLayerId ? '✓' : ''
+    current.textContent = isCurrent ? '✓' : ''
+
+    const color = document.createElement('input')
+    color.type = 'color'
+    color.value = layer.color
+    color.dataset.tip = 'Layer color'
+    color.addEventListener('click', (e) => e.stopPropagation())
+    color.addEventListener('change', () => doc.updateLayer(layer.id, { color: color.value }))
 
     const name = document.createElement('span')
     name.className = 'layer-name'
     name.textContent = layer.name
     name.dataset.layerId = String(layer.id)
+    name.dataset.tip = 'Double-click to rename'
 
-    const visible = this.toggle(layer.visible ? 'On' : 'Off', 'Show or hide the layer', layer.visible, () =>
+    const objects = document.createElement('span')
+    objects.className = 'layer-count'
+    objects.textContent = count > 0 ? String(count) : ''
+
+    const visible = iconButton(layer.visible ? 'eye' : 'eyeOff', layer.visible ? 'Hide layer' : 'Show layer', () =>
       doc.updateLayer(layer.id, { visible: !layer.visible }),
     )
-    const locked = this.toggle(layer.locked ? 'Locked' : 'Free', 'Lock or unlock the layer', !layer.locked, () =>
+    visible.classList.toggle('off', !layer.visible)
+    const locked = iconButton(layer.locked ? 'lock' : 'unlock', layer.locked ? 'Unlock layer' : 'Lock layer', () =>
       doc.updateLayer(layer.id, { locked: !layer.locked }),
     )
+    locked.classList.toggle('off', layer.locked)
 
-    const color = document.createElement('input')
-    color.type = 'color'
-    color.value = layer.color
-    color.title = 'Layer color'
-    color.addEventListener('click', (e) => e.stopPropagation())
-    color.addEventListener('change', () => doc.updateLayer(layer.id, { color: color.value }))
-
-    row.append(current, name, visible, locked, color)
+    row.append(current, color, name, objects, visible, locked)
     return row
   }
 
@@ -94,26 +107,10 @@ export class LayersPanel {
     input.addEventListener('blur', () => finish(true))
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') finish(true)
-      if (e.key === 'Escape') finish(false)
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        finish(false)
+      }
     })
-  }
-
-  private toggle(text: string, title: string, on: boolean, onClick: () => void): HTMLButtonElement {
-    const button = this.button(text, title, onClick)
-    button.classList.add('layer-toggle')
-    button.classList.toggle('off', !on)
-    return button
-  }
-
-  private button(text: string, title: string, onClick: () => void): HTMLButtonElement {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.textContent = text
-    button.title = title
-    button.addEventListener('click', (e) => {
-      e.stopPropagation()
-      onClick()
-    })
-    return button
   }
 }

@@ -1,4 +1,5 @@
 import './style.css'
+import { FileManager, isDesktop } from './app/files'
 import { registerCommands } from './commands'
 import { CommandContext, CommandRunner } from './commands/runner'
 import { Document } from './core/document'
@@ -6,32 +7,37 @@ import { Settings } from './core/settings'
 import { Interaction } from './input/interaction'
 import { CommandLine } from './ui/commandLine'
 import { LayersPanel } from './ui/layersPanel'
+import { closeMenu, isMenuOpen } from './ui/menu'
+import { buildMenuBar } from './ui/menuBar'
+import { PropertiesPanel } from './ui/propertiesPanel'
+import { buildTabs } from './ui/sidePanel'
 import { StatusBar } from './ui/statusBar'
-import { buildToolbar } from './ui/toolbar'
+import { buildToolbars } from './ui/toolbar'
+import { installTooltips } from './ui/tooltip'
+import { installViewportMenus } from './ui/viewportMenus'
 import { Display } from './view/display'
 
-const STORAGE_KEY = 'nurbs-cad:document'
+const STORAGE_KEY = 'archiopen:session'
 const SAVE_DELAY = 300
 
 const doc = new Document()
-try {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved) doc.load(JSON.parse(saved))
-} catch (error) {
-  console.warn('Could not restore the saved document', error)
-}
-
+const files = new FileManager(doc)
 const settings = new Settings()
 const display = new Display(document.getElementById('viewports')!, doc)
 const input = new Interaction(doc, display, settings)
-const ctx: CommandContext = { doc, display, input, settings, log: (text) => commandLine.log(text) }
+const ctx: CommandContext = { doc, display, input, settings, files, log: (text) => commandLine.log(text) }
 const runner = new CommandRunner(ctx)
 registerCommands(runner)
 
 const commandLine = new CommandLine(runner, input)
-const statusBar = new StatusBar(doc, settings)
-new LayersPanel(document.getElementById('side')!, doc, ctx.log)
-buildToolbar(document.getElementById('toolbar')!, runner)
+const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, settings)
+const [propertiesPane, layersPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers'])
+new PropertiesPanel(propertiesPane, doc, runner)
+new LayersPanel(layersPane, doc, ctx.log)
+buildMenuBar(document.getElementById('menus')!, runner, ctx)
+buildToolbars(document.getElementById('toolbar')!, document.getElementById('standard-bar')!, runner)
+installViewportMenus(display, runner)
+installTooltips()
 
 input.ui = {
   setPrompt: (text, options) => commandLine.setPrompt(text, options),
@@ -40,26 +46,86 @@ input.ui = {
 }
 runner.onIdle = () => commandLine.setIdle()
 
-// Autosave to the browser so a reload does not lose the model.
+// --- Window title ----------------------------------------------------------------
+
+const docTitle = document.getElementById('doc-title')!
+let shownTitle = ''
+
+function updateTitle(): void {
+  const title = `${files.name}${doc.modified ? ' •' : ''} — ArchiOpen`
+  if (title === shownTitle) return
+  shownTitle = title
+  document.title = title
+  docTitle.textContent = files.name
+  docTitle.classList.toggle('modified', doc.modified)
+  if (isDesktop) void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().setTitle(title))
+}
+doc.on(updateTitle)
+files.onChange(updateTitle)
+
+// --- Session recovery ------------------------------------------------------------
+// The model, its file name and its unsaved state are kept in browser storage, so a crash or reload
+// brings back exactly what was on screen. Saving to a file is still what keeps work for good.
+
+interface Session {
+  name: string
+  path: string | null
+  modified: boolean
+  document: unknown
+}
+
+try {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (saved) {
+    const session: Session = JSON.parse(saved)
+    doc.load(session.document)
+    doc.modified = session.modified
+    files.restore(session.name, session.path)
+  }
+} catch (error) {
+  console.warn('Could not restore the previous session', error)
+}
+
 let saveTimer = 0
-doc.on((kind) => {
-  if (kind === 'selection') return
+function scheduleSessionSave(): void {
   window.clearTimeout(saveTimer)
   saveTimer = window.setTimeout(() => {
+    const session: Session = { name: files.name, path: files.path, modified: doc.modified, document: doc.toJSON() }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(doc.toJSON()))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
     } catch (error) {
-      console.warn('Could not save the document', error)
+      console.warn('Could not store the session', error)
     }
   }, SAVE_DELAY)
+}
+doc.on((kind) => {
+  if (kind !== 'selection') scheduleSessionSave()
 })
+files.onChange(scheduleSessionSave)
+
+// --- Closing with unsaved changes ------------------------------------------------
+
+if (isDesktop) {
+  void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
+    getCurrentWindow().onCloseRequested(async (event) => {
+      if (!(await files.confirmDiscard())) event.preventDefault()
+    }),
+  )
+} else {
+  window.addEventListener('beforeunload', (e) => {
+    if (doc.modified) e.preventDefault()
+  })
+}
+
+// --- Keyboard --------------------------------------------------------------------
 
 function isTextEntry(target: EventTarget | null): boolean {
-  if (target instanceof HTMLTextAreaElement) return true
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true
   return target instanceof HTMLInputElement && (target.type === 'text' || target.type === '')
 }
 
-const SHORTCUTS: Record<string, string> = { z: 'Undo', y: 'Redo', a: 'SelAll' }
+const SHORTCUTS: Record<string, string> = { z: 'Undo', y: 'Redo', a: 'SelAll', n: 'New', o: 'Open', s: 'Save' }
+const SHIFT_SHORTCUTS: Record<string, string> = { s: 'SaveAs', z: 'Redo' }
 const FUNCTION_KEYS = { F3: 'osnap', F8: 'ortho', F9: 'gridSnap' } as const
 
 // The command line owns the keyboard: typing anywhere goes to it, as long as no other text field has focus.
@@ -74,9 +140,13 @@ document.addEventListener('keydown', (e) => {
     return
   }
   if (e.ctrlKey || e.metaKey) {
-    const macro = SHORTCUTS[e.key.toLowerCase()]
-    if (macro && !runner.busy) {
+    const key = e.key.toLowerCase()
+    const macro = (e.shiftKey ? SHIFT_SHORTCUTS : SHORTCUTS)[key]
+    // Undo, redo and select all wait for the running command; file commands may interrupt it.
+    const fileCommand = key === 'n' || key === 'o' || key === 's'
+    if (macro && (fileCommand || !runner.busy)) {
       e.preventDefault()
+      closeMenu()
       void runner.run(macro)
     }
     return
@@ -86,6 +156,7 @@ document.addEventListener('keydown', (e) => {
     settings.toggle(FUNCTION_KEYS[e.key as keyof typeof FUNCTION_KEYS])
     return
   }
+  if (isMenuOpen()) return
   if (e.key === 'Delete' && !runner.busy && commandLine.isEmpty && doc.selection.size > 0) {
     e.preventDefault()
     void runner.run('Delete')
@@ -103,10 +174,12 @@ document.addEventListener('keydown', (e) => {
 
 // Clicking buttons or viewports hands the keyboard back to the command line.
 document.addEventListener('click', (e) => {
-  if (!(e.target instanceof HTMLInputElement)) commandLine.focus()
+  const target = e.target as Element
+  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) commandLine.focus()
 })
 
-commandLine.log('Type a command name, or pick one from the toolbar. Enter, Space or right click repeats the last command.')
+commandLine.log('ArchiOpen 0.1. Type a command name, or pick one from the menus or toolbars. Enter, Space or right click repeats the last command.')
 commandLine.focus()
+updateTitle()
 
-if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings } })
+if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings, files } })

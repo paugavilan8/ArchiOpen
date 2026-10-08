@@ -21,6 +21,7 @@ type Action =
   | { type: 'add'; obj: CadObject }
   | { type: 'remove'; obj: CadObject }
   | { type: 'modify'; id: number; before: Geometry; after: Geometry }
+  | { type: 'relayer'; id: number; before: number; after: number }
 
 const LAYER_COLORS = ['#c0392b', '#1f6fb5', '#1e8449', '#b9770e', '#7d3c98', '#117a8b']
 
@@ -33,6 +34,8 @@ export class Document {
   readonly selection = new Set<number>()
   layers: Layer[] = defaultLayers()
   currentLayerId = 1
+  /** True when there are changes since the document was created, opened or saved. */
+  modified = false
 
   private nextObjectId = 1
   private nextLayerId = 2
@@ -46,6 +49,7 @@ export class Document {
   }
 
   private emit(kind: ChangeKind): void {
+    if (kind !== 'selection') this.modified = true
     for (const listener of this.listeners) listener(kind)
   }
 
@@ -65,6 +69,11 @@ export class Document {
   setGeometry(id: number, geometry: Geometry): void {
     const obj = this.objects.get(id)
     if (obj) this.record({ type: 'modify', id, before: obj.geometry, after: geometry })
+  }
+
+  setLayer(id: number, layerId: number): void {
+    const obj = this.objects.get(id)
+    if (obj && obj.layerId !== layerId) this.record({ type: 'relayer', id, before: obj.layerId, after: layerId })
   }
 
   layerOf(obj: CadObject): Layer {
@@ -137,6 +146,11 @@ export class Document {
       case 'modify': {
         const obj = this.objects.get(action.id)
         if (obj) obj.geometry = inverse ? action.before : action.after
+        break
+      }
+      case 'relayer': {
+        const obj = this.objects.get(action.id)
+        if (obj) obj.layerId = inverse ? action.before : action.after
         break
       }
     }
@@ -250,5 +264,11 @@ export class Document {
     this.tx = null
     this.emit('layers')
     this.emit('objects')
+    this.modified = false
+  }
+
+  /** Empties the document, as for a new file. */
+  clear(): void {
+    this.load({})
   }
 }

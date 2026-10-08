@@ -219,7 +219,7 @@ export class Interaction {
   }
 
   private onDown(vp: Viewport, e: PointerEvent): void {
-    if (e.target === vp.titleEl) return
+    if (vp.titleEl.contains(e.target as Node)) return
     this.display.setActive(vp)
     vp.updateCamera()
     const pos = localPosition(vp, e)

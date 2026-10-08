@@ -9,74 +9,110 @@ const SNAPS: [SnapKind, string][] = [
   ['quad', 'Quad'],
 ]
 
-const TOGGLES: [ToggleKey, string][] = [
-  ['gridSnap', 'Grid Snap'],
-  ['ortho', 'Ortho'],
-  ['osnap', 'Osnap'],
+const TOGGLES: [ToggleKey, string, string][] = [
+  ['gridSnap', 'Grid Snap', 'F9'],
+  ['ortho', 'Ortho', 'F8'],
+  ['osnap', 'Osnap', 'F3'],
 ]
 
-/** Object snap checkboxes plus the bottom bar with coordinates, current layer and mode toggles. */
+/** Bottom bar: cursor coordinates, current layer, selection, object snaps and drawing aids. */
 export class StatusBar {
   private readonly coords = document.createElement('span')
-  private readonly layer = document.createElement('span')
   private readonly swatch = document.createElement('i')
   private readonly layerName = document.createElement('span')
+  private readonly selection = document.createElement('span')
 
   constructor(
+    bar: HTMLElement,
     private readonly doc: Document,
     private readonly settings: Settings,
   ) {
-    this.buildSnapBar(document.getElementById('osnap-bar')!)
-    this.buildStatusBar(document.getElementById('status-bar')!)
-    doc.on((kind) => {
-      if (kind === 'layers') this.renderLayer()
-    })
+    const coordsGroup = this.group('status-coords')
+    const cplane = document.createElement('span')
+    cplane.className = 'status-label'
+    cplane.textContent = 'CPlane'
+    this.coords.className = 'status-value'
+    const units = document.createElement('span')
+    units.className = 'status-label'
+    units.textContent = 'mm'
+    coordsGroup.append(cplane, this.coords, units)
+
+    const layerGroup = this.group('status-layer')
+    layerGroup.dataset.tip = 'Current layer'
+    layerGroup.append(this.swatch, this.layerName)
+
+    this.selection.className = 'status-selection'
+
+    const snapGroup = this.group('status-snaps')
+    for (const [kind, text] of SNAPS) snapGroup.appendChild(this.snapChip(kind, text))
+
+    const toggleGroup = this.group('status-toggles')
+    for (const [key, text, shortcut] of TOGGLES) toggleGroup.appendChild(this.toggle(key, text, shortcut))
+
+    const spacer = document.createElement('span')
+    spacer.className = 'status-spacer'
+    bar.append(coordsGroup, layerGroup, this.selection, spacer, snapGroup, toggleGroup)
+
+    doc.on(() => this.renderDocument())
+    settings.onChange(() => bar.classList.toggle('osnap-off', !settings.osnap))
+    bar.classList.toggle('osnap-off', !settings.osnap)
     this.setCoords(0, 0, 0)
-    this.renderLayer()
+    this.renderDocument()
   }
 
   setCoords(x: number, y: number, z: number): void {
-    this.coords.textContent = `x ${x.toFixed(3)}   y ${y.toFixed(3)}   z ${z.toFixed(3)}`
+    this.coords.textContent = `${fmt(x)}  ${fmt(y)}  ${fmt(z)}`
   }
 
-  private buildSnapBar(bar: HTMLElement): void {
-    for (const [kind, text] of SNAPS) {
-      const label = document.createElement('label')
-      const box = document.createElement('input')
-      box.type = 'checkbox'
-      box.checked = this.settings.snaps[kind]
-      box.addEventListener('change', () => this.settings.setSnap(kind, box.checked))
-      label.append(box, text)
-      bar.appendChild(label)
+  private group(className: string): HTMLElement {
+    const el = document.createElement('div')
+    el.className = `status-group ${className}`
+    return el
+  }
+
+  private snapChip(kind: SnapKind, text: string): HTMLButtonElement {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = 'snap-chip'
+    chip.textContent = text
+    chip.dataset.tip = `${text} object snap`
+    chip.setAttribute('aria-pressed', 'false')
+    chip.addEventListener('click', () => this.settings.setSnap(kind, !this.settings.snaps[kind]))
+    const sync = () => {
+      chip.classList.toggle('on', this.settings.snaps[kind])
+      chip.setAttribute('aria-pressed', String(this.settings.snaps[kind]))
     }
+    this.settings.onChange(sync)
+    sync()
+    return chip
   }
 
-  private buildStatusBar(bar: HTMLElement): void {
-    const cplane = document.createElement('span')
-    cplane.textContent = 'CPlane'
-    this.coords.className = 'status-coords'
-    const units = document.createElement('span')
-    units.textContent = 'Millimeters'
-    this.layer.className = 'status-layer'
-    this.layer.append(this.swatch, this.layerName)
-    bar.append(cplane, this.coords, units, this.layer)
-
-    for (const [key, text] of TOGGLES) {
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'status-toggle'
-      button.textContent = text
-      button.addEventListener('click', () => this.settings.toggle(key))
-      const sync = () => button.classList.toggle('on', this.settings[key])
-      this.settings.onChange(sync)
-      sync()
-      bar.appendChild(button)
+  private toggle(key: ToggleKey, text: string, shortcut: string): HTMLButtonElement {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'status-toggle'
+    button.textContent = text
+    button.dataset.tip = `${text}  (${shortcut})`
+    button.addEventListener('click', () => this.settings.toggle(key))
+    const sync = () => {
+      button.classList.toggle('on', this.settings[key])
+      button.setAttribute('aria-pressed', String(this.settings[key]))
     }
+    this.settings.onChange(sync)
+    sync()
+    return button
   }
 
-  private renderLayer(): void {
+  private renderDocument(): void {
     const layer = this.doc.currentLayer
     this.swatch.style.background = layer.color
     this.layerName.textContent = layer.name
+    const n = this.doc.selection.size
+    this.selection.textContent = n === 0 ? '' : `${n} selected`
   }
+}
+
+/** Fixed width so the numbers do not jitter as the cursor moves. */
+function fmt(n: number): string {
+  return n.toFixed(3).padStart(10, ' ')
 }
