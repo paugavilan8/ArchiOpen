@@ -25,7 +25,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Import STEP…', 'ImportSTEP'),
         item('Export STEP…', 'ExportSTEP'),
         'separator',
-        item('Print to PDF…', 'ExportPDF'),
+        item('Print to PDF… (view or layouts)', 'ExportPDF'),
         item('Export DXF…', 'ExportDXF'),
       ],
     ],
@@ -119,6 +119,9 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
     [
       'Drawing',
       [
+        item('New Layout', 'Layout'),
+        item('Back to Model', 'ModelView'),
+        'separator',
         item('Make 2D Drawing', 'Make2D'),
         'separator',
         item('Text', 'Text'),

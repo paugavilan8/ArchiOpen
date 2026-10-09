@@ -66,6 +66,18 @@ se adjuntan a un borrador de *release*.
   DXF R12, que leen AutoCAD, LibreCAD, Illustrator y casi cualquier programa de CAD: capas con su
   color, tipo de línea y unidades; líneas, polilíneas, círculos y arcos exactos; el resto como
   polilíneas y los sombreados sólidos como relleno.
+- Láminas (layouts): `Layout` crea una lámina (A3 apaisado, con una vista en planta ajustada a
+  escala y un cajetín) y las pestañas de abajo (*Model*, cada lámina y *+*) cambian entre el modelo
+  y las láminas (doble clic en una pestaña para renombrarla). En la lámina:
+  - las vistas de detalle se mueven arrastrando, se redimensionan por las esquinas y con Mayús +
+    arrastrar se desplaza el modelo dentro; la rueda acerca la lámina;
+  - cada detalle tiene vista (planta, alzados, isométricas o la perspectiva actual), escala (1:1 a
+    1:10000), modo de dibujo (alámbrico o con líneas ocultas eliminadas, calculadas con el núcleo)
+    y un título que se rotula debajo con su escala;
+  - el cajetín muestra proyecto, plano, número, autor, fecha, escala y número de hoja (1/3…);
+  - el papel y la orientación se cambian en el panel y los detalles se recolocan;
+  - `ExportPDF` con una lámina abierta imprime esa lámina o todas (opción `Sheets`) en un PDF de
+    varias páginas, con los grosores y tipos de línea de cada capa.
 - Abrir e importar DXF (ASCII, de R12 a 2018): `Open` abre un `.dxf` como modelo nuevo e `Import`
   lo añade al actual, convertido a sus unidades. Se leen:
   - las capas con su color (también color verdadero), tipo de línea, grosor, apagadas y

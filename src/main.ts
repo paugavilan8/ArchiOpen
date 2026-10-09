@@ -9,6 +9,7 @@ import { CommandLine } from './ui/commandLine'
 import { LayersPanel } from './ui/layersPanel'
 import { BlocksPanel } from './ui/blocksPanel'
 import { installBlockEditBanner } from './ui/blockEditBanner'
+import { LayoutEditor } from './ui/layoutEditor'
 import { Gumball } from './ui/gumball'
 import { closeMenu, isMenuOpen } from './ui/menu'
 import { buildMenuBar } from './ui/menuBar'
@@ -39,6 +40,7 @@ new PropertiesPanel(propertiesPane, doc, runner)
 new LayersPanel(layersPane, doc, ctx.log)
 new BlocksPanel(blocksPane, doc, runner, ctx.log)
 installBlockEditBanner(document.getElementById('viewports')!, doc, runner)
+new LayoutEditor(document.getElementById('viewports')!, doc, display, runner, ctx.log)
 buildMenuBar(document.getElementById('menus')!, runner, ctx)
 buildToolbars(document.getElementById('toolbar')!, document.getElementById('standard-bar')!, runner)
 installViewportMenus(display, runner)

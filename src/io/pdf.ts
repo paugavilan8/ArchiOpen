@@ -1,6 +1,6 @@
 /**
- * A minimal vector PDF writer: one page of stroked polylines and filled regions, which is all a
- * line drawing needs. Coordinates are millimeters on the sheet, from its lower left corner.
+ * A minimal vector PDF writer: pages of stroked polylines and filled regions, which is all a line
+ * drawing needs. Coordinates are millimeters on the sheet, from its lower left corner.
  */
 
 type Point = [number, number]
@@ -16,6 +16,8 @@ export interface SheetItem {
   width: number
   /** Dash pattern in millimeters (drawn, gap, drawn, gap…); empty for a continuous line. */
   dashes: number[]
+  /** Rectangle [x, y, width, height] this item is cut to, e.g. a layout detail's frame. */
+  clip?: [number, number, number, number]
 }
 
 export interface Sheet {
@@ -43,9 +45,13 @@ export function contentStream(sheet: Sheet): string {
   const out: string[] = ['1 J 1 j']
   if (sheet.clip) out.push(`${sheet.clip.map((v) => num(v * PT)).join(' ')} re W n`)
   const at = ([x, y]: Point) => `${num(x * PT)} ${num(y * PT)}`
+  // Items cut to a frame draw inside a saved graphics state, which the clip ends with.
+  const open = (item: SheetItem) => item.clip && out.push('q', `${item.clip.map((v) => num(v * PT)).join(' ')} re W n`)
+  const close = (item: SheetItem) => item.clip && out.push('Q')
   // Fills first, so line work stays on top of solid hatches.
   for (const item of sheet.items) {
     if (item.fills.length === 0) continue
+    open(item)
     out.push(`${rgb(item.color)} rg`)
     for (const region of item.fills) {
       for (const loop of region) {
@@ -54,9 +60,11 @@ export function contentStream(sheet: Sheet): string {
       }
       out.push('f*')
     }
+    close(item)
   }
   for (const item of sheet.items) {
     if (item.lines.length === 0) continue
+    open(item)
     // A zero dash with round caps is a dot.
     const dashes = item.dashes.map((d) => num(Math.abs(d) * PT))
     out.push(`${rgb(item.color)} RG`, `${num(item.width * PT)} w`, `[${dashes.join(' ')}] 0 d`)
@@ -64,6 +72,7 @@ export function contentStream(sheet: Sheet): string {
       if (line.length < 2) continue
       out.push(`${at(line[0])} m`, ...line.slice(1).map((p) => `${at(p)} l`), 'S')
     }
+    close(item)
   }
   return out.join('\n')
 }
@@ -78,9 +87,11 @@ const latin1 = (text: string) => Uint8Array.from(text, (c) => c.charCodeAt(0) & 
 /** Escapes a string for a PDF literal; characters outside Latin-1 become '?'. */
 const pdfString = (text: string) => `(${text.replace(/[^\x20-\xff]/g, '?').replace(/[\\()]/g, '\\$&')})`
 
-/** Writes the sheet as a one-page PDF file. */
-export async function writePdf(sheet: Sheet): Promise<Uint8Array> {
-  const content = await deflate(latin1(contentStream(sheet)))
+/** Writes sheets as a PDF file, one page each. The first sheet's title is the document's. */
+export async function writePdf(sheets: Sheet | Sheet[]): Promise<Uint8Array> {
+  const pages = Array.isArray(sheets) ? sheets : [sheets]
+  const contents = await Promise.all(pages.map((sheet) => deflate(latin1(contentStream(sheet)))))
+  const title = pages[0]?.title
   const parts: Uint8Array[] = []
   const offsets: number[] = []
   let length = 0
@@ -100,16 +111,21 @@ export async function writePdf(sheet: Sheet): Promise<Uint8Array> {
   }
 
   push(latin1('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n'))
+  // Objects: 1 catalog, 2 page tree, 3 document info, then a page and its content for each sheet.
+  const pageRef = (i: number) => 4 + 2 * i
   object(1, '<< /Type /Catalog /Pages 2 0 R >>')
-  object(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>')
-  object(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(sheet.width * PT)} ${num(sheet.height * PT)}] /Contents 4 0 R /Resources << >> >>`)
-  object(4, `<< /Length ${content.length} /Filter /FlateDecode >>`, content)
-  object(5, `<< /Producer (ArchiOpen)${sheet.title ? ` /Title ${pdfString(sheet.title)}` : ''} >>`)
+  object(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${pageRef(i)} 0 R`).join(' ')}] /Count ${pages.length} >>`)
+  object(3, `<< /Producer (ArchiOpen)${title ? ` /Title ${pdfString(title)}` : ''} >>`)
+  pages.forEach((sheet, i) => {
+    const box = `[0 0 ${num(sheet.width * PT)} ${num(sheet.height * PT)}]`
+    object(pageRef(i), `<< /Type /Page /Parent 2 0 R /MediaBox ${box} /Contents ${pageRef(i) + 1} 0 R /Resources << >> >>`)
+    object(pageRef(i) + 1, `<< /Length ${contents[i].length} /Filter /FlateDecode >>`, contents[i])
+  })
 
   const xref = length
   const rows = offsets.slice(1).map((o) => `${String(o).padStart(10, '0')} 00000 n \n`)
   push(latin1(`xref\n0 ${offsets.length}\n0000000000 65535 f \n${rows.join('')}`))
-  push(latin1(`trailer\n<< /Size ${offsets.length} /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xref}\n%%EOF\n`))
+  push(latin1(`trailer\n<< /Size ${offsets.length} /Root 1 0 R /Info 3 0 R >>\nstartxref\n${xref}\n%%EOF\n`))
 
   const out = new Uint8Array(length)
   let at = 0
@@ -120,13 +136,4 @@ export async function writePdf(sheet: Sheet): Promise<Uint8Array> {
   return out
 }
 
-/** Standard paper sizes in millimeters, portrait. */
-export const PAPER_SIZES: Record<string, [number, number]> = {
-  A4: [210, 297],
-  A3: [297, 420],
-  A2: [420, 594],
-  A1: [594, 841],
-  A0: [841, 1189],
-  Letter: [215.9, 279.4],
-  Tabloid: [279.4, 431.8],
-}
+export { PAPER_SIZES } from '../core/layout'

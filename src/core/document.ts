@@ -1,5 +1,6 @@
 import { controlPoints } from './curves'
 import { BlockDefinition, Geometry, geometryFromJSON, geometryToJSON } from './geometry'
+import type { Layout } from './layout'
 
 export interface Layer {
   id: number
@@ -44,6 +45,7 @@ type Action =
   | { type: 'groups'; id: number; before: number[] | undefined; after: number[] | undefined }
   | { type: 'block'; name: string; before: BlockDefinition | undefined; after: BlockDefinition | undefined }
   | { type: 'blockEdit'; before: BlockEdit | null; after: BlockEdit | null }
+  | { type: 'layouts'; before: Layout[]; after: Layout[] }
 
 const LAYER_COLORS = ['#c0392b', '#1f6fb5', '#1e8449', '#b9770e', '#7d3c98', '#117a8b']
 
@@ -61,6 +63,8 @@ export class Document {
   layers: Layer[] = defaultLayers()
   /** Block definitions by name. */
   readonly blocks = new Map<string, BlockDefinition>()
+  /** Sheets for printing; replaced as a whole on every change. */
+  layouts: Layout[] = []
   /** Set while a block is being edited in place. */
   blockEdit: BlockEdit | null = null
   currentLayerId = 1
@@ -68,6 +72,8 @@ export class Document {
   units = 'Millimeters'
   /** True when there are changes since the document was created, opened or saved. */
   modified = false
+  /** Goes up with every change to the model, for caches of things drawn from it. */
+  revision = 0
 
   private nextObjectId = 1
   private nextLayerId = 2
@@ -82,7 +88,10 @@ export class Document {
   }
 
   private emit(kind: ChangeKind): void {
-    if (kind !== 'selection') this.modified = true
+    if (kind !== 'selection') {
+      this.modified = true
+      this.revision++
+    }
     for (const listener of this.listeners) listener(kind)
   }
 
@@ -154,6 +163,15 @@ export class Document {
       for (const o of def.objects) if (o.geometry.type === 'instance') usage.set(o.geometry.definition.name, (usage.get(o.geometry.definition.name) ?? 0) + 1)
     }
     return usage
+  }
+
+  setLayouts(layouts: Layout[]): void {
+    if (layouts !== this.layouts) this.record({ type: 'layouts', before: this.layouts, after: layouts })
+  }
+
+  /** Replaces one layout (matched by id). */
+  updateLayout(layout: Layout): void {
+    this.setLayouts(this.layouts.map((l) => (l.id === layout.id ? layout : l)))
   }
 
   setBlockEdit(state: BlockEdit | null): void {
@@ -255,6 +273,9 @@ export class Document {
       }
       case 'blockEdit':
         this.blockEdit = inverse ? action.before : action.after
+        break
+      case 'layouts':
+        this.layouts = inverse ? action.before : action.after
         break
     }
   }
@@ -410,6 +431,7 @@ export class Document {
         ...(o.groups ? { groups: o.groups } : {}),
         geometry: geometryToJSON(o.geometry),
       })),
+      ...(this.layouts.length > 0 ? { layouts: this.layouts } : {}),
       ...(this.blockEdit ? { blockEdit: this.blockEdit } : {}),
     }
   }
@@ -439,6 +461,7 @@ export class Document {
     this.blocks.clear()
     for (const [name, definition] of blocks) this.blocks.set(name, definition)
     this.blockEdit = json.blockEdit ?? null
+    this.layouts = Array.isArray(json.layouts) ? json.layouts : []
     this.selection.clear()
     this.pointsOn.clear()
     this.pointSelection.clear()

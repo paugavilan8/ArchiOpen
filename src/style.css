@@ -985,3 +985,159 @@ input:focus-visible {
   background: var(--accent);
   color: #fff;
 }
+
+/* Layouts */
+
+.sheet-tabs {
+  position: absolute;
+  z-index: 6;
+  bottom: 6px;
+  left: 6px;
+  display: flex;
+  gap: 2px;
+  max-width: calc(100% - 12px);
+  padding: 2px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+}
+
+.sheet-tab,
+.sheet-tab-rename {
+  height: 22px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--radius) - 1px);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sheet-tab:hover {
+  background: var(--bg-0);
+  color: inherit;
+}
+
+.sheet-tab.active {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.sheet-tab-rename {
+  width: 120px;
+  border: 1px solid var(--accent);
+  background: var(--bg-0);
+  color: inherit;
+  cursor: text;
+}
+
+.layout-editor {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+}
+
+.layout-editor[hidden] {
+  display: none;
+}
+
+.layout-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.layout-toolbar button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.layout-toolbar button:hover {
+  border-color: var(--accent);
+}
+
+.layout-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.layout-canvas {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: #5b6168;
+  cursor: default;
+  touch-action: none;
+}
+
+.layout-form {
+  width: 250px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.layout-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+.layout-canvas .sheet {
+  fill: #fff;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 35%));
+}
+
+.layout-canvas .sheet-frame,
+.layout-canvas .detail-lines {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.layout-canvas .sheet-frame {
+  stroke: #000;
+  stroke-width: 0.25;
+}
+
+.layout-canvas .detail-frame {
+  fill: transparent;
+  stroke: #9aa3ad;
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  cursor: move;
+}
+
+.layout-canvas .detail-frame.selected {
+  stroke: var(--accent);
+  stroke-dasharray: none;
+}
+
+.layout-canvas .detail-handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  cursor: nwse-resize;
+}
+
+.layout-canvas .detail-note {
+  fill: #8a5a00;
+  font-size: 3px;
+}

@@ -47,6 +47,22 @@ export class Display {
   private readonly selectedPointMaterial = pointMaterial(SELECTED_COLOR, POINT_SIZE + 2)
   /** Objects left out of the drawing, e.g. while a dragged copy of them is shown as a preview. */
   private hidden = new Set<number>()
+  /** The layout shown over the viewports, or null for the model. */
+  activeLayout: number | null = null
+  private readonly layoutListeners = new Set<() => void>()
+
+  /** Shows a layout (or with null, the model again). */
+  showLayout(id: number | null): void {
+    if (id === this.activeLayout) return
+    this.activeLayout = id
+    for (const listener of this.layoutListeners) listener()
+    this.requestRender()
+  }
+
+  onLayoutChange(listener: () => void): void {
+    this.layoutListeners.add(listener)
+  }
+
   /** Called for each visible viewport after it is drawn, to update HTML overlays such as the gumball. */
   readonly overlays: ((vp: Viewport) => void)[] = []
   private frame = 0

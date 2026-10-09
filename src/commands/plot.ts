@@ -4,7 +4,9 @@ import { DXF, PDF } from '../app/files'
 import { writeDxf } from '../io/dxf'
 import { PAPER_SIZES, writePdf } from '../io/pdf'
 import { plotSheet, PlotOptions } from '../io/plot'
+import { cachedHiddenLines, computeHiddenLines, HiddenDrawings, layoutSheet, usesHiddenLines } from '../io/layoutSheet'
 import { formatValue, isOption } from './helpers'
+import { kernel } from './solids'
 import type { Command, CommandContext } from './runner'
 
 const PAPERS = Object.keys(PAPER_SIZES)
@@ -31,6 +33,7 @@ const exportPdf: Command = {
   repeat: false,
   async run(ctx) {
     const { doc, display, input, files, log } = ctx
+    if (display.activeLayout !== null) return printLayouts(ctx)
     const objects = chosenObjects(ctx)
     for (;;) {
       const option = await input.getOption(`Print the ${display.active.kind} view to PDF. Press Enter to save`, [
@@ -53,6 +56,40 @@ const exportPdf: Command = {
     const fileName = await files.exportFile(PDF, () => writePdf(sheet))
     if (fileName) log(`Saved ${fileName} (${memory.paper} ${memory.landscape ? 'landscape' : 'portrait'})`)
   },
+}
+
+const layoutMemory = { all: false }
+
+/** Prints the open layout, or all of them, to a PDF with one page per sheet. */
+async function printLayouts(ctx: CommandContext): Promise<void> {
+  const { doc, display, input, files, log } = ctx
+  for (;;) {
+    const option = await input.getOption('Print layouts to PDF. Press Enter to save', [
+      `Sheets=${layoutMemory.all ? 'All' : 'Current'}`,
+      `Color=${memory.black ? 'Black' : 'Display'}`,
+    ])
+    if (option === null) break
+    if (isOption(option, 'Sheets')) layoutMemory.all = !layoutMemory.all
+    else if (isOption(option, 'Color')) memory.black = !memory.black
+  }
+  const layouts = layoutMemory.all ? doc.layouts : doc.layouts.filter((l) => l.id === display.activeLayout)
+  if (layouts.length === 0) throw new Error('There is no layout to print')
+  // Details drawn with hidden lines need the geometry kernel.
+  const hidden: HiddenDrawings = new Map()
+  const needsKernel = layouts.some((l) => l.details.some(usesHiddenLines))
+  if (needsKernel) {
+    await kernel(ctx)
+    log('Removing hidden lines…')
+  }
+  const sheets = layouts.map((layout) => {
+    const sheetNumber = doc.layouts.indexOf(layout) + 1
+    for (const d of layout.details) if (usesHiddenLines(d)) hidden.set(d.id, cachedHiddenLines(doc, d) ?? computeHiddenLines(doc, d))
+    const sheet = layoutSheet(doc, layout, { black: memory.black, sheetNumber, sheetCount: doc.layouts.length }, hidden)
+    hidden.clear()
+    return sheet
+  })
+  const fileName = await files.exportFile(PDF, () => writePdf(sheets))
+  if (fileName) log(`Saved ${fileName} (${sheets.length} sheet${sheets.length === 1 ? '' : 's'})`)
 }
 
 const exportDxf: Command = {

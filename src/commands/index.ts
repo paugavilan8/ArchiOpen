@@ -6,6 +6,7 @@ import { drawingCommands } from './drawing'
 import { editCommands } from './edit'
 import { fileCommands } from './file'
 import { hatchCommands } from './hatch'
+import { layoutCommands } from './layouts'
 import { plotCommands } from './plot'
 import { solidCommands } from './solids'
 import { transformCommands } from './transform'
@@ -50,6 +51,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }
