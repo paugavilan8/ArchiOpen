@@ -10,13 +10,49 @@ export interface Material {
   metalness: number
   /** How much light passes through, 0 to 1 (glass is near 1). */
   transparency: number
+  /** A pattern or picture over the surface, tinted by `color` (white shows it as it is). */
+  texture?: MaterialTexture
 }
+
+/** Patterns drawn by the program, and pictures from a file. */
+export const TEXTURE_KINDS = ['Wood', 'Brick', 'Tiles', 'Concrete', 'Marble', 'Image'] as const
+export type TextureKind = (typeof TEXTURE_KINDS)[number]
+
+/**
+ * A texture laid over surfaces from the world's axes (box mapping): each face takes it from the axis
+ * it faces most, at its real size.
+ */
+export interface MaterialTexture {
+  kind: TextureKind
+  /** For Image: the picture, as a data URL (JPEG or PNG). */
+  image?: string
+  /** Real size of one repeat of the pattern, in meters, whatever the model's units. */
+  size: number
+  /** Turn of the pattern on the surface, in degrees. */
+  rotation: number
+  /** Relief from the pattern's light and dark, 0 (flat) to 1. */
+  bump: number
+}
+
+/** A sensible size and relief for each pattern. */
+export const TEXTURE_DEFAULTS: Record<TextureKind, { size: number; bump: number }> = {
+  Wood: { size: 1, bump: 0.2 },
+  Brick: { size: 0.5, bump: 0.6 },
+  Tiles: { size: 0.6, bump: 0.4 },
+  Concrete: { size: 2, bump: 0.3 },
+  Marble: { size: 1.2, bump: 0 },
+  Image: { size: 1, bump: 0 },
+}
+
+const textured = (kind: TextureKind): MaterialTexture => ({ kind, rotation: 0, ...TEXTURE_DEFAULTS[kind] })
 
 export const MATERIAL_PRESETS: Material[] = [
   { name: 'White plaster', color: '#f2efe9', roughness: 0.9, metalness: 0, transparency: 0 },
-  { name: 'Concrete', color: '#a9a69f', roughness: 0.85, metalness: 0, transparency: 0 },
-  { name: 'Wood', color: '#a8723f', roughness: 0.6, metalness: 0, transparency: 0 },
-  { name: 'Brick', color: '#9c4a32', roughness: 0.9, metalness: 0, transparency: 0 },
+  { name: 'Concrete', color: '#ffffff', roughness: 0.85, metalness: 0, transparency: 0, texture: textured('Concrete') },
+  { name: 'Wood', color: '#ffffff', roughness: 0.6, metalness: 0, transparency: 0, texture: textured('Wood') },
+  { name: 'Brick', color: '#ffffff', roughness: 0.9, metalness: 0, transparency: 0, texture: textured('Brick') },
+  { name: 'Ceramic tiles', color: '#ffffff', roughness: 0.15, metalness: 0, transparency: 0, texture: textured('Tiles') },
+  { name: 'Marble', color: '#ffffff', roughness: 0.12, metalness: 0, transparency: 0, texture: textured('Marble') },
   { name: 'Glossy plastic', color: '#c8323c', roughness: 0.25, metalness: 0, transparency: 0 },
   { name: 'Rubber', color: '#222426', roughness: 0.95, metalness: 0, transparency: 0 },
   { name: 'Ceramic', color: '#fafafa', roughness: 0.08, metalness: 0, transparency: 0 },
@@ -43,6 +79,20 @@ export function materialFromJSON(j: Partial<Material>): Material | null {
     roughness: clamp01(j.roughness, 0.7),
     metalness: clamp01(j.metalness, 0),
     transparency: clamp01(j.transparency, 0),
+    ...(textureFromJSON(j.texture) ? { texture: textureFromJSON(j.texture)! } : {}),
+  }
+}
+
+function textureFromJSON(j: Partial<MaterialTexture> | undefined): MaterialTexture | null {
+  if (!j || !TEXTURE_KINDS.includes(j.kind as TextureKind)) return null
+  const kind = j.kind as TextureKind
+  if (kind === 'Image' && (typeof j.image !== 'string' || !j.image.startsWith('data:image/'))) return null
+  return {
+    kind,
+    ...(kind === 'Image' ? { image: j.image } : {}),
+    size: typeof j.size === 'number' && j.size > 0 ? j.size : TEXTURE_DEFAULTS[kind].size,
+    rotation: typeof j.rotation === 'number' && Number.isFinite(j.rotation) ? j.rotation : 0,
+    bump: clamp01(j.bump, TEXTURE_DEFAULTS[kind].bump),
   }
 }
 

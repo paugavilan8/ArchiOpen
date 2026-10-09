@@ -129,6 +129,11 @@ se adjuntan a un borrador de *release*.
     (color, rugosidad, metal y transparencia) y los asigna a objetos o capas. Sin material, un
     objeto usa el color de su capa. También desde *Properties* (por objeto), el panel de capas y
     `SetObjectMaterial`. Se guardan en el `.archi`.
+  - Texturas: cada material puede llevar un patrón generado (`Wood`, `Brick`, `Tiles`, `Concrete`,
+    `Marble`) o una imagen de un archivo (JPEG, PNG o WebP; se guarda dentro del `.archi`, reducida a
+    1024 px). Se aplican por proyección de caja a su tamaño real en metros (opciones de tamaño, giro
+    y relieve), sean cuales sean las unidades del modelo; en los muros el patrón queda derecho. Los
+    presets de hormigón, madera, ladrillo, azulejo y mármol ya vienen con su textura.
   - `Sun`: dirección (`Azimuth`, desde el norte), altura e intensidad del sol, fondo (`Studio`,
     `White`, `Sky`) y sombras en el suelo.
   - `Render` dibuja la vista activa a 1280 × 720, 1920 × 1080, 3840 × 2160 o el tamaño de la vista,

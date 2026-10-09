@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { Material, RenderSettings } from '../core/materials'
+import { addBoxUVs, TextureLibrary } from './textures'
 
 /** Layer of everything that only rendered views draw. */
 export const RENDER_LAYER = 3
@@ -20,7 +21,11 @@ export class RenderScene {
   private readonly materials = new Map<string, THREE.MeshPhysicalMaterial>()
   private environment: THREE.Texture | null = null
 
-  constructor() {
+  private readonly textures: TextureLibrary
+
+  /** `onTextureLoad` is called when a picture has loaded, to draw again. */
+  constructor(onTextureLoad: () => void = () => {}) {
+    this.textures = new TextureLibrary(onTextureLoad)
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
     this.sun.shadow.bias = -0.0005
@@ -49,8 +54,12 @@ export class RenderScene {
     this.meshes.clear()
   }
 
-  /** Adds a surface or mesh with its material; `selected` tints it. */
-  add(geometry: THREE.BufferGeometry, material: Material, selected: boolean): void {
+  /**
+   * Adds a surface or mesh with its material; `selected` tints it. A texture is laid on at its real
+   * size, for a model whose unit is `metersPerUnit` meters.
+   */
+  add(geometry: THREE.BufferGeometry, material: Material, selected: boolean, metersPerUnit: number): void {
+    if (material.texture) addBoxUVs(geometry, material.texture.size / metersPerUnit, material.texture.rotation)
     const mesh = new THREE.Mesh(geometry, this.material(material, selected))
     mesh.castShadow = true
     mesh.receiveShadow = true
@@ -59,7 +68,8 @@ export class RenderScene {
   }
 
   private material(m: Material, selected: boolean): THREE.MeshPhysicalMaterial {
-    const key = `${m.color}:${m.roughness}:${m.metalness}:${m.transparency}:${selected}`
+    const t = m.texture
+    const key = `${m.color}:${m.roughness}:${m.metalness}:${m.transparency}:${selected}:${t ? `${t.kind}:${t.bump}:${t.image ?? ''}` : ''}`
     let material = this.materials.get(key)
     if (!material) {
       const glass = m.transparency > 0
@@ -79,6 +89,14 @@ export class RenderScene {
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
       })
+      if (t) {
+        material.map = this.textures.get(t)
+        // Light and dark of the pattern read as relief: mortar joints sink, grain catches the light.
+        if (t.bump > 0) {
+          material.bumpMap = material.map
+          material.bumpScale = t.bump * 3
+        }
+      }
       this.materials.set(key, material)
     }
     return material

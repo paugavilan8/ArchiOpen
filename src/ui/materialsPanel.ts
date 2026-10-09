@@ -1,17 +1,45 @@
 import type { CommandRunner } from '../commands/runner'
 import type { Document } from '../core/document'
-import { Material, MATERIAL_PRESETS } from '../core/materials'
+import type { FileManager } from '../app/files'
+import { Material, MATERIAL_PRESETS, MaterialTexture, TEXTURE_DEFAULTS, TEXTURE_KINDS, TextureKind } from '../core/materials'
+import { patternPreview } from '../view/textures'
 import { iconButton } from './icons'
 
 /** A small picture of a material: its color, with a highlight as sharp as its finish. */
 function swatch(m: Material): HTMLSpanElement {
   const el = document.createElement('span')
   el.className = 'material-swatch'
+  if (m.texture) {
+    el.style.background = `center / cover url("${texturePreview(m.texture)}")`
+    return el
+  }
   const spot = Math.round(10 + m.roughness * 40)
   const shine = m.metalness > 0.5 ? 'rgb(255 255 255 / 0.9)' : `rgb(255 255 255 / ${0.85 - m.roughness * 0.6})`
   el.style.background = `radial-gradient(circle at 35% 30%, ${shine}, transparent ${spot}%), ${m.color}`
   if (m.transparency > 0) el.style.opacity = String(1 - m.transparency * 0.6)
   return el
+}
+
+const previews = new Map<string, string>()
+
+/** A small picture of a texture (patterns are drawn once). */
+function texturePreview(t: MaterialTexture): string {
+  if (t.kind === 'Image') return t.image!
+  let url = previews.get(t.kind)
+  if (!url) previews.set(t.kind, (url = patternPreview(t.kind)))
+  return url
+}
+
+/** A picture from a file, made at most 1024 pixels across and stored as JPEG, so models stay small. */
+async function pictureDataUrl(bytes: Uint8Array): Promise<string> {
+  const bitmap = await createImageBitmap(new Blob([bytes as BlobPart]))
+  const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+  return canvas.toDataURL('image/jpeg', 0.85)
 }
 
 /** The document's render materials: add from presets, edit, assign to objects and layers. */
@@ -26,6 +54,7 @@ export class MaterialsPanel {
     private readonly doc: Document,
     private readonly runner: CommandRunner,
     private readonly log: (text: string) => void,
+    private readonly files: FileManager,
   ) {
     const header = document.createElement('div')
     header.className = 'panel-toolbar'
@@ -67,7 +96,8 @@ export class MaterialsPanel {
       empty.textContent = 'No materials yet. Add one above, then give it to objects or layers; switch a view to Rendered to see it.'
       this.list.replaceChildren(empty)
     } else this.list.replaceChildren(...doc.materials.map((m) => this.row(m)))
-    this.renderEditor()
+    // Not while one of its fields is in use: rebuilding it would cut a slider's drag short.
+    if (!this.editor.contains(document.activeElement)) this.renderEditor()
   }
 
   private usage(name: string): number {
@@ -135,7 +165,10 @@ export class MaterialsPanel {
     const name = document.createElement('input')
     name.value = m.name
     name.addEventListener('keydown', (e) => e.stopPropagation())
-    name.addEventListener('change', () => this.rename(m.name, name.value.trim()))
+    name.addEventListener('change', () => {
+      name.blur()
+      this.rename(m.name, name.value.trim())
+    })
     field('Name', name)
     const color = document.createElement('input')
     color.type = 'color'
@@ -156,6 +189,7 @@ export class MaterialsPanel {
     slider('Roughness', 'roughness', 'Polished (left) to matte (right)')
     slider('Metal', 'metalness', 'Paint, stone or plastic (left) to bare metal (right)')
     slider('Transparency', 'transparency', 'Opaque (left) to clear glass (right)')
+    this.textureFields(m, field, update)
     const layer = document.createElement('select')
     layer.add(new Option('Give it to a layer…', '', true, true))
     for (const l of doc.layers) layer.add(new Option(`${l.name}${l.material === m.name ? ' ✓' : ''}`, String(l.id)))
@@ -165,6 +199,67 @@ export class MaterialsPanel {
     field('Layer', layer)
     section.append(heading, list)
     this.editor.replaceChildren(section)
+  }
+
+  /** Pattern or picture, its real size, turn and relief. */
+  private textureFields(m: Material, field: (label: string, input: HTMLElement) => void, update: (patch: Partial<Material>) => void): void {
+    const kind = document.createElement('select')
+    kind.add(new Option('None', '', false, !m.texture))
+    for (const k of TEXTURE_KINDS) kind.add(new Option(k === 'Image' ? 'Picture from a file…' : k, k, false, m.texture?.kind === k))
+    const choosePicture = async () => {
+      const file = await this.files.pickImage()
+      if (!file) return this.render()
+      try {
+        const image = await pictureDataUrl(file.bytes)
+        update({ color: '#ffffff', texture: { kind: 'Image', image, rotation: 0, ...TEXTURE_DEFAULTS.Image, ...(m.texture?.kind === 'Image' ? { size: m.texture.size, rotation: m.texture.rotation } : {}) } })
+      } catch {
+        this.log(`Could not read ${file.name} as a picture`)
+        this.render()
+      }
+    }
+    kind.addEventListener('change', () => {
+      // Out of the field, so the editor shows the texture's own fields.
+      kind.blur()
+      const k = kind.value as TextureKind | ''
+      if (!k) update({ texture: undefined })
+      else if (k === 'Image') void choosePicture()
+      // A pattern shows as it is under white; the old color would tint it.
+      else update({ color: '#ffffff', texture: { kind: k, rotation: 0, ...TEXTURE_DEFAULTS[k] } })
+    })
+    field('Texture', kind)
+    const t = m.texture
+    if (!t) return
+    const number = (value: number, step: string, onChange: (n: number) => void) => {
+      const input = document.createElement('input')
+      input.type = 'number'
+      input.step = step
+      input.value = String(value)
+      input.addEventListener('keydown', (e) => e.stopPropagation())
+      input.addEventListener('change', () => {
+        const n = Number(input.value)
+        if (Number.isFinite(n)) onChange(n)
+      })
+      return input
+    }
+    field('Size (m)', number(t.size, '0.05', (n) => n > 0 && update({ texture: { ...t, size: n } })))
+    field('Rotation (°)', number(t.rotation, '15', (n) => update({ texture: { ...t, rotation: n } })))
+    const bump = document.createElement('input')
+    bump.type = 'range'
+    bump.min = '0'
+    bump.max = '1'
+    bump.step = '0.05'
+    bump.value = String(t.bump)
+    bump.dataset.tip = 'Flat (left) to deep relief (right)'
+    bump.addEventListener('input', () => update({ texture: { ...t, bump: Number(bump.value) } }))
+    field('Relief', bump)
+    if (t.kind === 'Image') {
+      const change = document.createElement('button')
+      change.type = 'button'
+      change.className = 'material-picture'
+      change.textContent = 'Change picture…'
+      change.addEventListener('click', () => void choosePicture())
+      field('', change)
+    }
   }
 
   /** Renames a material and everything that refers to it. */

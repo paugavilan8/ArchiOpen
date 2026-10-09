@@ -7,6 +7,7 @@ import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.j
 import { flatten } from '../core/blocks'
 import { hatchTriangles } from '../core/hatch'
 import { dashesOf } from '../core/linetypes'
+import { METERS } from '../core/units'
 import { BACKGROUNDS, RENDER_LAYER, RenderScene } from './renderScene'
 import { DisplayMode, Viewport, ViewKind } from './viewport'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
@@ -74,7 +75,7 @@ export class Display {
   } | null = null
   private readonly analysisMaterials = new Map<string, THREE.ShaderMaterial>()
   /** What rendered views draw: materials, sun, environment and ground shadows. */
-  readonly renderScene = new RenderScene()
+  readonly renderScene = new RenderScene(() => this.requestRender())
   private readonly surfaceMaterials = new Map<string, THREE.MeshStandardMaterial>()
   private readonly headlight = new THREE.DirectionalLight(0xffffff, 1.6)
   private readonly raycaster = new THREE.Raycaster()
@@ -323,7 +324,7 @@ export class Display {
           const analysis = this.surfaceAnalysis?.ids.has(obj.id) ? this.analysisMaterial(this.surfaceAnalysis.mode) : null
           const material = analysis ?? this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj))
           const mesh = new THREE.Mesh(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), material)
-          this.renderScene.add(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), this.doc.materialOf(obj), selected)
+          this.renderScene.add(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), this.doc.materialOf(obj), selected, METERS[this.doc.units] ?? 0.001)
           if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
           modelBox.union(mesh.geometry.boundingBox!)
           // Analysis shading shows in every view, wireframe ones included.

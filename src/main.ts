@@ -42,7 +42,7 @@ const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, set
 const [propertiesPane, layersPane, materialsPane, blocksPane, viewsPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Materials', 'Blocks', 'Views'])
 new PropertiesPanel(propertiesPane, doc, runner)
 new LayersPanel(layersPane, doc, ctx.log)
-new MaterialsPanel(materialsPane, doc, runner, ctx.log)
+new MaterialsPanel(materialsPane, doc, runner, ctx.log, files)
 new BlocksPanel(blocksPane, doc, runner, ctx.log)
 new ViewsPanel(viewsPane, doc, display, runner)
 installBlockEditBanner(document.getElementById('viewports')!, doc, runner)

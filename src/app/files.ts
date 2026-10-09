@@ -25,6 +25,7 @@ export const DXF: FileType = { name: 'DXF drawing', extension: 'dxf', mime: 'app
 export const STEP: FileType = { name: 'STEP model', extension: 'step', extensions: ['step', 'stp'], mime: 'model/step' }
 export const STL: FileType = { name: 'STL mesh', extension: 'stl', mime: 'model/stl' }
 export const PNG: FileType = { name: 'PNG image', extension: 'png', mime: 'image/png' }
+export const IMAGE: FileType = { name: 'Image', extension: 'jpg', extensions: ['jpg', 'jpeg', 'png', 'webp'], mime: 'image/*' }
 export const OBJ: FileType = { name: 'OBJ mesh', extension: 'obj', mime: 'model/obj' }
 const UNTITLED = 'Untitled'
 
@@ -328,6 +329,12 @@ export class FileManager {
     const parts = [`${shapes.length} solid${shapes.length === 1 ? '' : 's'} or surface${shapes.length === 1 ? '' : 's'}`]
     if (curves.length > 0) parts.push(`${curves.length} curve${curves.length === 1 ? '' : 's'}`)
     return { ids, message: `Imported ${file.fileName}: ${parts.join(' and ')}, in ${this.doc.units.toLowerCase()}` }
+  }
+
+  /** Asks for a picture (JPEG, PNG or WebP). Resolves to its name and bytes, or null if cancelled. */
+  async pickImage(): Promise<{ name: string; bytes: Uint8Array } | null> {
+    const file = await pickFile([IMAGE])
+    return file ? { name: file.fileName, bytes: await file.read() } : null
   }
 
   /** Reads a .3dm; its polysurfaces are rebuilt as exact shapes with the geometry kernel. */
