@@ -16,6 +16,8 @@ export const memory = {
   polarAngle: 360,
   offsetDistance: 1,
   filletRadius: 1,
+  chamferA: 1,
+  chamferB: 1,
 }
 
 export function formatValue(value: number): string {

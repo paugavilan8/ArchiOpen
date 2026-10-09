@@ -123,7 +123,7 @@ describe('reading Rhino content', () => {
     expect(describeSkipped(result.skipped)).toBe('')
   })
 
-  it('fits rational curves that are not arcs', () => {
+  it('reads rational curves that are not arcs exactly', () => {
     const file = new rhino.File3dm()
     // A rational circle of radius 4 squashed to half height in Y is an ellipse with semi-axes 4 and 2.
     const ellipse = rhino.NurbsCurve.createFromCircle(new rhino.Circle([0, 0, 0], 4))
@@ -135,12 +135,21 @@ describe('reading Rhino content', () => {
     const [obj] = readRhinoFile(rhino, file.toByteArray()).objects
     file.destroy()
     const curve = obj.geometry as AnyCurve
-    expect(curve.type).toBe('curve')
+    expect(curve.type === 'curve' && curve.weights?.length).toBe(9)
     const [t0, t1] = domain(curve)
     for (const f of [0.1, 0.3, 0.6, 0.9]) {
       const p = pointAt(curve, t0 + (t1 - t0) * f)
-      expect((p.x * p.x) / 16 + (p.y * p.y) / 4).toBeCloseTo(1, 3)
+      expect((p.x * p.x) / 16 + (p.y * p.y) / 4).toBeCloseTo(1, 10)
     }
+  })
+
+  it('writes rational curves with their weights', async () => {
+    const { ellipse } = await import('../core/curveTools')
+    const e = ellipse(v(1, 2), v(1, 0), v(0, 1), 4, 2)
+    const bytes = writeRhinoFile(rhino, { units: 'Millimeters', layers: [{ id: 1, name: 'Default', color: '#000000', visible: true, locked: false }], objects: [{ layerId: 1, geometry: e }] })
+    const [obj] = readRhinoFile(rhino, bytes).objects
+    expectSameCurve(e, obj.geometry)
+    expect(obj.geometry.type === 'curve' && obj.geometry.weights).toEqual(e.weights)
   })
 
   it('rejects files that are not .3dm', () => {

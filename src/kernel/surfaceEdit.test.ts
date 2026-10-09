@@ -117,3 +117,17 @@ describe('curves on surfaces', () => {
     expect(explodeShape(solid)).toHaveLength(6)
   })
 })
+
+describe('rational curves in the kernel', () => {
+  it('turns an ellipse into an exact edge', async () => {
+    const { ellipse } = await import('../core/curveTools')
+    const { curveToEdges } = await import('./brep')
+    const [edge] = curveToEdges(ellipse(v(0, 0), v(1, 0), v(0, 1), 4, 2))
+    // (OCCT's volume integration is not precise enough on rational surfaces to check a solid.)
+    for (let i = 0; i <= 20; i++) {
+      const p = edge.pointAt(i / 20)
+      expect(Math.abs((p.x / 4) ** 2 + (p.y / 2) ** 2 - 1)).toBeLessThan(1e-9)
+    }
+    expect(toBrep(extrudeCurve(ellipse(v(0, 0), v(1, 0), v(0, 1), 4, 2), v(0, 0, 3), true)).kind).toBe('solid')
+  })
+})

@@ -17,17 +17,24 @@ function cornerArc(corner: Vector3, u: Vector3, w: Vector3, r: number): { arc: A
   return { arc: { type: 'arc', center, xaxis, yaxis, radius: r, angle: Math.PI - theta }, setback }
 }
 
-/**
- * Rounds the corner between two lines with an arc of radius r, trimming or extending both lines to
- * the arc. The picked points say which side of each line to keep. Radius 0 makes a sharp corner.
- */
-export function filletLines(a: PolylineGeometry, pickA: Vector3, b: PolylineGeometry, pickB: Vector3, r: number): FilletResult {
+interface LineCorner {
+  corner: Vector3
+  /** Unit directions from the corner along the kept side of each line. */
+  u: Vector3
+  w: Vector3
+  /** The ends of the lines away from the corner. */
+  farA: Vector3
+  farB: Vector3
+}
+
+/** Where two coplanar lines meet, and which side of each was picked. */
+function lineCorner(a: PolylineGeometry, pickA: Vector3, b: PolylineGeometry, pickB: Vector3): LineCorner | { error: string } {
   const [a0, a1] = a.points
   const [b0, b1] = b.points
   const da = a1.clone().sub(a0).normalize()
   const db = b1.clone().sub(b0).normalize()
   const normal = da.clone().cross(db)
-  if (normal.length() < 1e-9) return { ok: false, error: 'The lines are parallel' }
+  if (normal.length() < 1e-9) return { error: 'The lines are parallel' }
 
   // Closest points of the two infinite lines; they must meet for the lines to be coplanar.
   const w0 = a0.clone().sub(b0)
@@ -36,7 +43,7 @@ export function filletLines(a: PolylineGeometry, pickA: Vector3, b: PolylineGeom
   const sa = (bdot * db.dot(w0) - da.dot(w0)) / denom
   const sb = (db.dot(w0) - bdot * da.dot(w0)) / denom
   const corner = a0.clone().addScaledVector(da, sa)
-  if (corner.distanceTo(b0.clone().addScaledVector(db, sb)) > TOLERANCE) return { ok: false, error: 'The lines are not in the same plane' }
+  if (corner.distanceTo(b0.clone().addScaledVector(db, sb)) > TOLERANCE) return { error: 'The lines are not in the same plane' }
 
   // Keep the side of each line where it was picked.
   const keepDirection = (dir: Vector3, pick: Vector3, p0: Vector3, p1: Vector3) => {
@@ -48,7 +55,17 @@ export function filletLines(a: PolylineGeometry, pickA: Vector3, b: PolylineGeom
   const w = keepDirection(db, pickB, b0, b1)
   const farA = a0.clone().sub(corner).dot(u) > a1.clone().sub(corner).dot(u) ? a0 : a1
   const farB = b0.clone().sub(corner).dot(w) > b1.clone().sub(corner).dot(w) ? b0 : b1
+  return { corner, u, w, farA, farB }
+}
 
+/**
+ * Rounds the corner between two lines with an arc of radius r, trimming or extending both lines to
+ * the arc. The picked points say which side of each line to keep. Radius 0 makes a sharp corner.
+ */
+export function filletLines(a: PolylineGeometry, pickA: Vector3, b: PolylineGeometry, pickB: Vector3, r: number): FilletResult {
+  const c = lineCorner(a, pickA, b, pickB)
+  if ('error' in c) return { ok: false, error: c.error }
+  const { corner, u, w, farA, farB } = c
   if (r <= 0) {
     return { ok: true, a: line(farA, corner), b: line(corner, farB), arc: null }
   }
@@ -59,6 +76,25 @@ export function filletLines(a: PolylineGeometry, pickA: Vector3, b: PolylineGeom
   const ta = corner.clone().addScaledVector(u, setback)
   const tb = corner.clone().addScaledVector(w, setback)
   return { ok: true, a: line(farA, ta), b: line(tb, farB), arc }
+}
+
+export type ChamferResult = { ok: true; a: PolylineGeometry; b: PolylineGeometry; chamfer: PolylineGeometry | null } | { ok: false; error: string }
+
+/**
+ * Cuts the corner between two lines with a straight line, `da` along the first and `db` along the
+ * second from where they meet, trimming or extending both. Zero distances make a sharp corner.
+ */
+export function chamferLines(a: PolylineGeometry, pickA: Vector3, b: PolylineGeometry, pickB: Vector3, da: number, db: number): ChamferResult {
+  const c = lineCorner(a, pickA, b, pickB)
+  if ('error' in c) return { ok: false, error: c.error }
+  const { corner, u, w, farA, farB } = c
+  if (da <= 0 && db <= 0) return { ok: true, a: line(farA, corner), b: line(corner, farB), chamfer: null }
+  if (da > farA.clone().sub(corner).dot(u) + TOLERANCE || db > farB.clone().sub(corner).dot(w) + TOLERANCE) {
+    return { ok: false, error: 'The distances are too large for these lines' }
+  }
+  const ta = corner.clone().addScaledVector(u, da)
+  const tb = corner.clone().addScaledVector(w, db)
+  return { ok: true, a: line(farA, ta), b: line(tb, farB), chamfer: line(ta, tb) }
 }
 
 function line(p: Vector3, q: Vector3): PolylineGeometry {

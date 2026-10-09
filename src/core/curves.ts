@@ -489,7 +489,8 @@ export function removeControlPoints(g: Geometry, indices: Set<number>): Geometry
   if (points.length < 2) return null
   // Fewer points may force a lower degree; the knots become uniform again.
   const degree = Math.min(g.degree, points.length - 1)
-  return { type: 'curve', degree, points, knots: clampedKnots(points.length, degree) }
+  const weights = g.weights?.filter((_, i) => !indices.has(i))
+  return { type: 'curve', degree, points, knots: clampedKnots(points.length, degree), ...(weights ? { weights } : {}) }
 }
 
 // --- Circles through points ------------------------------------------------------------

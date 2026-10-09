@@ -198,15 +198,22 @@ function readCurve(rhino: RhinoModule, c: Curve): AnyCurve | null {
       return arcFrom(arc.plane, arc.radius, arc.angleDomain[0], arc.angleDomain[1])
     }
     const count = c.points().count
+    // Control points come in homogeneous coordinates (x·w, y·w, z·w, w).
     const points: Vector3[] = []
-    for (let i = 0; i < count; i++) points.push(vec(c.points().get(i)))
-    if (!c.isRational) {
-      if (c.degree === 1) return polylineFrom(points)
-      // Rhino leaves out the first and last knot of a clamped knot vector.
-      const knots = c.knots().toList()
-      return { type: 'curve', degree: c.degree, points, knots: [knots[0], ...knots, knots[knots.length - 1]] }
+    const weights: number[] = []
+    for (let i = 0; i < count; i++) {
+      const [x, y, z, w = 1] = c.points().get(i)
+      points.push(new Vector3(x / w, y / w, z / w))
+      weights.push(w)
     }
-    // Other rational curves (ellipses, conics) are fitted with a cubic through points on them.
+    // Rhino leaves out the first and last knot of a clamped knot vector.
+    const list = c.knots().toList()
+    const knots = [list[0], ...list, list[list.length - 1]]
+    const clamped = knots.slice(0, c.degree + 1).every((k) => k === knots[0]) && knots.slice(-c.degree - 1).every((k) => k === knots[knots.length - 1])
+    if (!c.isRational && c.degree === 1) return polylineFrom(points)
+    // Clamped curves come through exactly, rational ones (ellipses, conics) with their weights.
+    if (clamped && !c.isPeriodic) return { type: 'curve', degree: c.degree, points, knots, ...(c.isRational ? { weights } : {}) }
+    // Periodic curves are fitted with a cubic through points on them.
     const [t0, t1] = c.domain
     const samples = Math.max(32, 16 * c.spanCount)
     const pts: Vector3[] = []
@@ -310,9 +317,13 @@ function writeCurve(rhino: RhinoModule, g: AnyCurve): Curve {
     }
     case 'curve': {
       const n = g.points.length
-      const curve = new rhino.NurbsCurve(3, false, g.degree + 1, n)
+      const curve = new rhino.NurbsCurve(3, !!g.weights, g.degree + 1, n)
       g.knots.slice(1, -1).forEach((k, i) => curve.knots().set(i, k))
-      g.points.forEach((p, i) => curve.points().set(i, [p.x, p.y, p.z, 1]))
+      // Homogeneous coordinates: the point times its weight, then the weight.
+      g.points.forEach((p, i) => {
+        const w = g.weights?.[i] ?? 1
+        curve.points().set(i, [p.x * w, p.y * w, p.z * w, w])
+      })
       return curve
     }
     case 'polycurve': {

@@ -24,10 +24,17 @@ se adjuntan a un borrador de *release*.
 - Cuatro vistas (Top, Front, Right, Perspective) con rejilla, gizmo de ejes y menú por vista.
 - Órbita (botón derecho en Perspective), encuadre (Shift + botón derecho o botón central) y zoom
   con la rueda.
-- Dibujo: `Line`, `Polyline`, `Rectangle`, `Circle`, `Arc`, `Curve`.
+- Dibujo: `Line`, `Polyline`, `Rectangle`, `Circle`, `Arc`, `Curve` (por puntos de control),
+  `InterpCrv` (curva que pasa por los puntos), `Ellipse` (exacta, como curva racional), `Polygon`
+  (inscrito o circunscrito, con `NumSides`) y `Helix` (con `Turns`). Las curvas NURBS racionales
+  (elipses, cónicas) se leen y escriben exactas en `.3dm`, DXF y el núcleo.
 - Transformación: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array`, `ArrayPolar`.
 - Edición de curvas: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet` (entre dos líneas),
-  `FilletCorners` (todas las esquinas de una polilínea).
+  `FilletCorners` (todas las esquinas de una polilínea), `Chamfer` (chaflán entre dos líneas con dos
+  distancias), `Extend` (alarga curvas hasta otras: rectas en línea recta, arcos siguiendo su
+  círculo), `BlendCrv` (curva de transición entre dos extremos con continuidad de posición,
+  tangencia o curvatura) y `Rebuild` (rehace una curva con los puntos de control y el grado que
+  se pidan, e indica cuánto se separa de la original).
 - Superficies y sólidos (núcleo [Open CASCADE](https://dev.opencascade.org) a través de
   [replicad](https://replicad.xyz), cargado la primera vez que se usa):
   `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (con opción `Solid` para tapar curvas cerradas

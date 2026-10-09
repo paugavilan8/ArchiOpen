@@ -37,6 +37,8 @@ function splineEdge(g: Extract<AnyCurve, { type: 'curve' }>): R.Edge {
   values.forEach((u, i) => knots.SetValue(i + 1, u))
   mults.forEach((m, i) => multiplicities.SetValue(i + 1, m))
   const curve = new k.Geom_BSplineCurve(poles, knots, multiplicities, g.degree, false)
+  // Weights make it rational (NURBS); there is no constructor that takes them directly.
+  g.weights?.forEach((w, i) => curve.SetWeight(i + 1, w))
   const maker = new k.BRepBuilderAPI_MakeEdge(curve)
   const edge = new R.Edge(maker.Edge())
   maker.delete()

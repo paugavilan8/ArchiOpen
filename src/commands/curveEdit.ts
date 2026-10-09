@@ -1,7 +1,8 @@
 import { Vector3 } from 'three'
 import { closestPoint, explode as explodeCurve, join as joinCurves, split as splitCurve } from '../core/curves'
-import { filletCorners as roundCorners, filletLines } from '../core/fillet'
-import { AnyCurve, Geometry, isCurve, PolylineGeometry, tessellate, wireframe } from '../core/geometry'
+import { chamferLines, filletCorners as roundCorners, filletLines } from '../core/fillet'
+import { extend as extendCurve } from '../core/curveTools'
+import { AnyCurve, domain, Geometry, isCurve, PolylineGeometry, tessellate, wireframe } from '../core/geometry'
 import { intersect } from '../core/intersect'
 import { offset as offsetCurve } from '../core/offset'
 import { CancelError } from '../input/interaction'
@@ -244,19 +245,93 @@ const offset: Command = {
 const isLine = (g: Geometry): g is PolylineGeometry => g.type === 'polyline' && g.points.length === 2 && !g.closed
 
 /** Picks a line for Fillet, handling the Radius option. Returns null when the user presses Enter. */
-async function pickLine(ctx: CommandContext, prompt: string): Promise<{ id: number; point: Vector3; line: PolylineGeometry } | null> {
+interface LineOptions {
+  /** The options offered while picking, as they read now. */
+  options: () => string[]
+  change: (option: string) => Promise<void>
+  /** The command's name, for messages. */
+  what: string
+}
+
+const filletOptions: LineOptions = {
+  options: () => [valueOption('Radius', memory.filletRadius)],
+  change: async () => {},
+  what: 'Fillet',
+}
+
+async function pickLine(ctx: CommandContext, prompt: string, opts: LineOptions = filletOptions): Promise<{ id: number; point: Vector3; line: PolylineGeometry } | null> {
   for (;;) {
-    const pick = await ctx.input.getPick(prompt, [valueOption('Radius', memory.filletRadius)])
+    const pick = await ctx.input.getPick(prompt, opts.options())
     if (pick.kind === 'option') {
-      memory.filletRadius = await askDistance(ctx, 'Fillet radius', memory.filletRadius, true)
+      if (opts === filletOptions) memory.filletRadius = await askDistance(ctx, 'Fillet radius', memory.filletRadius, true)
+      else await opts.change(pick.option)
       continue
     }
     if (pick.kind !== 'pick') return null
     const g = ctx.doc.objects.get(pick.id)!.geometry
     const type = g.type
     if (isLine(g)) return { id: pick.id, point: pick.point, line: g }
-    ctx.log(type === 'polyline' ? 'Pick a single line. To round the corners of a polyline, use FilletCorners' : 'Fillet works with lines for now')
+    ctx.log(type === 'polyline' ? `Pick a single line. To ${opts.what === 'Fillet' ? 'round' : 'cut'} the corners of a polyline, explode it first` : `${opts.what} works with lines`)
   }
+}
+
+const chamferOptions = (ctx: CommandContext): LineOptions => ({
+  options: () => [valueOption('Distance1', memory.chamferA), valueOption('Distance2', memory.chamferB)],
+  change: async (option) => {
+    if (isOption(option, 'Distance1')) memory.chamferA = await askDistance(ctx, 'First chamfer distance', memory.chamferA, true)
+    else memory.chamferB = await askDistance(ctx, 'Second chamfer distance', memory.chamferB, true)
+  },
+  what: 'Chamfer',
+})
+
+const chamfer: Command = {
+  name: 'Chamfer',
+  async run(ctx) {
+    const { doc } = ctx
+    const opts = chamferOptions(ctx)
+    const first = await pickLine(ctx, 'Select first line to chamfer', opts)
+    if (!first) return
+    doc.select([first.id])
+    const second = await pickLine(ctx, 'Select second line to chamfer', opts)
+    if (!second) return
+    if (second.id === first.id) throw new Error('Pick two different lines')
+    const result = chamferLines(first.line, first.point, second.line, second.point, memory.chamferA, memory.chamferB)
+    if (!result.ok) throw new Error(result.error)
+    const layerId = doc.objects.get(first.id)!.layerId
+    doc.setGeometry(first.id, result.a)
+    doc.setGeometry(second.id, result.b)
+    if (result.chamfer) doc.add(result.chamfer, layerId)
+    doc.clearSelection()
+  },
+}
+
+const extendCommand: Command = {
+  name: 'Extend',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const boundaries = new Set(await input.getObjects('Select boundary objects'))
+    doc.select(boundaries)
+    const curves = () => [...boundaries].map((id) => curveOf(ctx, id)).filter((c): c is AnyCurve => c !== null)
+    for (;;) {
+      const pick = await input.getPick('Select the end of a curve to extend. Press Enter when done')
+      if (pick.kind !== 'pick') return
+      const g = curveOf(ctx, pick.id)
+      if (!g) {
+        log('Extend works on curves')
+        continue
+      }
+      // The end nearer the click is extended.
+      const [t0, t1] = domain(g)
+      const atStart = closestPoint(g, pick.point).t - t0 < t1 - closestPoint(g, pick.point).t
+      const longer = extendCurve(g, atStart, curves().filter((c) => c !== g))
+      if (!longer) {
+        log('That end does not reach any boundary')
+        continue
+      }
+      doc.setGeometry(pick.id, longer)
+      doc.select(boundaries)
+    }
+  },
 }
 
 const fillet: Command = {
@@ -302,4 +377,4 @@ const filletCorners: Command = {
   },
 }
 
-export const curveEditCommands: Command[] = [trim, split, join, explode, offset, fillet, filletCorners]
+export const curveEditCommands: Command[] = [trim, split, join, explode, offset, fillet, filletCorners, chamfer, extendCommand]

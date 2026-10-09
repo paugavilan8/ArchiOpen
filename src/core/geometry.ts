@@ -1,5 +1,5 @@
 import { Box3, Vector3 } from 'three'
-import { clampedKnots, evalBSpline } from '../math/nurbs'
+import { clampedKnots, evalCurve } from '../math/nurbs'
 import { annotationLines } from './annotation'
 import { hatchLines } from './hatch'
 import { insertionPoint, instanceContents } from './blocks'
@@ -37,11 +37,14 @@ export interface ArcGeometry {
 }
 
 /** Non-rational B-spline curve with a clamped knot vector. */
+/** B-spline curve with a clamped knot vector; rational (NURBS) when it has weights. */
 export interface CurveGeometry {
   type: 'curve'
   degree: number
   points: Vector3[]
   knots: number[]
+  /** One per control point; missing for non-rational curves. */
+  weights?: number[]
 }
 
 /** Open curves that can be chained into a polycurve. */
@@ -223,7 +226,7 @@ export function pointAt(g: AnyCurve, t: number): Vector3 {
     case 'arc':
       return circlePoint(g, t)
     case 'curve':
-      return evalBSpline(g.points, g.degree, g.knots, t)
+      return evalCurve(g, t)
     case 'polycurve': {
       const [i, s] = segmentParam(g, t)
       return pointAt(g.segments[i], s)
@@ -477,7 +480,7 @@ export function geometryToJSON(g: Geometry): unknown {
         angle: g.angle,
       }
     case 'curve':
-      return { type: g.type, degree: g.degree, points: g.points.map(toTriple), knots: g.knots }
+      return { type: g.type, degree: g.degree, points: g.points.map(toTriple), knots: g.knots, ...(g.weights ? { weights: g.weights } : {}) }
     case 'polycurve':
       return { type: g.type, segments: g.segments.map(geometryToJSON) }
     case 'hatch':
@@ -534,7 +537,8 @@ export function geometryFromJSON(j: any, blocks?: BlockLookup): Geometry {
       const points: Vector3[] = j.points.map(fromTriple)
       const degree = Math.min(j.degree, points.length - 1)
       // Files from before knots were stored used uniform clamped knots.
-      return { type: 'curve', degree, points, knots: j.knots ?? clampedKnots(points.length, degree) }
+      const knots = j.knots ?? clampedKnots(points.length, degree)
+      return { type: 'curve', degree, points, knots, ...(Array.isArray(j.weights) ? { weights: j.weights } : {}) }
     }
     case 'polycurve':
       return { type: 'polycurve', segments: j.segments.map(read) }

@@ -16,6 +16,10 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'Circle', tip: 'Circle', icon: 'circle' },
     { macro: 'Arc', tip: 'Arc: center, start, end  (A)', icon: 'arc' },
     { macro: 'Curve', tip: 'Control point curve', icon: 'curve' },
+    { macro: 'InterpCrv', tip: 'Curve through points', icon: 'interpCrv' },
+    { macro: 'Ellipse', tip: 'Ellipse  (EL)', icon: 'ellipse' },
+    { macro: 'Polygon', tip: 'Polygon  (POL)', icon: 'polygon' },
+    { macro: 'Helix', tip: 'Helix', icon: 'helix' },
   ],
   [
     { macro: 'Move', tip: 'Move  (M)', icon: 'move' },
@@ -34,6 +38,10 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'Offset', tip: 'Offset  (OF)', icon: 'offset' },
     { macro: 'Fillet', tip: 'Fillet two lines  (F)', icon: 'fillet' },
     { macro: 'FilletCorners', tip: 'Fillet the corners of polylines', icon: 'filletCorners' },
+    { macro: 'Chamfer', tip: 'Chamfer two lines  (CHA)', icon: 'chamfer' },
+    { macro: 'Extend', tip: 'Extend curves to boundaries  (EX)', icon: 'extend' },
+    { macro: 'BlendCrv', tip: 'Blend between curve ends', icon: 'blend' },
+    { macro: 'Rebuild', tip: 'Rebuild curves', icon: 'rebuild' },
     { macro: 'Delete', tip: 'Delete  (Del)', icon: 'delete' },
   ],
   [

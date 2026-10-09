@@ -1,5 +1,6 @@
 import { Matrix4, Vector3 } from 'three'
-import { transform } from '../core/curves'
+import { closestPoint, subCurve, transform } from '../core/curves'
+import { ellipse } from '../core/curveTools'
 import type { Layer } from '../core/document'
 import type { AnnotationGeometry, AnyCurve, BlockDefinition, BlockObject, Geometry, SegmentGeometry } from '../core/geometry'
 import { LINETYPE_NAMES, PRINT_WIDTHS } from '../core/linetypes'
@@ -229,8 +230,12 @@ function ellipseCurve(center: Vector3, major: Vector3, ratio: number, n: Vector3
     if (full) return { type: 'circle', center, xaxis, yaxis, radius: r }
     return { type: 'arc', center, xaxis, yaxis, radius: r, angle: u1 - u0 }
   }
+  // An exact (rational) ellipse; an elliptical arc is the piece between its end points.
+  const exact = ellipse(center, major.clone().normalize(), minor.clone().normalize(), r, major.length() * ratio)
+  if (full) return exact
   const at = (u: number) => center.clone().addScaledVector(major, Math.cos(u)).addScaledVector(minor, Math.sin(u))
-  return sampled(at, u0, u1, Math.max(16, Math.ceil((96 * (u1 - u0)) / (Math.PI * 2))))
+  const piece = subCurve(exact, closestPoint(exact, at(u0)).t, closestPoint(exact, at(u1)).t)
+  return piece ?? sampled(at, u0, u1, Math.max(16, Math.ceil((96 * (u1 - u0)) / (Math.PI * 2))))
 }
 
 /** A NURBS curve from control points, knots and weights; exact when it is clamped and not rational. */
@@ -241,7 +246,8 @@ function splineCurve(degree: number, ctrl: Vector3[], knots: number[], weights: 
   const rational = weights.length === ctrl.length && weights.some((w) => Math.abs(w - weights[0]) > 1e-12)
   const clamped =
     knots.slice(0, degree + 1).every((k) => k === knots[0]) && knots.slice(-degree - 1).every((k) => k === knots[knots.length - 1])
-  if (!rational && clamped) return { type: 'curve', degree, points: ctrl, knots }
+  // Clamped curves come through exactly, rational ones (ellipses, conics) with their weights.
+  if (clamped) return { type: 'curve', degree, points: ctrl, knots, ...(rational ? { weights } : {}) }
   const w = weights.length === ctrl.length ? weights : ctrl.map(() => 1)
   const numer = ctrl.map((p, i) => p.clone().multiplyScalar(w[i]))
   const denom = w.map((x) => v(x, 0))
