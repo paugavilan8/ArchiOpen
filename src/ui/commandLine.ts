@@ -91,8 +91,10 @@ export class CommandLine {
 
   private onKeyDown(e: KeyboardEvent): void {
     switch (e.key) {
-      case 'Enter':
       case ' ':
+        if (this.interaction.wantsText) break
+      // falls through
+      case 'Enter':
         e.preventDefault()
         this.submit()
         break

@@ -1,5 +1,6 @@
 import { Box3, Vector3 } from 'three'
 import { clampedKnots, evalBSpline } from '../math/nurbs'
+import { annotationLines } from './annotation'
 
 export interface Plane {
   origin: Vector3
@@ -75,12 +76,39 @@ export interface BrepGeometry {
   display: BrepDisplay
 }
 
+export type AnnotationKind = 'text' | 'linear' | 'aligned' | 'radius' | 'diameter' | 'angle' | 'leader'
+
+/**
+ * Text, dimension or leader, drawn as line work in the plane of `xaxis` and `yaxis` (unit vectors).
+ * The defining points depend on the kind:
+ * - text: the lower left corner;
+ * - linear, aligned: the two measured points and a point on the dimension line (linear measures
+ *   along `xaxis`, aligned along the measured points);
+ * - radius, diameter: the center, a point on the circle and the text location;
+ * - angle: the vertex, a point on each ray and a point on the dimension arc;
+ * - leader: the arrow tip, then the points of the leader line, the text at the last one.
+ * For dimensions, `<>` in `text` stands for the measured value, and an empty text shows just that.
+ */
+export interface AnnotationGeometry {
+  type: 'annotation'
+  kind: AnnotationKind
+  points: Vector3[]
+  xaxis: Vector3
+  yaxis: Vector3
+  text: string
+  /** Text height; arrows are the same size. */
+  height: number
+  arrow: 'arrow' | 'tick'
+  /** Decimal places of the measured value. */
+  precision: number
+}
+
 export type AnyCurve = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
 
 // Geometry values are immutable: edits produce a new value, which keeps the caches below valid.
-export type Geometry = AnyCurve | BrepGeometry
+export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry
 
-export const isCurve = (g: Geometry): g is AnyCurve => g.type !== 'brep'
+export const isCurve = (g: Geometry): g is AnyCurve => g.type !== 'brep' && g.type !== 'annotation'
 
 export interface SnapPoints {
   end: Vector3[]
@@ -263,7 +291,9 @@ export function wireframe(g: Geometry): Vector3[][] {
   if (!lines) {
     lines = isCurve(g)
       ? [tessellate(g)]
-      : g.display.edges.map((flat) => {
+      : g.type === 'annotation'
+        ? annotationLines(g)
+        : g.display.edges.map((flat) => {
           const pts: Vector3[] = []
           for (let i = 0; i < flat.length; i += 3) pts.push(new Vector3(flat[i], flat[i + 1], flat[i + 2]))
           return pts
@@ -321,6 +351,9 @@ function buildSnapPoints(g: Geometry): SnapPoints {
         snaps.quad.push(...s.quad)
       }
       break
+    case 'annotation':
+      snaps.end = g.points
+      break
     case 'brep':
       // Corners and edge midpoints of surfaces and solids.
       for (const edge of wireframe(g)) {
@@ -349,6 +382,7 @@ export function expandBox(box: Box3, g: Geometry): void {
 export function typeName(g: Geometry): string {
   if (g.type === 'polyline') return g.points.length === 2 ? 'line' : 'polyline'
   if (g.type === 'brep') return g.kind
+  if (g.type === 'annotation') return g.kind === 'text' || g.kind === 'leader' ? g.kind : 'dimension'
   return g.type
 }
 
@@ -378,6 +412,18 @@ export function geometryToJSON(g: Geometry): unknown {
       return { type: g.type, degree: g.degree, points: g.points.map(toTriple), knots: g.knots }
     case 'polycurve':
       return { type: g.type, segments: g.segments.map(geometryToJSON) }
+    case 'annotation':
+      return {
+        type: g.type,
+        kind: g.kind,
+        points: g.points.map(toTriple),
+        xaxis: toTriple(g.xaxis),
+        yaxis: toTriple(g.yaxis),
+        text: g.text,
+        height: g.height,
+        arrow: g.arrow,
+        precision: g.precision,
+      }
     case 'brep':
       return { type: g.type, brep: g.brep, matrix: g.matrix, kind: g.kind, faces: g.faces, display: g.display }
   }
@@ -407,6 +453,18 @@ export function geometryFromJSON(j: any): Geometry {
     }
     case 'polycurve':
       return { type: 'polycurve', segments: j.segments.map(geometryFromJSON) }
+    case 'annotation':
+      return {
+        type: 'annotation',
+        kind: j.kind,
+        points: j.points.map(fromTriple),
+        xaxis: fromTriple(j.xaxis),
+        yaxis: fromTriple(j.yaxis),
+        text: j.text ?? '',
+        height: j.height,
+        arrow: j.arrow === 'tick' ? 'tick' : 'arrow',
+        precision: j.precision ?? 2,
+      }
     case 'brep':
       return { type: 'brep', brep: j.brep, matrix: j.matrix ?? null, kind: j.kind, faces: j.faces, display: j.display }
     default:

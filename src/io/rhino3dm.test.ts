@@ -4,7 +4,7 @@ import rhino3dm from 'rhino3dm/rhino3dm.module.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { length } from '../core/curves'
 import type { Layer } from '../core/document'
-import { AnyCurve, BrepGeometry, domain, Geometry, pointAt } from '../core/geometry'
+import { AnyCurve, BrepGeometry, domain, Geometry, isCurve, pointAt } from '../core/geometry'
 import { clampedKnots } from '../math/nurbs'
 import { describeSkipped, readRhinoFile, writeRhinoFile } from './rhino3dm'
 
@@ -17,7 +17,7 @@ const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
 
 /** Same shape: compare points spread along both curves. */
 function expectSameCurve(a: Geometry, b: Geometry) {
-  if (a.type === 'brep' || b.type === 'brep') throw new Error('curves expected')
+  if (!isCurve(a) || !isCurve(b)) throw new Error('curves expected')
   expect(length(b)).toBeCloseTo(length(a), 6)
   const [a0, a1] = domain(a)
   const [b0, b1] = domain(b)

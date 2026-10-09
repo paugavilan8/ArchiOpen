@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import type { Brep, Curve, GeometryBase, NurbsCurve, RhinoModule } from 'rhino3dm'
 import { chain } from '../core/curves'
 import type { Layer } from '../core/document'
+import { wireframe } from '../core/geometry'
 import type { AnyCurve, BrepGeometry, Geometry, SegmentGeometry } from '../core/geometry'
 import { interpolate } from '../math/nurbs'
 import type { BrepFaceData, NurbsCurveData, NurbsSurfaceData, RhinoBrepData } from './rhinoBrepData'
@@ -367,7 +368,12 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Arr
       const attributes = new rhino.ObjectAttributes()
       attributes.layerIndex = indexOf.get(obj.layerId) ?? 0
       const g = obj.geometry
-      file.objects().add(g.type === 'brep' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
+      if (g.type === 'annotation') {
+        // Texts and dimensions go as their line work.
+        for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
+      } else {
+        file.objects().add(g.type === 'brep' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
+      }
     }
     return file.toByteArray()
   } finally {

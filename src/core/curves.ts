@@ -1,6 +1,7 @@
 import { Matrix3, Matrix4, Vector3 } from 'three'
 import { clampedKnots, interpolate, reverseBSpline, splitBSpline } from '../math/nurbs'
 import {
+  AnnotationGeometry,
   AnyCurve,
   ArcGeometry,
   BrepGeometry,
@@ -47,10 +48,14 @@ function arcAsCurve(g: CircleGeometry | ArcGeometry): CurveGeometry {
  * Applies an affine transform. Under a non-uniform scale, circles and arcs cannot stay circular, so
  * they become (closely approximating) curves.
  */
-export function transform<G extends Geometry>(g: G, m: Matrix4): G extends BrepGeometry ? BrepGeometry : AnyCurve
+export function transform<G extends Geometry>(
+  g: G,
+  m: Matrix4,
+): G extends BrepGeometry ? BrepGeometry : G extends AnnotationGeometry ? AnnotationGeometry : AnyCurve
 export function transform(g: Geometry, m: Matrix4): Geometry {
   if (g.type === 'brep') return transformBrep(g, m)
   const linear = new Matrix3().setFromMatrix4(m)
+  if (g.type === 'annotation') return transformAnnotation(g, m, linear)
   const point = (p: Vector3) => p.clone().applyMatrix4(m)
   switch (g.type) {
     case 'polyline':
@@ -67,6 +72,20 @@ export function transform(g: Geometry, m: Matrix4): Geometry {
     case 'polycurve':
       return { type: 'polycurve', segments: g.segments.map((s) => transform(s, m) as SegmentGeometry) }
   }
+}
+
+/**
+ * Moves the defining points and turns the annotation's plane with them. Text keeps reading
+ * forwards after a mirror, and its height follows the scale.
+ */
+function transformAnnotation(g: AnnotationGeometry, m: Matrix4, linear: Matrix3): AnnotationGeometry {
+  const x = g.xaxis.clone().applyMatrix3(linear)
+  const y = g.yaxis.clone().applyMatrix3(linear)
+  const scale = Math.sqrt(x.length() * y.length())
+  x.normalize()
+  y.addScaledVector(x, -y.dot(x)).normalize()
+  if (linear.determinant() < 0) x.negate()
+  return { ...g, points: g.points.map((p) => p.clone().applyMatrix4(m)), xaxis: x, yaxis: y, height: g.height * scale }
 }
 
 /** Records the transform on the brep and moves its display data; the exact shape is updated lazily. */
@@ -424,12 +443,12 @@ export function closestPoint(g: AnyCurve, p: Vector3): CurvePoint {
 
 /** The points that define a polyline or curve, which the user can edit directly. Null for other types. */
 export function controlPoints(g: Geometry): Vector3[] | null {
-  return g.type === 'polyline' || g.type === 'curve' ? g.points : null
+  return g.type === 'polyline' || g.type === 'curve' || g.type === 'annotation' ? g.points : null
 }
 
 /** The same polyline or curve with new control points (same count). */
 export function withControlPoints(g: Geometry, points: Vector3[]): Geometry {
-  if (g.type === 'polyline' || g.type === 'curve') return { ...g, points }
+  if (g.type === 'polyline' || g.type === 'curve' || g.type === 'annotation') return { ...g, points }
   return g
 }
 

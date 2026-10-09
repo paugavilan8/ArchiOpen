@@ -1,6 +1,7 @@
 import { Matrix4 } from 'three'
 import * as R from 'replicad'
 import { join, transform } from '../core/curves'
+import { wireframe } from '../core/geometry'
 import type { AnyCurve, Geometry } from '../core/geometry'
 import { curveToWire, shapeOf } from './brep'
 import { edgeToCurve } from './edges'
@@ -59,6 +60,10 @@ export async function writeStep(objects: StepObject[], units: string): Promise<U
 
 function inFileUnits(g: Geometry, toFile: Matrix4, scale: number): R.AnyShape {
   const scaled = scale === 1 ? g : transform(g, toFile)
+  if (scaled.type === 'annotation') {
+    // Texts and dimensions go as their line work.
+    return R.makeCompound(wireframe(scaled).map((points) => curveToWire({ type: 'polyline', points, closed: false })))
+  }
   return scaled.type === 'brep' ? shapeOf(scaled) : curveToWire(scaled)
 }
 

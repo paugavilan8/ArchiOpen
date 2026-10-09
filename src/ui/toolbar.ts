@@ -53,7 +53,15 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'BooleanDifference', tip: 'Boolean difference  (BD)', icon: 'booleanDifference' },
     { macro: 'BooleanIntersection', tip: 'Boolean intersection  (BI)', icon: 'booleanIntersection' },
   ],
-  [{ macro: 'Make2D', tip: 'Make2D: 2D drawing of the selection', icon: 'make2d' }],
+  [
+    { macro: 'Make2D', tip: 'Make2D: 2D drawing of the selection', icon: 'make2d' },
+    { macro: 'Text', tip: 'Text', icon: 'text' },
+    { macro: 'Dim', tip: 'Linear dimension', icon: 'dimLinear' },
+    { macro: 'DimAligned', tip: 'Aligned dimension', icon: 'dimAligned' },
+    { macro: 'DimRadius', tip: 'Radius dimension', icon: 'dimRadius' },
+    { macro: 'DimAngle', tip: 'Angle dimension', icon: 'dimAngle' },
+    { macro: 'Leader', tip: 'Leader', icon: 'leader' },
+  ],
 ]
 
 /** File, history and view tools, in the horizontal bar under the command line. */

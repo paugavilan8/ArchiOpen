@@ -18,6 +18,7 @@ export type GetResult =
   | { kind: 'option'; option: string }
   | { kind: 'number'; value: number }
   | { kind: 'pick'; id: number; point: Vector3; viewport: Viewport }
+  | { kind: 'string'; text: string }
   | { kind: 'enter' }
 
 export interface GetPointOptions {
@@ -38,7 +39,7 @@ export interface InteractionUI {
 }
 
 interface Request {
-  kind: 'point' | 'objects' | 'option' | 'number' | 'pick'
+  kind: 'point' | 'objects' | 'option' | 'number' | 'pick' | 'string'
   opts: GetPointOptions
   resolve: (result: GetResult) => void
   reject: (error: Error) => void
@@ -121,6 +122,20 @@ export class Interaction {
     return defaultValue
   }
 
+  /**
+   * Asks for a line of text; Space types a space instead of answering. Resolves to the text (with
+   * `\n` turned into line breaks), or to null if Enter is pressed on an empty line.
+   */
+  async getString(prompt: string): Promise<string | null> {
+    const result = await this.start('string', { prompt })
+    return result.kind === 'string' ? result.text.replace(/\\n/g, '\n') : null
+  }
+
+  /** True while a command waits for typed text, so Space must not answer it. */
+  get wantsText(): boolean {
+    return this.request?.kind === 'string'
+  }
+
   /** Asks the user to click on one object; the result also says where on the object they clicked. */
   getPick(prompt: string, options: string[] = []): Promise<GetResult> {
     return this.start('pick', { prompt, options })
@@ -182,6 +197,7 @@ export class Interaction {
     const text = raw.trim()
     if (text === '') return this.enter()
 
+    if (request.kind === 'string') return this.finish({ kind: 'string', text })
     if (request.kind === 'number' && SINGLE_NUMBER.test(text)) return this.finish({ kind: 'number', value: parseFloat(text) })
     if (request.kind === 'point') {
       const coords = COORDINATE.exec(text)
@@ -259,7 +275,7 @@ export class Interaction {
       if (hit) this.finish({ kind: 'pick', id: hit.id, point: hit.point, viewport: vp })
       return
     }
-    if (e.button === 0 && (this.request?.kind === 'option' || this.request?.kind === 'number')) return
+    if (e.button === 0 && (this.request?.kind === 'option' || this.request?.kind === 'number' || this.request?.kind === 'string')) return
 
     vp.el.setPointerCapture(e.pointerId)
     this.drag = { button: e.button, startX: pos.x, startY: pos.y, lastX: pos.x, lastY: pos.y, moved: false }

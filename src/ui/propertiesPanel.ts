@@ -2,7 +2,8 @@ import type { Vector3 } from 'three'
 import type { CommandRunner } from '../commands/runner'
 import type { CadObject, Document } from '../core/document'
 import { length } from '../core/curves'
-import { endPoint, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
+import { measure } from '../core/annotation'
+import { AnnotationGeometry, endPoint, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
 
 type Row = [label: string, value: string]
 
@@ -57,6 +58,9 @@ function geometryRows(g: Geometry): Row[] {
         ['Segments', String(g.segments.length)],
         ['Closed', isClosed(g) ? 'Yes' : 'No'],
       ]
+    case 'annotation':
+      if (g.kind === 'text' || g.kind === 'leader') return [['Insertion point', point(g.points[g.kind === 'text' ? 0 : g.points.length - 1])]]
+      return [['Value', g.kind === 'angle' ? `${fmt(measure(g))}°` : fmt(measure(g))]]
   }
 }
 
@@ -107,7 +111,11 @@ export class PropertiesPanel {
       const object = this.section('Object', [['Type', selected.length === 1 ? capitalize(typeName(selected[0].geometry)) : type]])
       object.querySelector('dl')!.append(...this.layerField(selected))
       sections.push(object)
-      if (selected.length === 1) sections.push(this.section('Geometry', geometryRows(selected[0].geometry)))
+      if (selected.length === 1) {
+        const g = selected[0].geometry
+        sections.push(this.section('Geometry', geometryRows(g)))
+        if (g.type === 'annotation') sections.push(this.annotationSection(selected[0].id, g))
+      }
     }
     this.body.replaceChildren(...sections)
   }
@@ -125,6 +133,55 @@ export class PropertiesPanel {
       list.append(dt, dd)
     }
     section.append(heading, list)
+    return section
+  }
+
+  /** Editable text, height, arrows and precision of a text, dimension or leader. */
+  private annotationSection(id: number, g: AnnotationGeometry): HTMLElement {
+    const section = this.section(g.kind === 'text' || g.kind === 'leader' ? 'Text' : 'Dimension', [])
+    const list = section.querySelector('dl')!
+    const update = (patch: Partial<AnnotationGeometry>) => {
+      if (this.runner.busy) return
+      this.doc.begin()
+      this.doc.setGeometry(id, { ...g, ...patch })
+      this.doc.commit()
+    }
+    const field = (label: string, input: HTMLElement) => {
+      const dt = document.createElement('dt')
+      dt.textContent = label
+      const dd = document.createElement('dd')
+      dd.appendChild(input)
+      list.append(dt, dd)
+    }
+    const isDim = g.kind !== 'text' && g.kind !== 'leader'
+    const text = document.createElement('textarea')
+    text.rows = isDim ? 1 : 3
+    text.value = g.text
+    text.placeholder = isDim ? '<> (measured value)' : ''
+    text.title = isDim ? '<> stands for the measured value' : ''
+    text.addEventListener('change', () => update({ text: text.value }))
+    field(isDim ? 'Text' : 'Content', text)
+    const height = document.createElement('input')
+    height.type = 'number'
+    height.min = '0'
+    height.step = 'any'
+    height.value = String(Number(g.height.toFixed(6)))
+    height.addEventListener('change', () => {
+      const value = Number(height.value)
+      if (value > 0) update({ height: value })
+    })
+    field('Height', height)
+    if (g.kind === 'text') return section
+    const arrow = document.createElement('select')
+    arrow.add(new Option('Arrow', 'arrow', false, g.arrow === 'arrow'))
+    arrow.add(new Option('Tick', 'tick', false, g.arrow === 'tick'))
+    arrow.addEventListener('change', () => update({ arrow: arrow.value === 'tick' ? 'tick' : 'arrow' }))
+    field('Arrowheads', arrow)
+    if (!isDim) return section
+    const precision = document.createElement('select')
+    for (let i = 0; i <= 4; i++) precision.add(new Option(i === 0 ? '1' : (0).toFixed(i).replace(/0$/, '1'), String(i), false, g.precision === i))
+    precision.addEventListener('change', () => update({ precision: Number(precision.value) }))
+    field('Precision', precision)
     return section
   }
 

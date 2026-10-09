@@ -1,7 +1,7 @@
 import type { Vector3 } from 'three'
 import { closestPoint, explode as explodeCurve, join as joinCurves, split as splitCurve } from '../core/curves'
 import { filletCorners as roundCorners, filletLines } from '../core/fillet'
-import { AnyCurve, Geometry, isCurve, PolylineGeometry, tessellate } from '../core/geometry'
+import { AnyCurve, Geometry, isCurve, PolylineGeometry, tessellate, wireframe } from '../core/geometry'
 import { intersect } from '../core/intersect'
 import { offset as offsetCurve } from '../core/offset'
 import { CancelError } from '../input/interaction'
@@ -140,6 +140,14 @@ const explode: Command = {
     const ids = await input.getObjects('Select objects to explode')
     let pieces = await brepHooks.explode(ctx, ids.filter((id) => doc.objects.get(id)?.geometry.type === 'brep'))
     for (const id of ids) {
+      const g = doc.objects.get(id)?.geometry
+      if (g?.type === 'annotation') {
+        // Texts and dimensions become their line work.
+        const parts = wireframe(g).map((points): AnyCurve => ({ type: 'polyline', points, closed: false }))
+        replaceWith(ctx, id, parts)
+        pieces += parts.length
+        continue
+      }
       const curve = curveOf(ctx, id)
       if (!curve) continue
       const parts = explodeCurve(curve)

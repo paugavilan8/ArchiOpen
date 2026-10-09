@@ -44,6 +44,14 @@ se adjuntan a un borrador de *release*.
   perfil y axonometría en el sistema americano) y `HiddenLines` (dibuja también las ocultas). Las
   líneas visibles van a la capa *Make2D Visible* y las ocultas a *Make2D Hidden*. Las vistas en
   perspectiva se dibujan como proyección paralela.
+- Textos y cotas, dibujados como líneas con una tipografía técnica de un solo trazo (Hershey, con
+  acentos, ñ, ¿¡, Ø, ±, ° y ²): `Text`, `Dim` (cota horizontal o vertical según hacia dónde se
+  arrastre), `DimAligned`, `DimRadius`, `DimDiameter`, `DimAngle` (eligiendo dos líneas o con la
+  opción `Points`) y `Leader` (directriz con texto). Opciones `Height` (altura del texto) y
+  `Arrow` (flecha o trazo oblicuo de arquitectura). Las cotas se actualizan solas al mover,
+  escalar o editar sus puntos (`PointsOn`). En el panel de propiedades se cambian el texto (`<>`
+  es el valor medido, p. ej. `L = <> m`), la altura, las flechas y los decimales. `Explode` las
+  convierte en líneas; al exportar a `.3dm` o STEP van como líneas.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.
@@ -92,6 +100,11 @@ npm run app:build  # instaladores en src-tauri/target/release/bundle
 npm run typecheck
 npm test           # pruebas de la geometría
 ```
+
+## Créditos
+
+- Tipografía de los textos: fuentes Hershey (A. V. Hershey, U.S. National Bureau of Standards), en
+  la conversión de [hersheytext](https://github.com/techninja/hersheytextjs) (MIT).
 
 ## Licencia
 

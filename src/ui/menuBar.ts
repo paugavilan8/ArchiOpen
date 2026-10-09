@@ -105,7 +105,17 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
     ],
     [
       'Drawing',
-      [item('Make 2D Drawing', 'Make2D')],
+      [
+        item('Make 2D Drawing', 'Make2D'),
+        'separator',
+        item('Text', 'Text'),
+        item('Linear Dimension', 'Dim'),
+        item('Aligned Dimension', 'DimAligned'),
+        item('Radius Dimension', 'DimRadius'),
+        item('Diameter Dimension', 'DimDiameter'),
+        item('Angle Dimension', 'DimAngle'),
+        item('Leader', 'Leader'),
+      ],
     ],
     [
       'Transform',

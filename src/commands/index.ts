@@ -1,3 +1,4 @@
+import { annotationCommands } from './annotate'
 import { curveEditCommands } from './curveEdit'
 import { drawCommands } from './draw'
 import { drawingCommands } from './drawing'
@@ -40,6 +41,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...drawingCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...drawingCommands, ...annotationCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }

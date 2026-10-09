@@ -1,6 +1,6 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import { transform } from '../core/curves'
-import { AnyCurve, isCurve, tessellate } from '../core/geometry'
+import { AnyCurve, expandBox, isCurve, tessellate } from '../core/geometry'
 import type { Layer } from '../core/document'
 import { shapeOf } from '../kernel/brep'
 import { Drawing2D, DrawingView, make2D } from '../kernel/make2d'
@@ -87,8 +87,8 @@ const make2d: Command = {
 
     const model = new Box3()
     for (const g of objects) {
-      if (isCurve(g)) for (const p of tessellate(g)) model.expandByPoint(p)
-      else for (let i = 0; i < g.display.vertices.length; i += 3) model.expandByPoint(new Vector3().fromArray(g.display.vertices, i))
+      if (g.type === 'brep') for (let i = 0; i < g.display.vertices.length; i += 3) model.expandByPoint(new Vector3().fromArray(g.display.vertices, i))
+      else expandBox(model, g)
     }
     const size = model.getSize(new Vector3())
     const gap = Math.max(size.x, size.y, size.z, 1e-6) * 0.25
