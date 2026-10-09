@@ -1,7 +1,8 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import * as R from 'replicad'
 import { isSimilarity, join } from '../core/curves'
-import { AnyCurve, BrepGeometry, endPoint, isClosed, pointAt, startPoint } from '../core/geometry'
+import { AnyCurve, BrepGeometry, endPoint, isClosed, MeshGeometry, pointAt, startPoint } from '../core/geometry'
+import { weldMesh } from '../core/mesh'
 import { edgeToCurve } from './edges'
 
 /**
@@ -259,6 +260,52 @@ export function joinShapes(shapes: AnyShape[], tolerance = 1e-4): AnyShape {
     }
   }
   return sewn
+}
+
+// --- Meshes ----------------------------------------------------------------------------
+
+/**
+ * A mesh of a shape, finer for a smaller `tolerance` (largest distance from the true surface) and
+ * `angularTolerance` (largest turn between neighbouring facets, in radians). Faces share vertices
+ * inside each face of the shape; along its edges they are welded too.
+ */
+export function shapeToMesh(shape: AnyShape, tolerance: number, angularTolerance: number): MeshGeometry {
+  const mesh = shape.mesh({ tolerance, angularTolerance })
+  const faces: number[] = []
+  for (let i = 0; i < mesh.triangles.length; i += 3) faces.push(mesh.triangles[i], mesh.triangles[i + 1], mesh.triangles[i + 2], mesh.triangles[i + 2])
+  return weldMesh({ type: 'mesh', vertices: [...mesh.vertices], faces }, tolerance / 100)
+}
+
+/** A polysurface (a solid when closed) with one flat face per mesh face; bent quads become two triangles. */
+export function meshToShape(g: MeshGeometry): AnyShape {
+  const v = (i: number) => new Vector3().fromArray(g.vertices, 3 * i)
+  const faces: R.Face[] = []
+  const add = (corners: Vector3[]) => {
+    try {
+      faces.push(R.makePolygon(corners.map(pt)))
+    } catch {
+      // A face with no area adds nothing.
+    }
+  }
+  const f = g.faces
+  for (let i = 0; i < f.length; i += 4) {
+    const [a, b, c, d] = [v(f[i]), v(f[i + 1]), v(f[i + 2]), v(f[i + 3])]
+    if (f[i + 2] === f[i + 3]) {
+      add([a, b, c])
+      continue
+    }
+    const normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize()
+    const size = Math.max(a.distanceTo(c), b.distanceTo(d))
+    if (Math.abs(d.clone().sub(a).dot(normal)) < size * 1e-7) add([a, b, c, d])
+    else {
+      add([a, b, c])
+      add([a, c, d])
+    }
+  }
+  if (faces.length === 0) throw new Error('The mesh has no faces with area')
+  let size = 1
+  for (const x of g.vertices) size = Math.max(size, Math.abs(x))
+  return joinShapes(faces, 1e-6 * size)
 }
 
 /** Index of the face of a brep closest to a point (from its display mesh), or -1. */

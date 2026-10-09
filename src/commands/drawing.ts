@@ -128,6 +128,8 @@ const make2d: Command = {
       throw new Error('Could not compute the drawing')
     }
 
+    const meshes = objects.filter((g) => g.type === 'mesh').length
+    if (meshes > 0) log(`${plural('mesh', meshes)} left out: Make2D draws surfaces, solids and curves (MeshToNURB turns a mesh into a polysurface)`)
     const all = drawings.flatMap((d) => [...d.visible, ...d.hidden])
     if (all.length === 0) {
       log('Nothing to draw')

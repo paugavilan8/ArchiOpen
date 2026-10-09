@@ -5,6 +5,7 @@ import {
   AnyCurve,
   HatchGeometry,
   InstanceGeometry,
+  MeshGeometry,
   ArcGeometry,
   BrepGeometry,
   CircleGeometry,
@@ -21,6 +22,7 @@ import {
   startPoint,
   TOLERANCE,
 } from './geometry'
+import { meshPoints, transformMesh, withMeshPoints } from './mesh'
 
 const TWO_PI = Math.PI * 2
 
@@ -61,9 +63,12 @@ export function transform<G extends Geometry>(
       ? HatchGeometry
       : G extends InstanceGeometry
         ? InstanceGeometry
-        : AnyCurve
+        : G extends MeshGeometry
+          ? MeshGeometry
+          : AnyCurve
 export function transform(g: Geometry, m: Matrix4): Geometry {
   if (g.type === 'brep') return transformBrep(g, m)
+  if (g.type === 'mesh') return transformMesh(g, m)
   const linear = new Matrix3().setFromMatrix4(m)
   if (g.type === 'annotation') return transformAnnotation(g, m, linear)
   if (g.type === 'instance') return { ...g, matrix: m.clone().multiply(new Matrix4().fromArray(g.matrix)).toArray() }
@@ -468,13 +473,22 @@ export function closestPoint(g: AnyCurve, p: Vector3): CurvePoint {
 // --- Control points ------------------------------------------------------------------
 
 /** The points that define a polyline or curve, which the user can edit directly. Null for other types. */
+const meshPointCache = new WeakMap<MeshGeometry, Vector3[]>()
+
 export function controlPoints(g: Geometry): Vector3[] | null {
+  if (g.type === 'mesh') {
+    // Mesh vertices act as control points.
+    let pts = meshPointCache.get(g)
+    if (!pts) meshPointCache.set(g, (pts = meshPoints(g)))
+    return pts
+  }
   return g.type === 'polyline' || g.type === 'curve' || g.type === 'annotation' ? g.points : null
 }
 
 /** The same polyline or curve with new control points (same count). */
 export function withControlPoints(g: Geometry, points: Vector3[]): Geometry {
   if (g.type === 'polyline' || g.type === 'curve' || g.type === 'annotation') return { ...g, points }
+  if (g.type === 'mesh') return withMeshPoints(g, points)
   return g
 }
 

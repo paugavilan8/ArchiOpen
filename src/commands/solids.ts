@@ -28,7 +28,7 @@ import { isOption, plural, valueOption, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
 
 /** Defaults the solid commands remember between runs. */
-const memory = {
+export const memory = {
   height: 10,
   radius: 5,
   extrudeDistance: 10,
@@ -67,13 +67,13 @@ export const brepOf = (ctx: CommandContext, id: number): BrepGeometry | null => 
 }
 
 /** Signed height of p above the base along n; in the base's own plane, the distance from the base. */
-function heightAt(base: Vector3, n: Vector3, p: Vector3): number {
+export function heightAt(base: Vector3, n: Vector3, p: Vector3): number {
   const h = p.clone().sub(base).dot(n)
   return Math.abs(h) > 1e-9 ? h : p.distanceTo(base)
 }
 
 /** Asks for a height: typed, or picked (see heightAt). Resolves to null when cancelled with Enter. */
-async function getHeight(ctx: CommandContext, base: Vector3, n: Vector3, preview: (h: number) => Vector3[][]): Promise<number> {
+export async function getHeight(ctx: CommandContext, base: Vector3, n: Vector3, preview: (h: number) => Vector3[][]): Promise<number> {
   const result = await ctx.input.getPoint({
     prompt: `Height <${memory.height}>`,
     base,
@@ -88,7 +88,7 @@ async function getHeight(ctx: CommandContext, base: Vector3, n: Vector3, preview
 }
 
 /** Wireframe of the box on rectangle (a, u, v) extruded by w, for previews. */
-function boxLines(a: Vector3, u: Vector3, v: Vector3, w: Vector3): Vector3[][] {
+export function boxLines(a: Vector3, u: Vector3, v: Vector3, w: Vector3): Vector3[][] {
   const bottom = [a, a.clone().add(u), a.clone().add(u).add(v), a.clone().add(v)]
   const top = bottom.map((p) => p.clone().add(w))
   return [[...bottom, bottom[0]], [...top, top[0]], ...bottom.map((p, i) => [p, top[i]])]
@@ -126,7 +126,7 @@ const boxCommand: Command = {
   },
 }
 
-function circleLines(center: Vector3, x: Vector3, y: Vector3, r: number): Vector3[] {
+export function circleLines(center: Vector3, x: Vector3, y: Vector3, r: number): Vector3[] {
   const pts: Vector3[] = []
   for (let i = 0; i <= 64; i++) {
     const t = (i / 64) * Math.PI * 2
@@ -136,7 +136,7 @@ function circleLines(center: Vector3, x: Vector3, y: Vector3, r: number): Vector
 }
 
 /** Asks for a radius around a center (typed or picked). */
-async function getRadius(ctx: CommandContext, center: Vector3, x: Vector3, y: Vector3): Promise<number> {
+export async function getRadius(ctx: CommandContext, center: Vector3, x: Vector3, y: Vector3): Promise<number> {
   const result = await ctx.input.getPoint({
     prompt: `Radius <${memory.radius}>`,
     base: center,

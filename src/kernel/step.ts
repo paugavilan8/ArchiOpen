@@ -4,7 +4,7 @@ import { join, transform } from '../core/curves'
 import { flatten } from '../core/blocks'
 import { wireframe } from '../core/geometry'
 import type { AnyCurve, Geometry } from '../core/geometry'
-import { curveToWire, shapeOf } from './brep'
+import { curveToWire, meshToShape, shapeOf } from './brep'
 import { edgeToCurve } from './edges'
 
 /** STEP unit codes understood by Open CASCADE, by model unit name. */
@@ -71,6 +71,8 @@ function inFileUnits(g: Geometry, toFile: Matrix4, scale: number): R.AnyShape {
   // Hatches go as their boundaries.
   if (scaled.type === 'hatch') return R.makeCompound(scaled.loops.map(curveToWire))
   if (scaled.type === 'instance') return R.makeCompound([])
+  // Meshes go as faces of flat polygons, sewn together.
+  if (scaled.type === 'mesh') return meshToShape(scaled)
   return scaled.type === 'brep' ? shapeOf(scaled) : curveToWire(scaled)
 }
 

@@ -308,6 +308,17 @@ function writeEntity(out: Out, layer: string, g: Geometry): void {
     }
     return
   }
+  if (g.type === 'mesh') {
+    // One 3D face per mesh face; a triangle repeats its last corner, as in the mesh itself.
+    const f = g.faces
+    const corner = (i: number) => new Vector3().fromArray(g.vertices, 3 * i)
+    for (let i = 0; i < f.length; i += 4) {
+      w.pair(0, '3DFACE')
+      w.pair(8, layer)
+      for (let k = 0; k < 4; k++) w.point(10 + k, corner(f[i + k]))
+    }
+    return
+  }
   // Surfaces, solids, texts, dimensions and patterned hatches as their line work.
   for (const line of wireframe(g)) polyline(w, layer, line, false)
 }

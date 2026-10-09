@@ -68,6 +68,10 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'BooleanIntersection', tip: 'Boolean intersection  (BI)', icon: 'booleanIntersection' },
   ],
   [
+    { macro: 'Mesh', tip: 'Mesh from surfaces or solids', icon: 'mesh' },
+    { macro: 'MeshSphere', tip: 'Mesh sphere', icon: 'meshSphere' },
+  ],
+  [
     { macro: 'Make2D', tip: 'Make2D: 2D drawing of the selection', icon: 'make2d' },
     { macro: 'Text', tip: 'Text', icon: 'text' },
     { macro: 'Dim', tip: 'Linear dimension', icon: 'dimLinear' },

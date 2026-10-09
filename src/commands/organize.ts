@@ -96,7 +96,7 @@ function selector(name: string, what: string, test: (o: CadObject) => boolean): 
       const { doc, log } = ctx
       const ids = [...doc.objects.values()].filter((o) => doc.isSelectable(o) && test(o)).map((o) => o.id)
       doc.select(ids, 'add')
-      log(ids.length === 0 ? `No ${what} to select` : `${plural(what.replace(/s$/, ''), ids.length)} added to the selection`)
+      log(ids.length === 0 ? `No ${what} to select` : `${plural(what.replace(/(?<=(s|sh|ch|x))es$|s$/, ''), ids.length)} added to the selection`)
     },
   }
 }
@@ -196,4 +196,5 @@ export const organizeCommands: Command[] = [
   selector('SelDim', 'dimensions', (o) => o.geometry.type === 'annotation' && o.geometry.kind !== 'text' && o.geometry.kind !== 'leader'),
   selector('SelText', 'texts', (o) => o.geometry.type === 'annotation' && o.geometry.kind === 'text'),
   selector('SelHatch', 'hatches', (o) => o.geometry.type === 'hatch'),
+  selector('SelMesh', 'meshes', (o) => o.geometry.type === 'mesh'),
 ]

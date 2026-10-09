@@ -1,5 +1,6 @@
 import type { Document } from '../core/document'
 import { readDxf } from '../io/dxfRead'
+import { readObj, readStl } from '../io/meshFiles'
 import { describeSkipped, readRhinoFile, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
 import { loadRhino } from '../io/loadRhino'
 import { toBrep } from '../kernel/brep'
@@ -22,7 +23,24 @@ export const RHINO: FileType = { name: 'Rhino 3D model', extension: '3dm', mime:
 export const PDF: FileType = { name: 'PDF drawing', extension: 'pdf', mime: 'application/pdf' }
 export const DXF: FileType = { name: 'DXF drawing', extension: 'dxf', mime: 'application/dxf' }
 export const STEP: FileType = { name: 'STEP model', extension: 'step', extensions: ['step', 'stp'], mime: 'model/step' }
+export const STL: FileType = { name: 'STL mesh', extension: 'stl', mime: 'model/stl' }
+export const OBJ: FileType = { name: 'OBJ mesh', extension: 'obj', mime: 'model/obj' }
 const UNTITLED = 'Untitled'
+
+const isMeshFile = (fileName: string) => [STL.extension, OBJ.extension].includes(extensionOf(fileName))
+
+/** An STL or OBJ file as an import: its meshes (and OBJ lines) on one layer named after the file. */
+function readMeshFile(fileName: string, bytes: Uint8Array, units: string): RhinoImport {
+  const layer = { name: baseName(fileName), color: '#000000', visible: true, locked: false }
+  const objects: RhinoImport['objects'] =
+    extensionOf(fileName) === STL.extension
+      ? [{ layer: 0, geometry: readStl(bytes) }]
+      : (() => {
+          const { meshes, lines } = readObj(new TextDecoder().decode(bytes))
+          return [...meshes.map((m) => ({ layer: 0, geometry: m.mesh })), ...lines.map((l) => ({ layer: 0, geometry: l }))]
+        })()
+  return { units, layers: [layer], objects, breps: [], tolerance: 0, skipped: new Map() }
+}
 const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']
 
 /** True when running inside the desktop shell rather than a plain browser tab. */
@@ -205,9 +223,16 @@ export class FileManager {
    */
   async open(): Promise<string | null> {
     if (!(await this.confirmDiscard())) return null
-    const file = await pickFile([ARCHI, RHINO, DXF])
+    const file = await pickFile([ARCHI, RHINO, DXF, STL, OBJ])
     if (!file) return null
     const bytes = await file.read()
+    if (isMeshFile(file.fileName)) {
+      // STL and OBJ have no units; millimeters are the usual ones for 3D printing.
+      const result = readMeshFile(file.fileName, bytes, 'Millimeters')
+      applyRhinoImport(this.doc, result)
+      this.setLocation(baseName(file.fileName), null)
+      return `Opened ${file.fileName}: ${this.rhinoSummary(result)}, taken as millimeters (Units changes them)`
+    }
     if (extensionOf(file.fileName) === DXF.extension) {
       // DXF files without units are taken as millimeters.
       const result = readDxf(bytes, 'Millimeters')
@@ -239,13 +264,17 @@ export class FileManager {
     return true
   }
 
-  /** Adds the contents of a .3dm or .dxf file to the document. Resolves to the new object ids, or null. */
+  /** Adds the contents of a .3dm, .dxf, .stl or .obj file to the document. Resolves to the new object ids, or null. */
   async importModel(): Promise<{ ids: number[]; message: string } | null> {
-    const file = await pickFile([RHINO, DXF])
+    const file = await pickFile([RHINO, DXF, STL, OBJ])
     if (!file) return null
     const bytes = await file.read()
-    // DXF files without units are taken to be in the model's units.
-    const result = extensionOf(file.fileName) === DXF.extension ? readDxf(bytes, this.doc.units) : await this.readRhino(bytes)
+    // Files without units (DXF without $INSUNITS, STL, OBJ) are taken to be in the model's units.
+    const result = isMeshFile(file.fileName)
+      ? readMeshFile(file.fileName, bytes, this.doc.units)
+      : extensionOf(file.fileName) === DXF.extension
+        ? readDxf(bytes, this.doc.units)
+        : await this.readRhino(bytes)
     const { ids, scaledFrom } = mergeRhinoImport(this.doc, result)
     const scaled = scaledFrom ? `, scaled from ${scaledFrom.toLowerCase()} to ${this.doc.units.toLowerCase()}` : ''
     return { ids, message: `Imported ${file.fileName}: ${this.rhinoSummary(result)}${scaled}` }
@@ -318,9 +347,11 @@ export class FileManager {
 
   private rhinoSummary(result: RhinoImport): string {
     const breps = result.objects.filter((o) => o.geometry.type === 'brep').length
-    const curveCount = result.objects.length - breps
-    const parts = [`${curveCount} object${curveCount === 1 ? '' : 's'}`]
+    const meshes = result.objects.filter((o) => o.geometry.type === 'mesh').length
+    const curveCount = result.objects.length - breps - meshes
+    const parts = curveCount > 0 || breps + meshes === 0 ? [`${curveCount} object${curveCount === 1 ? '' : 's'}`] : []
     if (breps > 0) parts.push(`${breps} polysurface${breps === 1 ? '' : 's'}`)
+    if (meshes > 0) parts.push(`${meshes} mesh${meshes === 1 ? '' : 'es'}`)
     const curves = `${parts.join(' and ')} on ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}`
     const skipped = describeSkipped(result.skipped)
     return skipped ? `${curves}. Not loaded yet: ${skipped}` : curves

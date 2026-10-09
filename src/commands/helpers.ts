@@ -88,5 +88,5 @@ export function signedAngle(a: Vector3, b: Vector3, n: Vector3): number {
 }
 
 export function plural(word: string, count: number): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`
+  return `${count} ${word}${count === 1 ? '' : /(s|sh|ch|x)$/.test(word) ? 'es' : 's'}`
 }

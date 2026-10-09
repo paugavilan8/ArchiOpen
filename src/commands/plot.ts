@@ -15,7 +15,7 @@ const PAPERS = Object.keys(PAPER_SIZES)
 const memory: PlotOptions = { paper: 'A3', landscape: true, scale: null, area: 'Extents', black: false }
 
 /** The selection if there is one, otherwise everything visible. */
-function chosenObjects(ctx: CommandContext): CadObject[] {
+export function chosenObjects(ctx: CommandContext): CadObject[] {
   const { doc } = ctx
   const chosen = doc.selection.size > 0 ? [...doc.selection].map((id) => doc.objects.get(id)!) : [...doc.objects.values()].filter((o) => doc.isVisible(o))
   if (chosen.length === 0) throw new Error('There is nothing to export')

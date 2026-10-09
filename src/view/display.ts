@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import type { Document } from '../core/document'
 import { controlPoints } from '../core/curves'
-import { BrepGeometry, expandBox, wireframe } from '../core/geometry'
+import { BrepGeometry, expandBox, MeshGeometry, wireframe } from '../core/geometry'
+import { meshTriangles, nakedEdges } from '../core/mesh'
+import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { flatten } from '../core/blocks'
 import { hatchTriangles } from '../core/hatch'
 import { dashesOf } from '../core/linetypes'
@@ -17,6 +19,23 @@ const POLYGON_COLOR = '#6b7280'
 const POINT_SIZE = 7
 /** Three.js layer for shaded surfaces, so only shaded viewports draw them. */
 const SHADED_LAYER = 1
+/** Lines only drawn in wireframe views (the inner edges of meshes). */
+const WIRE_LAYER = 2
+
+interface LineBatch {
+  material: THREE.LineBasicMaterial | THREE.LineDashedMaterial
+  positions: number[]
+  distances: number[]
+  selected: boolean
+  wireOnly: boolean
+}
+
+const bordersCache = new WeakMap<MeshGeometry, THREE.Vector3[][]>()
+function openBorders(g: MeshGeometry): THREE.Vector3[][] {
+  let lines = bordersCache.get(g)
+  if (!lines) bordersCache.set(g, (lines = nakedEdges(g)))
+  return lines
+}
 /** Screen pixels per millimeter at 96 dpi. */
 const MM_TO_PX = 96 / 25.4
 
@@ -183,7 +202,7 @@ export class Display {
     this.clearGroup(this.fillGroup)
     // Line work is batched into one set of segments per material, so large drawings take a few draw
     // calls instead of one per line.
-    const batches = new Map<THREE.Material, { positions: number[]; distances: number[]; selected: boolean }>()
+    const batches = new Map<string, LineBatch>()
     const edit = this.doc.blockEdit
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
@@ -192,20 +211,15 @@ export class Display {
       // While a block is edited, everything else is shown dimmed.
       const color = selected ? SELECTED_COLOR : layer.locked || obj.locked || !this.doc.isEditable(obj) ? LOCKED_COLOR : layer.color
       const material = this.material(color, layer.linetype)
-      let batch = batches.get(material)
-      if (!batch) batches.set(material, (batch = { positions: [], distances: [], selected }))
-      for (const pts of wireframe(obj.geometry)) {
-        // Distances run along each polyline, so dashes flow around curves.
-        let along = 0
-        for (let i = 1; i < pts.length; i++) {
-          const a = pts[i - 1]
-          const b = pts[i]
-          const d = a.distanceTo(b)
-          batch.positions.push(a.x, a.y, a.z, b.x, b.y, b.z)
-          batch.distances.push(along, along + d)
-          along += d
-        }
+      const batchOf = (key: string) => {
+        let batch = batches.get(key)
+        if (!batch) batches.set(key, (batch = { material, positions: [], distances: [], selected, wireOnly: key.startsWith('wire:') }))
+        return batch
       }
+      // A mesh shows every edge in wireframe views, but only its open borders over the shading.
+      const mesh = obj.geometry.type === 'mesh' ? obj.geometry : null
+      if (mesh) this.addLines(batchOf(`wire:${material.uuid}`), wireframe(mesh))
+      this.addLines(batchOf(material.uuid), mesh ? openBorders(mesh) : wireframe(obj.geometry))
       // Blocks fill and shade what they hold like loose objects.
       for (const g of flatten(obj.geometry)) {
         if (g.type === 'hatch' && g.pattern === 'Solid') {
@@ -216,24 +230,40 @@ export class Display {
           mesh.userData.id = obj.id
           this.fillGroup.add(mesh)
         }
-        if (g.type === 'brep') {
-          const mesh = new THREE.Mesh(surfaceGeometry(g), this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj)))
+        if (g.type === 'brep' || g.type === 'mesh') {
+          const mesh = new THREE.Mesh(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj)))
           mesh.layers.set(SHADED_LAYER)
           mesh.userData.id = obj.id
           this.surfaceGroup.add(mesh)
         }
       }
     }
-    for (const [material, batch] of batches) {
+    for (const { material, ...batch } of batches.values()) {
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3))
       if (material instanceof THREE.LineDashedMaterial) geometry.setAttribute('lineDistance', new THREE.Float32BufferAttribute(batch.distances, 1))
       const segments = new THREE.LineSegments(geometry, material)
       segments.renderOrder = batch.selected ? 1 : 0
+      if (batch.wireOnly) segments.layers.set(WIRE_LAYER)
       this.objectsGroup.add(segments)
     }
     this.rebuildPoints()
     this.requestRender()
+  }
+
+  /** Adds polylines to a batch of segments. Distances run along each one, so dashes flow around curves. */
+  private addLines(batch: LineBatch, lines: THREE.Vector3[][]): void {
+    for (const pts of lines) {
+      let along = 0
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1]
+        const b = pts[i]
+        const d = a.distanceTo(b)
+        batch.positions.push(a.x, a.y, a.z, b.x, b.y, b.z)
+        batch.distances.push(along, along + d)
+        along += d
+      }
+    }
   }
 
   /** Control points (and the control polygon of curves) of objects with points on. */
@@ -386,6 +416,7 @@ export class Display {
       for (const other of this.viewports) other.grid.visible = other === vp
       vp.camera.layers.set(0)
       this.applyMode(vp)
+      if (!vp.shaded) vp.camera.layers.enable(WIRE_LAYER)
       if (vp.shaded) {
         vp.camera.layers.enable(SHADED_LAYER)
         this.headlight.position.copy(vp.camera.position)
@@ -405,6 +436,26 @@ function pointMaterial(color: string, size: number): THREE.PointsMaterial {
     sizeAttenuation: false,
     depthTest: false,
   })
+}
+
+/** Facets meeting at a sharper angle than this are shaded as a crease. */
+const CREASE_ANGLE = (40 * Math.PI) / 180
+
+const polygonMeshCache = new WeakMap<MeshGeometry, THREE.BufferGeometry>()
+
+/** Triangles of a polygon mesh, smooth across gentle bends and sharp at creases (as a box's edges). */
+function polygonMeshGeometry(g: MeshGeometry): THREE.BufferGeometry {
+  let geometry = polygonMeshCache.get(g)
+  if (!geometry) {
+    const indexed = new THREE.BufferGeometry()
+    indexed.setAttribute('position', new THREE.Float32BufferAttribute(g.vertices, 3))
+    indexed.setIndex(meshTriangles(g))
+    geometry = toCreasedNormals(indexed, CREASE_ANGLE)
+    indexed.dispose()
+    geometry.computeBoundingSphere()
+    polygonMeshCache.set(g, geometry)
+  }
+  return geometry.clone()
 }
 
 const surfaceCache = new WeakMap<BrepGeometry, THREE.BufferGeometry>()

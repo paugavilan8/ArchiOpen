@@ -4,6 +4,7 @@ import type { CadObject, Document } from '../core/document'
 import { length } from '../core/curves'
 import { measure } from '../core/annotation'
 import { PATTERN_NAMES } from '../core/hatch'
+import { faceCount, isClosedMesh, meshArea, meshVolume, vertexCount } from '../core/mesh'
 import { AnnotationGeometry, endPoint, HatchGeometry, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
 
 type Row = [label: string, value: string]
@@ -61,6 +62,17 @@ function geometryRows(g: Geometry): Row[] {
       ]
     case 'hatch':
       return [['Loops', String(g.loops.length)]]
+    case 'mesh': {
+      const closed = isClosedMesh(g)
+      const triangles = g.faces.filter((_, i) => i % 4 === 3 && g.faces[i] === g.faces[i - 1]).length
+      return [
+        ['Vertices', String(vertexCount(g))],
+        ['Faces', `${faceCount(g)} (${triangles} triangles, ${faceCount(g) - triangles} quads)`],
+        ['Closed', closed ? 'Yes' : 'No'],
+        ['Area', fmt(meshArea(g))],
+        ...(closed ? [['Volume', fmt(Math.abs(meshVolume(g)))] as Row] : []),
+      ]
+    }
     case 'instance': {
       const m = new Matrix4().fromArray(g.matrix)
       const scale = new Vector3().setFromMatrixScale(m)

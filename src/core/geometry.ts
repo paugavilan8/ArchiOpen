@@ -3,6 +3,7 @@ import { clampedKnots, evalCurve } from '../math/nurbs'
 import { annotationLines } from './annotation'
 import { hatchLines } from './hatch'
 import { insertionPoint, instanceContents } from './blocks'
+import { meshEdgeLines, meshVertexPoints, SNAP_VERTEX_LIMIT } from './mesh'
 
 export interface Plane {
   origin: Vector3
@@ -124,6 +125,17 @@ export interface HatchGeometry {
   yaxis: Vector3
 }
 
+/**
+ * A polygon mesh, as in STL, OBJ or Rhino: flat [x, y, z, ...] vertex coordinates and four vertex
+ * indices per face. A triangle repeats its third index (a, b, c, c). Faces wind counter-clockwise
+ * seen from the side they face.
+ */
+export interface MeshGeometry {
+  type: 'mesh'
+  vertices: number[]
+  faces: number[]
+}
+
 export type AnyCurve = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
 
 // Geometry values are immutable: edits produce a new value, which keeps the caches below valid.
@@ -146,10 +158,10 @@ export interface InstanceGeometry {
   matrix: number[]
 }
 
-export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry | InstanceGeometry
+export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry | InstanceGeometry | MeshGeometry
 
 export const isCurve = (g: Geometry): g is AnyCurve =>
-  g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'instance'
+  g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'instance' && g.type !== 'mesh'
 
 export interface SnapPoints {
   end: Vector3[]
@@ -338,7 +350,9 @@ export function wireframe(g: Geometry): Vector3[][] {
           ? hatchWires(g)
           : g.type === 'instance'
             ? instanceContents(g).flatMap((o) => wireframe(o.geometry))
-            : g.display.edges.map((flat) => {
+            : g.type === 'mesh'
+              ? meshEdgeLines(g)
+              : g.display.edges.map((flat) => {
           const pts: Vector3[] = []
           for (let i = 0; i < flat.length; i += 3) pts.push(new Vector3(flat[i], flat[i + 1], flat[i + 2]))
           return pts
@@ -412,6 +426,10 @@ function buildSnapPoints(g: Geometry): SnapPoints {
       break
     case 'hatch':
       break
+    case 'mesh':
+      // Vertices snap as ends, unless there are so many that snapping would crawl.
+      if (g.vertices.length / 3 <= SNAP_VERTEX_LIMIT) snaps.end = meshVertexPoints(g)
+      break
     case 'instance':
       // The insertion point, then the snaps of what the block draws.
       snaps.end.push(insertionPoint(g))
@@ -452,6 +470,7 @@ export function typeName(g: Geometry): string {
   if (g.type === 'polyline') return g.points.length === 2 ? 'line' : 'polyline'
   if (g.type === 'brep') return g.kind
   if (g.type === 'hatch') return 'hatch'
+  if (g.type === 'mesh') return 'mesh'
   if (g.type === 'instance') return 'block'
   if (g.type === 'annotation') return g.kind === 'text' || g.kind === 'leader' ? g.kind : 'dimension'
   return g.type
@@ -510,6 +529,8 @@ export function geometryToJSON(g: Geometry): unknown {
       return { type: g.type, brep: g.brep, matrix: g.matrix, kind: g.kind, faces: g.faces, display: g.display }
     case 'instance':
       return { type: g.type, block: g.definition.name, matrix: g.matrix }
+    case 'mesh':
+      return { type: g.type, vertices: g.vertices, faces: g.faces }
   }
 }
 
@@ -570,6 +591,8 @@ export function geometryFromJSON(j: any, blocks?: BlockLookup): Geometry {
     case 'instance':
       // A missing definition reads as an empty block rather than failing the whole file.
       return { type: 'instance', definition: blocks?.(j.block) ?? { name: j.block, objects: [] }, matrix: j.matrix }
+    case 'mesh':
+      return { type: 'mesh', vertices: j.vertices, faces: j.faces }
     default:
       throw new Error(`Unknown geometry type: ${j.type}`)
   }

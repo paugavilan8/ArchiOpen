@@ -2,7 +2,8 @@ import { Matrix4, Vector3 } from 'three'
 import { closestPoint, subCurve, transform } from '../core/curves'
 import { ellipse } from '../core/curveTools'
 import type { Layer } from '../core/document'
-import type { AnnotationGeometry, AnyCurve, BlockDefinition, BlockObject, Geometry, SegmentGeometry } from '../core/geometry'
+import type { AnnotationGeometry, AnyCurve, BlockDefinition, BlockObject, Geometry, MeshGeometry, SegmentGeometry } from '../core/geometry'
+import { joinMeshes, makeMesh, weldMesh } from '../core/mesh'
 import { LINETYPE_NAMES, PRINT_WIDTHS } from '../core/linetypes'
 import { evalBSpline, interpolate } from '../math/nurbs'
 import { textShape, LINE_SPACING } from '../text/strokeFont'
@@ -510,7 +511,7 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
     const toBase = new Matrix4().makeTranslation(-block.base.x, -block.base.y, -block.base.z)
     const objects: BlockObject[] = []
     for (const child of block.entities) add(child, (g, layerName) => objects.push({ layerId: layerOf(layerName), geometry: transform(g, toBase) }), depth + 1)
-    const definition = { name: block.name, objects }
+    const definition = { name: block.name, objects: joinFaces(objects, (o) => o.layerId) }
     definitions.set(key, definition)
     return definition
   }
@@ -718,7 +719,8 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
       case '3DFACE': {
         const pts = [10, 11, 12, 13].map((code) => point(r, code)).filter((p, i, all) => i === 0 || p.distanceTo(all[i - 1]) > 1e-12)
         if (pts.length > 2 && pts[pts.length - 1].distanceTo(pts[0]) < 1e-12) pts.pop()
-        if (pts.length >= 3) out({ type: 'polyline', points: pts, closed: true })
+        // Faces become meshes; the faces of a layer are put together into one mesh at the end.
+        if (pts.length >= 3) out(makeMesh(pts.flatMap((p) => [p.x, p.y, p.z]), [pts.map((_, i) => i)]))
         return
       }
       default:
@@ -727,11 +729,34 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
   }
 
   for (const r of entities) add(r, toModel, 0)
+  objects.splice(0, objects.length, ...joinFaces(objects, (o) => o.layer))
 
   const skippedNamed = new Map<[string, string], number>()
   for (const [type, count] of skipped) skippedNamed.set(SKIPPED_NAMES[type] ?? [`${type.toLowerCase()} entity`, `${type.toLowerCase()} entities`], count)
   if (layers.length === 0) layers.push({ name: '0', color: '#000000', visible: true, locked: false })
   return { units, layers, objects, breps: [], tolerance: 0, skipped: skippedNamed }
+}
+
+/** Puts the meshes of each layer together into one welded mesh, where the first of them was. */
+function joinFaces<T extends { geometry: Geometry }>(list: T[], layerOf: (item: T) => number): T[] {
+  const byLayer = new Map<number, T[]>()
+  for (const item of list) {
+    if (item.geometry.type !== 'mesh') continue
+    const group = byLayer.get(layerOf(item))
+    if (group) group.push(item)
+    else byLayer.set(layerOf(item), [item])
+  }
+  if (byLayer.size === 0) return list
+  const out: T[] = []
+  for (const item of list) {
+    if (item.geometry.type !== 'mesh') out.push(item)
+    else {
+      const group = byLayer.get(layerOf(item))
+      if (group?.[0] !== item) continue
+      out.push({ ...item, geometry: weldMesh(joinMeshes(group.map((g) => g.geometry as MeshGeometry))) })
+    }
+  }
+  return out
 }
 
 /** A dimension as a live ArchiOpen dimension, or null for kinds drawn from their block. */

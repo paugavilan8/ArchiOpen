@@ -2,7 +2,8 @@ import { Vector3 } from 'three'
 import { closestPoint, explode as explodeCurve, join as joinCurves, split as splitCurve } from '../core/curves'
 import { chamferLines, filletCorners as roundCorners, filletLines } from '../core/fillet'
 import { extend as extendCurve } from '../core/curveTools'
-import { AnyCurve, domain, Geometry, isCurve, PolylineGeometry, tessellate, wireframe } from '../core/geometry'
+import { AnyCurve, domain, Geometry, isCurve, MeshGeometry, PolylineGeometry, tessellate, wireframe } from '../core/geometry'
+import { joinMeshes, meshPieces } from '../core/mesh'
 import { intersect } from '../core/intersect'
 import { offset as offsetCurve } from '../core/offset'
 import { CancelError } from '../input/interaction'
@@ -130,6 +131,15 @@ const join: Command = {
       const message = await brepHooks.join(ctx, brepIds)
       if (message) log(message)
     }
+    // Meshes join into one mesh (their vertices are not welded; Weld does that).
+    const meshIds = selected.filter((id) => doc.objects.get(id)?.geometry.type === 'mesh')
+    if (meshIds.length >= 2) {
+      const layerId = doc.objects.get(meshIds[0])!.layerId
+      const joinedMesh = joinMeshes(meshIds.map((id) => doc.objects.get(id)!.geometry as MeshGeometry))
+      for (const id of meshIds) doc.remove(id)
+      doc.select([doc.add(joinedMesh, layerId).id])
+      log(`${plural('mesh', meshIds.length)} joined into one`)
+    }
     const ids = selected.filter((id) => curveOf(ctx, id))
     if (ids.length === 0) return
     const geometries = ids.map((id) => curveOf(ctx, id)!)
@@ -165,6 +175,15 @@ const explode: Command = {
         const parts = explodeInstance(ctx, obj)
         doc.remove(id)
         for (const part of parts) doc.add(part.geometry, part.layerId)
+        pieces += parts.length
+        continue
+      }
+      if (obj && g?.type === 'mesh') {
+        // A mesh splits into the pieces that do not touch.
+        const parts = meshPieces(g)
+        if (parts.length < 2) continue
+        doc.remove(id)
+        for (const part of parts) doc.add(part, obj.layerId)
         pieces += parts.length
         continue
       }

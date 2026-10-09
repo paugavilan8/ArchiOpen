@@ -1,10 +1,10 @@
 import { Vector3 } from 'three'
-import type { Brep, Curve, GeometryBase, NurbsCurve, RhinoModule } from 'rhino3dm'
+import type { Brep, Curve, GeometryBase, Mesh, NurbsCurve, RhinoModule } from 'rhino3dm'
 import { chain } from '../core/curves'
 import type { Layer } from '../core/document'
 import { flatten } from '../core/blocks'
 import { wireframe } from '../core/geometry'
-import type { AnyCurve, BrepGeometry, Geometry, SegmentGeometry } from '../core/geometry'
+import type { AnyCurve, BrepGeometry, Geometry, MeshGeometry, SegmentGeometry } from '../core/geometry'
 import { interpolate } from '../math/nurbs'
 import type { BrepFaceData, NurbsCurveData, NurbsSurfaceData, RhinoBrepData } from './rhinoBrepData'
 
@@ -223,6 +223,17 @@ function readCurve(rhino: RhinoModule, c: Curve): AnyCurve | null {
   return null
 }
 
+/** A Rhino mesh: its faces are already four indices with triangles repeating the third. */
+function readMesh(mesh: Mesh): MeshGeometry | null {
+  const vertices: number[] = []
+  const faces: number[] = []
+  const vs = mesh.vertices()
+  const fs = mesh.faces()
+  for (let i = 0; i < vs.count; i++) vertices.push(...(vs.get(i) as number[]))
+  for (let i = 0; i < fs.count; i++) faces.push(...(fs.get(i) as number[]))
+  return faces.length > 0 ? { type: 'mesh', vertices, faces } : null
+}
+
 /** Singular and plural names of the kinds of objects that are not read yet. */
 const KIND_NAMES: Record<string, [string, string]> = {
   Brep: ['polysurface', 'polysurfaces'],
@@ -272,7 +283,7 @@ export function readRhinoFile(rhino: RhinoModule, bytes: Uint8Array): RhinoImpor
       if (attributes.isInstanceDefinitionObject) continue
       const geometry = obj.geometry()
       const layer = Math.min(Math.max(0, attributes.layerIndex), Math.max(0, layers.length - 1))
-      const converted = geometry instanceof rhino.Curve ? readCurve(rhino, geometry) : null
+      const converted = geometry instanceof rhino.Curve ? readCurve(rhino, geometry) : geometry instanceof rhino.Mesh ? readMesh(geometry) : null
       const brep = converted ? null : readBrep(rhino, geometry)
       if (converted) objects.push({ layer, geometry: converted })
       else if (brep) breps.push({ layer, data: brep })
@@ -334,12 +345,21 @@ function writeCurve(rhino: RhinoModule, g: AnyCurve): Curve {
   }
 }
 
-/** A surface or solid as a Rhino mesh of its display triangles (exact breps cannot be written yet). */
-function writeMesh(rhino: RhinoModule, g: BrepGeometry): GeometryBase {
+/** A mesh as it is, or a surface or solid as a mesh of its display triangles (exact breps cannot be written yet). */
+function writeMesh(rhino: RhinoModule, g: BrepGeometry | MeshGeometry): GeometryBase {
   const mesh = new rhino.Mesh()
-  const { vertices, triangles } = g.display
+  const vertices = g.type === 'mesh' ? g.vertices : g.display.vertices
   for (let i = 0; i < vertices.length; i += 3) mesh.vertices().add(vertices[i], vertices[i + 1], vertices[i + 2])
-  for (let i = 0; i < triangles.length; i += 3) mesh.faces().addTriFace(triangles[i], triangles[i + 1], triangles[i + 2])
+  if (g.type === 'mesh') {
+    const f = g.faces
+    for (let i = 0; i < f.length; i += 4) {
+      if (f[i + 2] === f[i + 3]) mesh.faces().addTriFace(f[i], f[i + 1], f[i + 2])
+      else mesh.faces().addQuadFace(f[i], f[i + 1], f[i + 2], f[i + 3])
+    }
+  } else {
+    const t = g.display.triangles
+    for (let i = 0; i < t.length; i += 3) mesh.faces().addTriFace(t[i], t[i + 1], t[i + 2])
+  }
   mesh.normals().computeNormals()
   mesh.compact()
   return mesh
@@ -392,7 +412,7 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Arr
             for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
           }
         } else {
-          file.objects().add(g.type === 'brep' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
+          file.objects().add(g.type === 'brep' || g.type === 'mesh' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
         }
       }
     }

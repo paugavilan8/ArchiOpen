@@ -56,6 +56,25 @@ se adjuntan a un borrador de *release*.
   - Curvas sobre superficies: `Project` (a lo largo de la normal del plano de construcción, sobre
     todas las caras donde caen), `Pull` (al punto más cercano), `Intersect` (curvas donde se cortan
     superficies y sólidos), `DupBorder` (bordes abiertos) y `DupEdge` (aristas elegidas).
+- Mallas (como las de STL, OBJ o Rhino: triángulos y cuadriláteros):
+  - `Mesh` convierte superficies y sólidos en mallas (opción `Density`: `Coarse`, `Medium` o
+    `Fine`), dejando los originales; `MeshBox`, `MeshSphere`, `MeshCylinder` y `MeshPlane` crean
+    mallas con el número de caras que se pida (`XFaces`, `AroundFaces`, `VerticalFaces`…).
+  - Edición: `Weld` (une vértices cercanos), `Unweld`, `Flip` (invierte las caras),
+    `UnifyMeshNormals` (orienta todas las caras igual y, si la malla es cerrada, hacia fuera),
+    `FillMeshHoles` (cierra los agujeros, p. ej. de un escaneado), `Join` y `Explode` (en piezas
+    sueltas). Se mueven, giran, escalan y simetrizan como cualquier objeto, y con `PointsOn` sus
+    vértices se editan como puntos de control.
+  - `MeshToNURB` convierte una malla en una polisuperficie de caras planas (un sólido si es
+    cerrada), para usarla con las booleanas y el resto de herramientas de sólidos.
+  - Se ven suaves en las vistas sombreadas (con aristas vivas donde la malla se dobla mucho); en
+    alámbrico se ven todas sus aristas y en sombreado solo los bordes abiertos. El panel de
+    propiedades muestra vértices, caras, si es cerrada, área y volumen. `SelMesh` las selecciona.
+  - Archivos: `Open` e `Import` leen STL (binario y ASCII) y OBJ (con sus grupos y líneas);
+    `ExportSTL` y `ExportOBJ` escriben la selección (o todo lo visible), y las superficies y sólidos
+    van como mallas. No tienen unidades: al abrir se toman milímetros y al importar las del modelo.
+    En `.3dm` se leen y escriben como mallas de Rhino, en DXF como caras 3D (`3DFACE`) y en STEP
+    como caras planas. `Make2D` aún no las dibuja.
 - Planos 2D: `Make2D` dibuja la selección vista desde una dirección, con eliminación de líneas
   ocultas, como curvas planas en el plano XY (alzados, plantas y axonometrías). Opciones: `View`
   (la vista activa, `Top`, `Front`, `Right`, `Back`, `Left` o `FourView`, que coloca alzado, planta,
@@ -110,7 +129,8 @@ se adjuntan a un borrador de *release*.
     anidados).
   - Puntos, multilíneas, multidirectrices, sólidos ACIS, imágenes y tablas aún no se cargan y se
     avisa de cuántos hay. Los DXF binarios y los DWG no se leen: guárdalos como DXF ASCII desde
-    el programa de origen (o conviértelos con ODA File Converter, gratuito).
+    el programa de origen (o conviértelos con ODA File Converter, gratuito). Las caras 3D
+    (`3DFACE`) se juntan en una malla por capa.
 - Bloques: `Block` (alias `B`) convierte la selección en un bloque con nombre y punto base;
   `Insert` (alias `I`) coloca copias con escala y giro (en el plano de construcción de la vista);
   `BlockEdit` edita un bloque en su sitio (el resto del modelo se atenúa y no se puede tocar) y al
@@ -163,11 +183,11 @@ se adjuntan a un borrador de *release*.
   - `Open` abre `.archi` o `.3dm`. De un `.3dm` se cargan las curvas (líneas, polilíneas, arcos,
     círculos, NURBS y polycurves), las polisuperficies, superficies y extrusiones (reconstruidas
     como geometría exacta y editable: sólidos cerrados, caras recortadas y agujeros), las capas
-    con su color, visibilidad y bloqueo, y las unidades. Las mallas, SubD, textos y bloques aún no
-    se cargan y se avisa de cuántos hay.
+    con su color, visibilidad y bloqueo, las mallas y las unidades. Los SubD, textos y bloques aún
+    no se cargan y se avisa de cuántos hay.
   - `Save` nunca sobrescribe un `.3dm` abierto (podría perder lo que no se cargó): guarda un `.archi`.
-  - `Export` escribe un `.3dm` con las curvas, las capas (también las anidadas) y las unidades.
-    Las superficies y sólidos se exportan como mallas.
+  - `Export` escribe un `.3dm` con las curvas, las mallas, las capas (también las anidadas) y las
+    unidades. Las superficies y sólidos se exportan como mallas.
   - `Import` añade un `.3dm` al modelo actual, escalándolo a sus unidades.
   - `Units` cambia las unidades del modelo (sin escalar la geometría).
 - Archivos STEP (`.step`, `.stp`, AP242), el formato que leen casi todos los programas de CAD:

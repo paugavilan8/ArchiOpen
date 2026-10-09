@@ -5,7 +5,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { transform } from '../core/curves'
 import type { AnyCurve, BrepGeometry } from '../core/geometry'
 import { clampedKnots } from '../math/nurbs'
-import { boolean, box, cylinder, explodeShape, extrudeCurve, filletEdges, joinShapes, loftCurves, nearestFace, planarFace, revolveCurve, sectionCurves, shapeOf, shellSolid, sphere, sweep, toBrep } from './brep'
+import { boolean, box, cylinder, explodeShape, extrudeCurve, filletEdges, joinShapes, loftCurves, meshToShape, nearestFace, planarFace, revolveCurve, sectionCurves, shapeOf, shapeToMesh, shellSolid, sphere, sweep, toBrep } from './brep'
+import { faceCount, isClosedMesh, meshBox, meshVolume as polygonMeshVolume } from '../core/mesh'
 import { length } from '../core/curves'
 
 beforeAll(async () => {
@@ -174,5 +175,24 @@ describe('solid tools', () => {
     const joined = joinShapes(faces.map((f) => R.cast(f.wrapped.Reversed().Reversed())))
     expect(toBrep(joined).kind).toBe('solid')
     expect(volume(joined)).toBeCloseTo(24, 6)
+  })
+})
+
+describe('meshes and polysurfaces', () => {
+  it('meshes a solid finer or coarser, closed and with the right volume', () => {
+    const g = toBrep(sphere(v(0, 0, 0), 2))
+    const coarse = shapeToMesh(shapeOf(g), 0.05, 0.5)
+    const fine = shapeToMesh(shapeOf(g), 0.002, 0.1)
+    expect(faceCount(fine)).toBeGreaterThan(faceCount(coarse))
+    expect(isClosedMesh(fine)).toBe(true)
+    expect(polygonMeshVolume(fine)).toBeCloseTo((4 / 3) * Math.PI * 8, 1)
+  })
+
+  it('turns a closed mesh into a solid with one face per flat face', () => {
+    const m = meshBox(v(0, 0, 0), v(2, 0, 0), v(0, 3, 0), v(0, 0, 4), 1, 2, 1)
+    const shape = meshToShape(m)
+    expect(toBrep(shape).kind).toBe('solid')
+    expect(shape.faces.length).toBe(faceCount(m))
+    expect(volume(shape)).toBeCloseTo(24, 6)
   })
 })
