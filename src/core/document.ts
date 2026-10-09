@@ -20,6 +20,30 @@ export interface CadObject {
   geometry: Geometry
   /** Groups the object belongs to; picking one member picks them all. */
   groups?: number[]
+  /** Hidden by Hide ('user') or by Isolate ('isolate'); shown when missing. */
+  hidden?: 'user' | 'isolate'
+  /** Locked objects are drawn but cannot be picked. */
+  locked?: boolean
+}
+
+/** A saved camera: which kind of view it was, and where it looked from. */
+export interface NamedView {
+  name: string
+  kind: string
+  state: { target: [number, number, number]; viewHeight: number; distance: number; azimuth: number; elevation: number }
+}
+
+/** A saved construction plane. */
+export interface NamedCPlane {
+  name: string
+  origin: [number, number, number]
+  xaxis: [number, number, number]
+  yaxis: [number, number, number]
+}
+
+export interface ObjectState {
+  hidden?: 'user' | 'isolate'
+  locked?: boolean
 }
 
 /**
@@ -43,6 +67,7 @@ type Action =
   | { type: 'modify'; id: number; before: Geometry; after: Geometry }
   | { type: 'relayer'; id: number; before: number; after: number }
   | { type: 'groups'; id: number; before: number[] | undefined; after: number[] | undefined }
+  | { type: 'state'; id: number; before: ObjectState; after: ObjectState }
   | { type: 'block'; name: string; before: BlockDefinition | undefined; after: BlockDefinition | undefined }
   | { type: 'blockEdit'; before: BlockEdit | null; after: BlockEdit | null }
   | { type: 'layouts'; before: Layout[]; after: Layout[] }
@@ -63,6 +88,20 @@ export class Document {
   layers: Layer[] = defaultLayers()
   /** Block definitions by name. */
   readonly blocks = new Map<string, BlockDefinition>()
+  /** Saved views and construction planes (kept with the model, outside undo, as in Rhino). */
+  namedViews: NamedView[] = []
+  namedCPlanes: NamedCPlane[] = []
+
+  setNamedViews(views: NamedView[]): void {
+    this.namedViews = views
+    this.emit('layers')
+  }
+
+  setNamedCPlanes(planes: NamedCPlane[]): void {
+    this.namedCPlanes = planes
+    this.emit('layers')
+  }
+
   /** Sheets for printing; replaced as a whole on every change. */
   layouts: Layout[] = []
   /** Set while a block is being edited in place. */
@@ -122,6 +161,20 @@ export class Document {
   get nextId(): number {
     return this.nextObjectId
   }
+
+  /** Hides, shows, locks or unlocks an object (undoable). */
+  setState(id: number, patch: ObjectState): void {
+    const obj = this.objects.get(id)
+    if (!obj) return
+    const before: ObjectState = { hidden: obj.hidden, locked: obj.locked }
+    const after: ObjectState = { ...before, ...patch }
+    if (before.hidden !== after.hidden || before.locked !== after.locked) this.record({ type: 'state', id, before, after })
+  }
+
+  /** The objects added by the last change (a command's whole step, or a single edit). */
+  lastCreated: number[] = []
+  /** The selection before the last time it was replaced or cleared. */
+  previousSelection: number[] = []
 
   /** Puts the objects in a new group. Returns its id. */
   group(ids: Iterable<number>): number {
@@ -183,12 +236,12 @@ export class Document {
   }
 
   isVisible(obj: CadObject): boolean {
-    return this.layerOf(obj).visible
+    return this.layerOf(obj).visible && !obj.hidden
   }
 
   isSelectable(obj: CadObject): boolean {
     const layer = this.layerOf(obj)
-    return layer.visible && !layer.locked && this.isEditable(obj)
+    return layer.visible && !layer.locked && !obj.hidden && !obj.locked && this.isEditable(obj)
   }
 
   /** While a block is edited, only its objects can be picked. */
@@ -207,8 +260,14 @@ export class Document {
     if (this.tx && this.tx.length > 0) {
       this.undoStack.push(this.tx)
       this.redoStack = []
+      this.noteCreated(this.tx)
     }
     this.tx = null
+  }
+
+  private noteCreated(actions: Action[]): void {
+    const added = actions.filter((a): a is Extract<Action, { type: 'add' }> => a.type === 'add').map((a) => a.obj.id)
+    if (added.length > 0) this.lastCreated = added
   }
 
   undo(): boolean {
@@ -238,6 +297,7 @@ export class Document {
     } else {
       this.undoStack.push([action])
       this.redoStack = []
+      this.noteCreated([action])
     }
     this.pruneSelection()
     this.emit('objects')
@@ -265,6 +325,16 @@ export class Document {
         if (obj) obj.groups = inverse ? action.before : action.after
         break
       }
+      case 'state': {
+        const obj = this.objects.get(action.id)
+        if (!obj) break
+        const state = inverse ? action.before : action.after
+        if (state.hidden) obj.hidden = state.hidden
+        else delete obj.hidden
+        if (state.locked) obj.locked = true
+        else delete obj.locked
+        break
+      }
       case 'block': {
         const definition = inverse ? action.before : action.after
         if (definition) this.blocks.set(action.name, definition)
@@ -283,7 +353,10 @@ export class Document {
   // --- Selection -------------------------------------------------------------
 
   select(ids: Iterable<number>, mode: SelectMode = 'replace'): void {
-    if (mode === 'replace') this.selection.clear()
+    if (mode === 'replace') {
+      if (this.selection.size > 0) this.previousSelection = [...this.selection]
+      this.selection.clear()
+    }
     for (const id of ids) {
       if (mode === 'remove') this.selection.delete(id)
       else this.selection.add(id)
@@ -293,6 +366,7 @@ export class Document {
 
   clearSelection(): void {
     if (this.selection.size === 0) return
+    this.previousSelection = [...this.selection]
     this.selection.clear()
     this.emit('selection')
   }
@@ -429,9 +503,13 @@ export class Document {
         id: o.id,
         layerId: o.layerId,
         ...(o.groups ? { groups: o.groups } : {}),
+        ...(o.hidden ? { hidden: o.hidden } : {}),
+        ...(o.locked ? { locked: true } : {}),
         geometry: geometryToJSON(o.geometry),
       })),
       ...(this.layouts.length > 0 ? { layouts: this.layouts } : {}),
+      ...(this.namedViews.length > 0 ? { namedViews: this.namedViews } : {}),
+      ...(this.namedCPlanes.length > 0 ? { namedCPlanes: this.namedCPlanes } : {}),
       ...(this.blockEdit ? { blockEdit: this.blockEdit } : {}),
     }
   }
@@ -450,6 +528,8 @@ export class Document {
       id: o.id,
       layerId: o.layerId,
       ...(o.groups?.length ? { groups: o.groups } : {}),
+      ...(o.hidden === 'user' || o.hidden === 'isolate' ? { hidden: o.hidden } : {}),
+      ...(o.locked ? { locked: true } : {}),
       geometry: geometryFromJSON(o.geometry, lookup),
     }))
 
@@ -462,6 +542,10 @@ export class Document {
     for (const [name, definition] of blocks) this.blocks.set(name, definition)
     this.blockEdit = json.blockEdit ?? null
     this.layouts = Array.isArray(json.layouts) ? json.layouts : []
+    this.namedViews = Array.isArray(json.namedViews) ? json.namedViews : []
+    this.namedCPlanes = Array.isArray(json.namedCPlanes) ? json.namedCPlanes : []
+    this.lastCreated = []
+    this.previousSelection = []
     this.selection.clear()
     this.pointsOn.clear()
     this.pointSelection.clear()

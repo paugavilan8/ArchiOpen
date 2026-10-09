@@ -3,6 +3,24 @@ import type { Plane } from '../core/geometry'
 
 export type ViewKind = 'Top' | 'Front' | 'Right' | 'Perspective'
 
+/** How a viewport draws surfaces: not at all, solid, see-through, or see-through with every edge on top. */
+export type DisplayMode = 'wireframe' | 'shaded' | 'ghosted' | 'xray'
+
+/** Where a viewport looks from, to save and restore views. */
+export interface ViewState {
+  target: [number, number, number]
+  viewHeight: number
+  distance: number
+  azimuth: number
+  elevation: number
+}
+
+/** The construction plane every view starts with. */
+export function worldPlane(kind: ViewKind): Plane {
+  const setup = SETUPS[kind]
+  return { origin: new THREE.Vector3(), xaxis: setup.x.clone(), yaxis: setup.y.clone(), normal: setup.x.clone().cross(setup.y) }
+}
+
 const X = new THREE.Vector3(1, 0, 0)
 const Y = new THREE.Vector3(0, 1, 0)
 const Z = new THREE.Vector3(0, 0, 1)
@@ -48,8 +66,8 @@ export class Viewport {
   readonly cplane: Plane
   readonly grid: THREE.Group
   readonly target = new THREE.Vector3()
-  /** Shaded viewports draw surfaces and solids filled; wireframe ones only draw their edges. */
-  shaded: boolean
+  /** How surfaces and solids are drawn; wireframe draws only their edges. */
+  mode: DisplayMode
   private readonly gizmo: { group: SVGGElement; line: SVGLineElement; text: SVGTextElement }[] = []
 
   private viewHeight = DEFAULT_HEIGHT
@@ -60,16 +78,11 @@ export class Viewport {
 
   constructor(readonly kind: ViewKind) {
     const setup = SETUPS[kind]
-    this.cplane = {
-      origin: new THREE.Vector3(),
-      xaxis: setup.x.clone(),
-      yaxis: setup.y.clone(),
-      normal: setup.x.clone().cross(setup.y),
-    }
+    this.cplane = worldPlane(kind)
     this.camera =
       kind === 'Perspective' ? new THREE.PerspectiveCamera(FOV, 1, 0.1, 1e5) : new THREE.OrthographicCamera()
     this.grid = buildGrid(this.cplane)
-    this.shaded = kind === 'Perspective'
+    this.mode = kind === 'Perspective' ? 'shaded' : 'wireframe'
 
     this.el = document.createElement('div')
     this.el.className = 'viewport'
@@ -117,6 +130,44 @@ export class Viewport {
       text.setAttribute('y', (y * 1.3).toFixed(2))
       group.parentNode!.appendChild(group)
     }
+  }
+
+  /** True when surfaces are drawn filled (in any mode but wireframe). */
+  get shaded(): boolean {
+    return this.mode !== 'wireframe'
+  }
+
+  /** Moves the construction plane (the grid, typed coordinates and picking follow it). */
+  setCPlane(plane: Pick<Plane, 'origin' | 'xaxis' | 'yaxis'>): void {
+    const x = plane.xaxis.clone().normalize()
+    const y = plane.yaxis.clone().addScaledVector(x, -plane.yaxis.dot(x)).normalize()
+    this.cplane.origin.copy(plane.origin)
+    this.cplane.xaxis.copy(x)
+    this.cplane.yaxis.copy(y)
+    this.cplane.normal.copy(x).cross(y)
+    const fresh = buildGrid(this.cplane)
+    for (const child of this.grid.children) (child as THREE.LineSegments).geometry.dispose()
+    this.grid.clear()
+    this.grid.add(...fresh.children)
+  }
+
+  get state(): ViewState {
+    return {
+      target: this.target.toArray() as [number, number, number],
+      viewHeight: this.viewHeight,
+      distance: this.distance,
+      azimuth: this.azimuth,
+      elevation: this.elevation,
+    }
+  }
+
+  set state(s: ViewState) {
+    this.target.fromArray(s.target)
+    this.viewHeight = s.viewHeight
+    this.distance = s.distance
+    this.azimuth = s.azimuth
+    this.elevation = s.elevation
+    this.updateCamera()
   }
 
   get isOrtho(): boolean {

@@ -610,7 +610,7 @@ input:focus-visible {
 }
 
 .tab {
-  padding: 5px 12px 6px;
+  padding: 5px 10px 6px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: none;
@@ -943,7 +943,12 @@ input:focus-visible {
   height: 34px;
 }
 
-.block-list li.panel-empty {
+.named-list li {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+
+.block-list li.panel-empty,
+.named-list li.panel-empty {
   display: block;
   height: auto;
   cursor: default;

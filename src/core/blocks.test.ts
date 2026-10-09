@@ -96,3 +96,43 @@ describe('documents with blocks and groups', () => {
     expect(doc.isSelectable(other)).toBe(true)
   })
 })
+
+describe('hiding, locking and selection history', () => {
+  const line = (i: number): AnyCurve => ({ type: 'polyline', points: [v(i, 0), v(i, 1)], closed: false })
+
+  it('hides and locks objects with undo, and saves the state', () => {
+    const doc = new Document()
+    const a = doc.add(line(1))
+    const b = doc.add(line(2))
+    doc.select([a.id, b.id])
+    doc.setState(a.id, { hidden: 'user' })
+    doc.setState(b.id, { locked: true })
+    expect(doc.isVisible(a)).toBe(false)
+    expect(doc.isVisible(b)).toBe(true)
+    expect(doc.isSelectable(b)).toBe(false)
+    // Hidden and locked objects drop out of the selection.
+    expect(doc.selection.size).toBe(0)
+    const copy = new Document()
+    copy.load(JSON.parse(JSON.stringify(doc.toJSON())))
+    expect(copy.objects.get(a.id)!.hidden).toBe('user')
+    expect(copy.objects.get(b.id)!.locked).toBe(true)
+    doc.undo()
+    doc.undo()
+    expect(doc.isVisible(a) && doc.isSelectable(b)).toBe(true)
+    expect('hidden' in doc.objects.get(a.id)!).toBe(false)
+  })
+
+  it('remembers the last objects made and the previous selection', () => {
+    const doc = new Document()
+    doc.begin()
+    const a = doc.add(line(1))
+    const b = doc.add(line(2))
+    doc.commit()
+    expect(doc.lastCreated).toEqual([a.id, b.id])
+    doc.select([a.id])
+    doc.select([b.id])
+    expect(doc.previousSelection).toEqual([a.id])
+    doc.clearSelection()
+    expect(doc.previousSelection).toEqual([b.id])
+  })
+})

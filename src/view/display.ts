@@ -187,10 +187,10 @@ export class Display {
     const edit = this.doc.blockEdit
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
-      if (!layer.visible || this.hidden.has(obj.id) || edit?.instanceId === obj.id) continue
+      if (!layer.visible || obj.hidden || this.hidden.has(obj.id) || edit?.instanceId === obj.id) continue
       const selected = this.doc.selection.has(obj.id)
       // While a block is edited, everything else is shown dimmed.
-      const color = selected ? SELECTED_COLOR : layer.locked || !this.doc.isEditable(obj) ? LOCKED_COLOR : layer.color
+      const color = selected ? SELECTED_COLOR : layer.locked || obj.locked || !this.doc.isEditable(obj) ? LOCKED_COLOR : layer.color
       const material = this.material(color, layer.linetype)
       let batch = batches.get(material)
       if (!batch) batches.set(material, (batch = { positions: [], distances: [], selected }))
@@ -274,16 +274,28 @@ export class Display {
         roughness: 0.75,
         metalness: 0,
         side: THREE.DoubleSide,
-        transparent: locked,
+        // Always drawn as transparent, so ghosted and x-ray views only change the opacity (see renderNow()).
+        transparent: true,
         opacity: locked ? 0.55 : 1,
         // Pushed back slightly so edges drawn on the surface stay visible.
         polygonOffset: true,
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
       })
+      material.userData.opacity = material.opacity
       this.surfaceMaterials.set(key, material)
     }
     return material
+  }
+
+  /** Surfaces see-through in ghosted and x-ray views, and edges on top of everything in x-ray. */
+  private applyMode(vp: Viewport): void {
+    const seeThrough = vp.mode === 'ghosted' ? 0.4 : vp.mode === 'xray' ? 0.18 : 1
+    for (const m of this.surfaceMaterials.values()) {
+      m.opacity = (m.userData.opacity as number) * seeThrough
+      m.depthWrite = seeThrough === 1
+    }
+    for (const m of this.materials.values()) m.depthTest = vp.mode !== 'xray'
   }
 
   /** The surface (in a shaded viewport) or solid hatch under the cursor, and the point hit on it. */
@@ -373,6 +385,7 @@ export class Display {
       r.clear()
       for (const other of this.viewports) other.grid.visible = other === vp
       vp.camera.layers.set(0)
+      this.applyMode(vp)
       if (vp.shaded) {
         vp.camera.layers.enable(SHADED_LAYER)
         this.headlight.position.copy(vp.camera.position)

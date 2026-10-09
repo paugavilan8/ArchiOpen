@@ -8,6 +8,7 @@ import { Interaction } from './input/interaction'
 import { CommandLine } from './ui/commandLine'
 import { LayersPanel } from './ui/layersPanel'
 import { BlocksPanel } from './ui/blocksPanel'
+import { ViewsPanel } from './ui/viewsPanel'
 import { installBlockEditBanner } from './ui/blockEditBanner'
 import { LayoutEditor } from './ui/layoutEditor'
 import { Gumball } from './ui/gumball'
@@ -35,10 +36,11 @@ registerCommands(runner)
 
 const commandLine = new CommandLine(runner, input)
 const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, settings)
-const [propertiesPane, layersPane, blocksPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Blocks'])
+const [propertiesPane, layersPane, blocksPane, viewsPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Blocks', 'Views'])
 new PropertiesPanel(propertiesPane, doc, runner)
 new LayersPanel(layersPane, doc, ctx.log)
 new BlocksPanel(blocksPane, doc, runner, ctx.log)
+new ViewsPanel(viewsPane, doc, display, runner)
 installBlockEditBanner(document.getElementById('viewports')!, doc, runner)
 new LayoutEditor(document.getElementById('viewports')!, doc, display, runner, ctx.log)
 buildMenuBar(document.getElementById('menus')!, runner, ctx)
@@ -136,8 +138,10 @@ function isTextEntry(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement && (target.type === 'text' || target.type === '')
 }
 
-const SHORTCUTS: Record<string, string> = { z: 'Undo', y: 'Redo', a: 'SelAll', n: 'New', o: 'Open', s: 'Save' }
+const SHORTCUTS: Record<string, string> = { z: 'Undo', y: 'Redo', a: 'SelAll', n: 'New', o: 'Open', s: 'Save', h: 'Hide', l: 'Lock' }
 const SHIFT_SHORTCUTS: Record<string, string> = { s: 'SaveAs', z: 'Redo' }
+// As in Rhino: Ctrl+H hides and Ctrl+L locks; with Alt they show and unlock.
+const ALT_SHORTCUTS: Record<string, string> = { h: 'Show', l: 'Unlock' }
 const FUNCTION_KEYS = { F3: 'osnap', F8: 'ortho', F9: 'gridSnap' } as const
 const FUNCTION_COMMANDS: Record<string, string> = { F10: 'PointsOn', F11: 'PointsOff' }
 
@@ -155,7 +159,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.ctrlKey || e.metaKey) {
     const key = e.key.toLowerCase()
-    const macro = (e.shiftKey ? SHIFT_SHORTCUTS : SHORTCUTS)[key]
+    const macro = (e.altKey ? ALT_SHORTCUTS : e.shiftKey ? SHIFT_SHORTCUTS : SHORTCUTS)[e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : key]
     // Undo, redo and select all wait for the running command; file commands may interrupt it.
     const fileCommand = key === 'n' || key === 'o' || key === 's'
     if (macro && (fileCommand || !runner.busy)) {

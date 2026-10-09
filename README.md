@@ -43,7 +43,7 @@ se adjuntan a un borrador de *release*.
   un carril), `Shell` (vaciar un sólido dejando abiertas las caras elegidas), `Section` (curvas de
   corte por un plano vertical dibujado con dos puntos) y `Contour` (cortes a intervalos, p. ej.
   plantas por niveles). `Explode` separa una polisuperficie en caras y `Join` las une de nuevo. Se ven sombreados en Perspective
-  (cambia Wireframe/Shaded desde el menú de cada vista) y se mueven, giran, escalan y copian como
+  (cambia el modo desde el menú de cada vista) y se mueven, giran, escalan y copian como
   cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`, `SW`.
 - Edición de superficies:
   - `Split` y `Trim` también parten y recortan superficies, polisuperficies y sólidos, con curvas
@@ -124,6 +124,24 @@ se adjuntan a un borrador de *release*.
 - Grupos: `Group` (alias `G`), `Ungroup` (`UG`), `AddToGroup` y `RemoveFromGroup`. Al hacer clic
   en un objeto agrupado se selecciona el grupo entero, y las copias de un grupo forman su propio
   grupo.
+- Organización:
+  - `Hide` (Ctrl+H) oculta objetos, `Show` (Ctrl+Alt+H) los vuelve a mostrar seleccionados y
+    `HideSwap` intercambia ocultos y visibles; `Isolate` deja solo la selección y `Unisolate`
+    devuelve lo que ocultó; `Lock` (Ctrl+L) bloquea objetos (se ven atenuados, sirven de referencia
+    pero no se seleccionan) y `Unlock` (Ctrl+Alt+L) los libera. Todo se deshace y se guarda en el
+    `.archi`.
+  - Selección: `SelCrv`, `SelSrf`, `SelPolysrf`, `SelClosedPolysrf`, `SelOpenPolysrf`,
+    `SelBlockInstance`, `SelAnnotation`, `SelDim`, `SelText`, `SelHatch`, `SelLayer` (por nombre
+    de capa), `SelDup` (duplicados exactos, dejando sin seleccionar el primero de cada grupo),
+    `SelLast` (lo último creado), `SelPrev` (la selección anterior) e `Invert`.
+- Visualización:
+  - Modos por vista: `Wireframe`, `Shaded`, `Ghosted` (superficies translúcidas) y `X-Ray`
+    (las aristas ocultas se ven a través), desde el menú de la vista o con `SetDisplayMode`.
+  - `CPlane` cambia el plano de construcción de la vista activa: nuevo origen con un clic,
+    `3Point` (origen, eje X y lado del eje Y), `Elevation` (lo sube o baja) y `World`. Lo que se
+    dibuja después (rectángulos, círculos, coordenadas escritas…) queda en ese plano.
+  - `NamedView` y `NamedCPlane` guardan, recuperan y borran vistas y planos de construcción con
+    nombre; la pestaña *Views* los lista y los recupera con un clic. Se guardan en el `.archi`.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.

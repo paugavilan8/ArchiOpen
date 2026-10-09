@@ -8,12 +8,14 @@ import { editCommands } from './edit'
 import { fileCommands } from './file'
 import { hatchCommands } from './hatch'
 import { layoutCommands } from './layouts'
+import { organizeCommands } from './organize'
 import { plotCommands } from './plot'
 import { solidCommands } from './solids'
 import { surfaceCommands } from './surfaces'
 import { transformCommands } from './transform'
 import type { CommandRunner } from './runner'
 import { viewCommands } from './view'
+import { viewSetupCommands } from './viewSetup'
 
 // Short aliases, following the conventions most NURBS modelers share.
 const ALIASES: Record<string, string> = {
@@ -57,6 +59,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...organizeCommands, ...viewSetupCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }
