@@ -75,6 +75,24 @@ se adjuntan a un borrador de *release*.
     van como mallas. No tienen unidades: al abrir se toman milímetros y al importar las del modelo.
     En `.3dm` se leen y escriben como mallas de Rhino, en DXF como caras 3D (`3DFACE`) y en STEP
     como caras planas. `Make2D` aún no las dibuja.
+- Análisis (menú *Analyze*):
+  - Medir: `Distance` (con incrementos y ángulos en el plano de construcción), `Length`, `Angle`
+    (tres puntos u opción `TwoLines`), `Radius` (radio de círculos y arcos, o de curvatura en el
+    punto elegido de una curva), `Area` (curvas cerradas planas, sombreados, superficies, sólidos y
+    mallas) y `Volume` (sólidos y mallas cerradas), ambos con su centroide. Las medidas de
+    superficies y sólidos son exactas (núcleo, con integración adaptativa donde la normal no
+    basta); las de curvas, a una millonésima.
+  - `BoundingBox` dibuja la caja que contiene la selección (en coordenadas del mundo o del plano de
+    construcción): un sólido, o un rectángulo si todo es plano.
+  - `CurvatureGraphOn` / `CurvatureGraphOff`: peine de curvatura sobre curvas (opciones `Scale` y
+    `Density`), que se actualiza al editarlas.
+  - `Zebra` y `DraftAngleAnalysis` (ángulo de desmoldeo respecto a la normal del plano de
+    construcción: verde suficiente, amarillo insuficiente, rojo contrasalida) colorean superficies
+    y mallas en todas las vistas; `ZebraOff` / `DraftAngleAnalysisOff` lo quitan.
+  - `ShowEdges` resalta los bordes abiertos de superficies y mallas.
+  - `What` describe los objetos; `Check` busca problemas (geometría no válida, aristas de más de
+    dos caras, caras sin área, curvas sin longitud) e indica si están cerrados; `SelBadObjects`
+    selecciona los que tienen problemas.
 - Planos 2D: `Make2D` dibuja la selección vista desde una dirección, con eliminación de líneas
   ocultas, como curvas planas en el plano XY (alzados, plantas y axonometrías). Opciones: `View`
   (la vista activa, `Top`, `Front`, `Right`, `Back`, `Left` o `FourView`, que coloca alzado, planta,

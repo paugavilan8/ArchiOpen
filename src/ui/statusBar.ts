@@ -1,3 +1,4 @@
+import { unitAbbreviation } from '../core/units'
 import type { Document } from '../core/document'
 import type { Settings, SnapKind, ToggleKey } from '../core/settings'
 
@@ -110,22 +111,10 @@ export class StatusBar {
     const n = this.doc.selection.size
     const points = this.doc.selectedPointCount
     this.selection.textContent = points > 0 ? `${points} point${points === 1 ? '' : 's'} selected` : n === 0 ? '' : `${n} selected`
-    this.units.textContent = UNIT_ABBREVIATIONS[this.doc.units] ?? this.doc.units
+    this.units.textContent = unitAbbreviation(this.doc.units)
   }
 }
 
-const UNIT_ABBREVIATIONS: Record<string, string> = {
-  Microns: 'µm',
-  Millimeters: 'mm',
-  Centimeters: 'cm',
-  Decimeters: 'dm',
-  Meters: 'm',
-  Kilometers: 'km',
-  Inches: 'in',
-  Feet: 'ft',
-  Yards: 'yd',
-  Miles: 'mi',
-}
 
 /** Fixed width so the numbers do not jitter as the cursor moves. */
 function fmt(n: number): string {

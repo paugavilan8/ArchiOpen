@@ -395,16 +395,17 @@ export function length(g: AnyCurve): number {
       return total
     }
     case 'curve': {
+      // Chords fall short by an amount that shrinks with the square of their length, so two chord
+      // sums (n and 2n chords) extrapolate to a far closer value.
       const [t0, t1] = domain(g)
       const steps = 64 * Math.max(1, g.points.length - g.degree)
-      let total = 0
-      let prev = pointAt(g, t0)
-      for (let i = 1; i <= steps; i++) {
-        const p = pointAt(g, t0 + ((t1 - t0) * i) / steps)
-        total += p.distanceTo(prev)
-        prev = p
-      }
-      return total
+      const pts: Vector3[] = []
+      for (let i = 0; i <= 2 * steps; i++) pts.push(pointAt(g, t0 + ((t1 - t0) * i) / (2 * steps)))
+      let fine = 0
+      let coarse = 0
+      for (let i = 1; i < pts.length; i++) fine += pts[i].distanceTo(pts[i - 1])
+      for (let i = 2; i < pts.length; i += 2) coarse += pts[i].distanceTo(pts[i - 2])
+      return fine + (fine - coarse) / 3
     }
     case 'polycurve':
       return g.segments.reduce((sum, s) => sum + length(s), 0)

@@ -14,3 +14,19 @@ export const METERS: Record<string, number> = {
 
 /** Millimeters in one model unit. */
 export const millimetersPer = (units: string): number => (METERS[units] ?? 1e-3) * 1000
+
+const ABBREVIATIONS: Record<string, string> = {
+  Microns: 'µm',
+  Millimeters: 'mm',
+  Centimeters: 'cm',
+  Decimeters: 'dm',
+  Meters: 'm',
+  Kilometers: 'km',
+  Inches: 'in',
+  Feet: 'ft',
+  Yards: 'yd',
+  Miles: 'mi',
+}
+
+/** Short name of a unit, e.g. "mm". */
+export const unitAbbreviation = (units: string): string => ABBREVIATIONS[units] ?? units

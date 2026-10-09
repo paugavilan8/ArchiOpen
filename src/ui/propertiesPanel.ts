@@ -18,7 +18,7 @@ function polylineLength(pts: Vector3[]): number {
   return length
 }
 
-function geometryRows(g: Geometry): Row[] {
+export function geometryRows(g: Geometry): Row[] {
   switch (g.type) {
     case 'polyline': {
       const length = polylineLength(tessellate(g))

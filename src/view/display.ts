@@ -56,6 +56,12 @@ export class Display {
   private readonly pointsGroup = new THREE.Group()
   private readonly surfaceGroup = new THREE.Group()
   private readonly fillGroup = new THREE.Group()
+  /** Lines drawn over the model by analysis commands (curvature combs, naked edges), by key. */
+  private readonly overlayGroup = new THREE.Group()
+  private readonly overlayLines = new Map<string, THREE.LineSegments>()
+  /** Surfaces drawn with an analysis shading instead of their layer color. */
+  private surfaceAnalysis: { mode: SurfaceAnalysisMode; ids: Set<number> } | null = null
+  private readonly analysisMaterials = new Map<string, THREE.ShaderMaterial>()
   private readonly surfaceMaterials = new Map<string, THREE.MeshStandardMaterial>()
   private readonly headlight = new THREE.DirectionalLight(0xffffff, 1.6)
   private readonly raycaster = new THREE.Raycaster()
@@ -109,7 +115,8 @@ export class Display {
     this.active.el.classList.add('active')
 
     this.previewGroup.renderOrder = 2
-    this.scene.add(this.fillGroup, this.objectsGroup, this.surfaceGroup, this.pointsGroup, this.previewGroup)
+    this.overlayGroup.renderOrder = 3
+    this.scene.add(this.fillGroup, this.objectsGroup, this.surfaceGroup, this.pointsGroup, this.previewGroup, this.overlayGroup)
     // Ambient sky/ground light plus a light at the camera, as in most modelers' shaded modes.
     const ambient = new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.1)
     ambient.layers.set(SHADED_LAYER)
@@ -163,6 +170,39 @@ export class Display {
       this.previewGroup.add(line)
     }
     this.requestRender()
+  }
+
+  /** Shows analysis lines under a key, replacing what the key showed before; no lines removes them. */
+  setOverlay(key: string, lines: THREE.Vector3[][], color: string): void {
+    const old = this.overlayLines.get(key)
+    if (old) {
+      this.overlayGroup.remove(old)
+      old.geometry.dispose()
+      ;(old.material as THREE.Material).dispose()
+      this.overlayLines.delete(key)
+    }
+    const positions: number[] = []
+    for (const pts of lines) for (let i = 1; i < pts.length; i++) positions.push(pts[i - 1].x, pts[i - 1].y, pts[i - 1].z, pts[i].x, pts[i].y, pts[i].z)
+    if (positions.length > 0) {
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      const segments = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color, depthTest: false }))
+      segments.renderOrder = 3
+      this.overlayGroup.add(segments)
+      this.overlayLines.set(key, segments)
+    }
+    this.requestRender()
+  }
+
+  /** Shades the given surfaces and meshes with an analysis (null turns it off). */
+  setSurfaceAnalysis(analysis: { mode: SurfaceAnalysisMode; ids: Iterable<number> } | null): void {
+    this.surfaceAnalysis = analysis && { mode: analysis.mode, ids: new Set(analysis.ids) }
+    this.stale = true
+    this.requestRender()
+  }
+
+  get surfaceAnalysisMode(): SurfaceAnalysisMode | null {
+    return this.surfaceAnalysis?.mode ?? null
   }
 
   setHidden(ids: Iterable<number>): void {
@@ -231,8 +271,11 @@ export class Display {
           this.fillGroup.add(mesh)
         }
         if (g.type === 'brep' || g.type === 'mesh') {
-          const mesh = new THREE.Mesh(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj)))
-          mesh.layers.set(SHADED_LAYER)
+          const analysis = this.surfaceAnalysis?.ids.has(obj.id) ? this.analysisMaterial(this.surfaceAnalysis.mode) : null
+          const material = analysis ?? this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj))
+          const mesh = new THREE.Mesh(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), material)
+          // Analysis shading shows in every view, wireframe ones included.
+          mesh.layers.set(analysis ? 0 : SHADED_LAYER)
           mesh.userData.id = obj.id
           this.surfaceGroup.add(mesh)
         }
@@ -314,6 +357,16 @@ export class Display {
       })
       material.userData.opacity = material.opacity
       this.surfaceMaterials.set(key, material)
+    }
+    return material
+  }
+
+  private analysisMaterial(mode: SurfaceAnalysisMode): THREE.ShaderMaterial {
+    const key = mode.kind === 'zebra' ? 'zebra' : `draft:${mode.angle}:${mode.pull.toArray().join(',')}`
+    let material = this.analysisMaterials.get(key)
+    if (!material) {
+      material = mode.kind === 'zebra' ? zebraMaterial() : draftMaterial(mode.angle, mode.pull)
+      this.analysisMaterials.set(key, material)
     }
     return material
   }
@@ -440,6 +493,74 @@ function pointMaterial(color: string, size: number): THREE.PointsMaterial {
 
 /** Facets meeting at a sharper angle than this are shaded as a crease. */
 const CREASE_ANGLE = (40 * Math.PI) / 180
+
+/** How surfaces are shaded for analysis: zebra stripes, or by draft angle against a pull direction. */
+export type SurfaceAnalysisMode = { kind: 'zebra' } | { kind: 'draft'; angle: number; pull: THREE.Vector3 }
+
+/**
+ * Stripes of a striped room reflected in the surface: kinks in the stripes show where surfaces meet
+ * without tangency, and their flow shows curvature.
+ */
+function zebraMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+    uniforms: { stripes: { value: 6 } },
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vView = isOrthographic ? vec3(0.0, 0.0, 1.0) : -mv.xyz;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float stripes;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vec3 n = normalize(vNormal);
+        if (!gl_FrontFacing) n = -n;
+        vec3 r = reflect(-normalize(vView), n);
+        float s = smoothstep(0.46, 0.54, abs(fract(r.y * stripes) - 0.5) * 2.0);
+        gl_FragColor = vec4(vec3(0.08 + 0.87 * s), 1.0);
+      }`,
+  })
+}
+
+/**
+ * Green where a face leans away from the pull direction by at least the draft angle, yellow where it
+ * leans less, red where it leans back (an undercut, which would lock in a mold).
+ */
+function draftMaterial(angle: number, pull: THREE.Vector3): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+    uniforms: { draft: { value: (angle * Math.PI) / 180 }, pull: { value: pull.clone().normalize() } },
+    vertexShader: `
+      varying vec3 vNormal;
+      void main() {
+        vNormal = normal;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform float draft;
+      uniform vec3 pull;
+      varying vec3 vNormal;
+      void main() {
+        vec3 n = normalize(vNormal);
+        if (!gl_FrontFacing) n = -n;
+        float a = asin(clamp(dot(n, pull), -1.0, 1.0));
+        vec3 color = a >= draft - 1e-4 ? vec3(0.25, 0.7, 0.3) : a >= -1e-4 ? mix(vec3(0.95, 0.85, 0.2), vec3(0.6, 0.8, 0.3), a / max(draft, 1e-4)) : vec3(0.85, 0.2, 0.2);
+        gl_FragColor = vec4(color, 1.0);
+      }`,
+  })
+}
 
 const polygonMeshCache = new WeakMap<MeshGeometry, THREE.BufferGeometry>()
 
