@@ -79,6 +79,11 @@ export class LayersPanel {
     }
     width.addEventListener('change', () => doc.updateLayer(layer.id, { printWidth: Number(width.value) }))
     field('Print width', width)
+    const material = document.createElement('select')
+    material.add(new Option('Layer color', '', false, !layer.material))
+    for (const m of doc.materials) material.add(new Option(m.name, m.name, false, layer.material === m.name))
+    material.addEventListener('change', () => doc.updateLayer(layer.id, { material: material.value || undefined }))
+    field('Material', material)
     section.append(heading, list)
     this.details.replaceChildren(section)
   }

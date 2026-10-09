@@ -95,7 +95,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
           checked: () => display.isMaximized,
         },
         'separator',
-        ...(['Wireframe', 'Shaded', 'Ghosted', 'XRay'] as const).map((label): MenuEntry => ({
+        ...(['Wireframe', 'Shaded', 'Rendered', 'Ghosted', 'XRay'] as const).map((label): MenuEntry => ({
           label: label === 'XRay' ? 'X-Ray' : label,
           action: run(`SetDisplayMode ${label}`),
           checked: () => display.active.mode === label.toLowerCase(),
@@ -217,6 +217,18 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Object Details', 'What'),
         item('Check Objects', 'Check'),
         item('Select Bad Objects', 'SelBadObjects'),
+      ],
+    ],
+    [
+      'Render',
+      [
+        item('Render…', 'Render'),
+        item('Rendered View', 'SetDisplayMode Rendered'),
+        'separator',
+        item('Sun and Backdrop…', 'Sun'),
+        item('Set Object Material…', 'SetObjectMaterial'),
+        'separator',
+        item('Save View as Image…', 'ViewCaptureToFile'),
       ],
     ],
     [

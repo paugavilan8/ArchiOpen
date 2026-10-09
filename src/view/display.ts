@@ -7,7 +7,12 @@ import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.j
 import { flatten } from '../core/blocks'
 import { hatchTriangles } from '../core/hatch'
 import { dashesOf } from '../core/linetypes'
-import { Viewport, ViewKind } from './viewport'
+import { BACKGROUNDS, RENDER_LAYER, RenderScene } from './renderScene'
+import { DisplayMode, Viewport, ViewKind } from './viewport'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 
 const GAP_COLOR = 0x15171a
 const BACKGROUND_COLOR = 0xb1b6bd
@@ -21,6 +26,8 @@ const POINT_SIZE = 7
 const SHADED_LAYER = 1
 /** Lines only drawn in wireframe views (the inner edges of meshes). */
 const WIRE_LAYER = 2
+/** Edges of surfaces and meshes, which rendered views leave out. */
+const EDGE_LAYER = 4
 
 interface LineBatch {
   material: THREE.LineBasicMaterial | THREE.LineDashedMaterial
@@ -28,6 +35,7 @@ interface LineBatch {
   distances: number[]
   selected: boolean
   wireOnly: boolean
+  edges: boolean
 }
 
 const bordersCache = new WeakMap<MeshGeometry, THREE.Vector3[][]>()
@@ -60,14 +68,28 @@ export class Display {
   private readonly overlayGroup = new THREE.Group()
   private readonly overlayLines = new Map<string, THREE.LineSegments>()
   /** Surfaces drawn with an analysis shading instead of their layer color. */
-  private surfaceAnalysis: { mode: SurfaceAnalysisMode; ids: Set<number> } | null = null
+  private surfaceAnalysis: {
+    mode: SurfaceAnalysisMode
+    ids: Set<number>
+  } | null = null
   private readonly analysisMaterials = new Map<string, THREE.ShaderMaterial>()
+  /** What rendered views draw: materials, sun, environment and ground shadows. */
+  readonly renderScene = new RenderScene()
   private readonly surfaceMaterials = new Map<string, THREE.MeshStandardMaterial>()
   private readonly headlight = new THREE.DirectionalLight(0xffffff, 1.6)
   private readonly raycaster = new THREE.Raycaster()
-  private readonly previewMaterial = new THREE.LineBasicMaterial({ color: PREVIEW_COLOR, depthTest: false })
-  private readonly selectedPreviewMaterial = new THREE.LineBasicMaterial({ color: SELECTED_COLOR, depthTest: false })
-  private readonly polygonMaterial = new THREE.LineBasicMaterial({ color: POLYGON_COLOR, depthTest: false })
+  private readonly previewMaterial = new THREE.LineBasicMaterial({
+    color: PREVIEW_COLOR,
+    depthTest: false,
+  })
+  private readonly selectedPreviewMaterial = new THREE.LineBasicMaterial({
+    color: SELECTED_COLOR,
+    depthTest: false,
+  })
+  private readonly polygonMaterial = new THREE.LineBasicMaterial({
+    color: POLYGON_COLOR,
+    depthTest: false,
+  })
   private readonly pointMaterial = pointMaterial(POINT_COLOR, POINT_SIZE)
   private readonly selectedPointMaterial = pointMaterial(SELECTED_COLOR, POINT_SIZE + 2)
   /** Objects left out of the drawing, e.g. while a dragged copy of them is shown as a preview. */
@@ -116,7 +138,9 @@ export class Display {
 
     this.previewGroup.renderOrder = 2
     this.overlayGroup.renderOrder = 3
-    this.scene.add(this.fillGroup, this.objectsGroup, this.surfaceGroup, this.pointsGroup, this.previewGroup, this.overlayGroup)
+    this.scene.add(this.fillGroup, this.objectsGroup, this.surfaceGroup, this.pointsGroup, this.previewGroup, this.overlayGroup, this.renderScene.group)
+    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     // Ambient sky/ground light plus a light at the camera, as in most modelers' shaded modes.
     const ambient = new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.1)
     ambient.layers.set(SHADED_LAYER)
@@ -196,7 +220,10 @@ export class Display {
 
   /** Shades the given surfaces and meshes with an analysis (null turns it off). */
   setSurfaceAnalysis(analysis: { mode: SurfaceAnalysisMode; ids: Iterable<number> } | null): void {
-    this.surfaceAnalysis = analysis && { mode: analysis.mode, ids: new Set(analysis.ids) }
+    this.surfaceAnalysis = analysis && {
+      mode: analysis.mode,
+      ids: new Set(analysis.ids),
+    }
     this.stale = true
     this.requestRender()
   }
@@ -240,6 +267,8 @@ export class Display {
     this.clearGroup(this.objectsGroup)
     this.clearGroup(this.surfaceGroup)
     this.clearGroup(this.fillGroup)
+    this.renderScene.clear()
+    const modelBox = new THREE.Box3()
     // Line work is batched into one set of segments per material, so large drawings take a few draw
     // calls instead of one per line.
     const batches = new Map<string, LineBatch>()
@@ -253,13 +282,26 @@ export class Display {
       const material = this.material(color, layer.linetype)
       const batchOf = (key: string) => {
         let batch = batches.get(key)
-        if (!batch) batches.set(key, (batch = { material, positions: [], distances: [], selected, wireOnly: key.startsWith('wire:') }))
+        if (!batch)
+          batches.set(
+            key,
+            (batch = {
+              material,
+              positions: [],
+              distances: [],
+              selected,
+              wireOnly: key.startsWith('wire:'),
+              edges: key.startsWith('edge:'),
+            }),
+          )
         return batch
       }
       // A mesh shows every edge in wireframe views, but only its open borders over the shading.
       const mesh = obj.geometry.type === 'mesh' ? obj.geometry : null
       if (mesh) this.addLines(batchOf(`wire:${material.uuid}`), wireframe(mesh))
-      this.addLines(batchOf(material.uuid), mesh ? openBorders(mesh) : wireframe(obj.geometry))
+      // Edges of surfaces are left out of rendered views, unless selected.
+      const surface = mesh !== null || obj.geometry.type === 'brep'
+      this.addLines(batchOf(surface && !selected ? `edge:${material.uuid}` : material.uuid), mesh ? openBorders(mesh) : wireframe(obj.geometry))
       // Blocks fill and shade what they hold like loose objects.
       for (const g of flatten(obj.geometry)) {
         if (g.type === 'hatch' && g.pattern === 'Solid') {
@@ -274,6 +316,9 @@ export class Display {
           const analysis = this.surfaceAnalysis?.ids.has(obj.id) ? this.analysisMaterial(this.surfaceAnalysis.mode) : null
           const material = analysis ?? this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj))
           const mesh = new THREE.Mesh(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), material)
+          this.renderScene.add(g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g), this.doc.materialOf(obj), selected)
+          if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+          modelBox.union(mesh.geometry.boundingBox!)
           // Analysis shading shows in every view, wireframe ones included.
           mesh.layers.set(analysis ? 0 : SHADED_LAYER)
           mesh.userData.id = obj.id
@@ -288,8 +333,10 @@ export class Display {
       const segments = new THREE.LineSegments(geometry, material)
       segments.renderOrder = batch.selected ? 1 : 0
       if (batch.wireOnly) segments.layers.set(WIRE_LAYER)
+      else if (batch.edges) segments.layers.set(EDGE_LAYER)
       this.objectsGroup.add(segments)
     }
+    this.renderScene.update(this.doc.renderSettings, modelBox)
     this.rebuildPoints()
     this.requestRender()
   }
@@ -405,7 +452,11 @@ export class Display {
       if (dashes.length > 0) {
         // The viewport shows the first dash and gap of the pattern, at about their printed size.
         const pixels = (mm: number) => Math.max(1.5, Math.abs(mm) * MM_TO_PX)
-        const dashed = new THREE.LineDashedMaterial({ color, dashSize: pixels(dashes[0]), gapSize: pixels(dashes[1] ?? dashes[0]) })
+        const dashed = new THREE.LineDashedMaterial({
+          color,
+          dashSize: pixels(dashes[0]),
+          gapSize: pixels(dashes[1] ?? dashes[0]),
+        })
         this.dashedMaterials.push(dashed)
         material = dashed
       } else {
@@ -465,21 +516,109 @@ export class Display {
       const y = fullHeight - vp.el.offsetTop - vp.height
       r.setViewport(x, y, vp.width, vp.height)
       r.setScissor(x, y, vp.width, vp.height)
-      r.clear()
-      for (const other of this.viewports) other.grid.visible = other === vp
-      vp.camera.layers.set(0)
-      this.applyMode(vp)
-      if (!vp.shaded) vp.camera.layers.enable(WIRE_LAYER)
-      if (vp.shaded) {
-        vp.camera.layers.enable(SHADED_LAYER)
-        this.headlight.position.copy(vp.camera.position)
-        this.headlight.target.position.copy(vp.target)
-        this.headlight.target.updateMatrixWorld()
-      }
-      r.render(this.scene, vp.camera)
+      this.drawViewport(r, vp, vp.camera)
       for (const overlay of this.overlays) overlay(vp)
     }
   }
+
+  /**
+   * Draws the scene as a viewport shows it, into the renderer's current viewport: its display mode,
+   * background, grid and lights. `camera` is the viewport's own, or a copy sized for an image.
+   */
+  private drawViewport(r: THREE.WebGLRenderer, vp: Viewport, camera: THREE.Camera, options: { grid?: boolean; occlusion?: boolean } = {}): void {
+    const rendered = vp.mode === 'rendered'
+    if (rendered) this.renderScene.prepare(r)
+    r.setClearColor(rendered ? BACKGROUNDS[this.doc.renderSettings.background] : BACKGROUND_COLOR)
+    r.toneMapping = rendered ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping
+    // Rhino's rendered views leave the grid out.
+    for (const other of this.viewports) other.grid.visible = other === vp && !rendered && options.grid !== false
+    camera.layers.set(0)
+    this.applyMode(vp)
+    if (!vp.shaded) camera.layers.enable(WIRE_LAYER)
+    if (!rendered) camera.layers.enable(EDGE_LAYER)
+    if (rendered) camera.layers.enable(RENDER_LAYER)
+    else if (vp.shaded) {
+      camera.layers.enable(SHADED_LAYER)
+      this.headlight.position.copy(camera.position)
+      this.headlight.target.position.copy(vp.target)
+      this.headlight.target.updateMatrixWorld()
+    }
+    if (rendered && options.occlusion) {
+      // Ambient occlusion darkens creases and contacts; the output pass then tone maps the result.
+      const size = r.getDrawingBufferSize(new THREE.Vector2())
+      const composer = new EffectComposer(r)
+      composer.setPixelRatio(1)
+      composer.setSize(size.x, size.y)
+      const background = BACKGROUNDS[this.doc.renderSettings.background]
+      // The backdrop is drawn clear and laid in at the end, so tone mapping leaves its color alone.
+      composer.addPass(new RenderPass(this.scene, camera, undefined, new THREE.Color(background), 0))
+      composer.addPass(new GTAOPass(this.scene, camera, size.x, size.y))
+      composer.addPass(backdropOutputPass(background))
+      composer.render()
+      composer.dispose()
+      return
+    }
+    r.clear()
+    r.render(this.scene, camera)
+  }
+
+  /**
+   * An image of a viewport at any size, drawn `supersample` times larger and scaled down for smooth
+   * edges. `mode` draws it in another display mode (e.g. 'rendered'). The canvas is drawn at the new
+   * size for a moment and put back before anything is shown.
+   */
+  captureImage(vp: Viewport, width: number, height: number, options: { mode?: DisplayMode; grid?: boolean; supersample?: number; occlusion?: boolean } = {}): HTMLCanvasElement {
+    if (this.stale) this.rebuildObjects()
+    const r = this.renderer
+    const max = r.capabilities.maxTextureSize
+    const scale = Math.max(1, Math.min(options.supersample ?? 2, Math.floor(max / Math.max(width, height))))
+    const big = new THREE.Vector2(width * scale, height * scale)
+    const ratio = r.getPixelRatio()
+    const previousMode = vp.mode
+    const camera = vp.camera.clone()
+    if (camera instanceof THREE.PerspectiveCamera) camera.aspect = width / height
+    else if (camera instanceof THREE.OrthographicCamera) {
+      // Same height of view; the width follows the image's shape.
+      const half = (camera.top - camera.bottom) / 2
+      const middle = (camera.left + camera.right) / 2
+      camera.left = middle - half * (width / height)
+      camera.right = middle + half * (width / height)
+    }
+    camera.updateProjectionMatrix()
+    for (const m of this.dashedMaterials) m.scale = 1 / (vp.worldPerPixel(vp.target) / scale)
+    const out = document.createElement('canvas')
+    out.width = width
+    out.height = height
+    try {
+      if (options.mode) vp.mode = options.mode
+      r.setPixelRatio(1)
+      r.setSize(big.x, big.y, false)
+      r.setScissorTest(false)
+      r.setViewport(0, 0, big.x, big.y)
+      this.drawViewport(r, vp, camera, { grid: options.grid, occlusion: options.occlusion })
+      // Read back at once, before the browser clears the drawing buffer.
+      const ctx = out.getContext('2d')!
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(r.domElement, 0, 0, big.x, big.y, 0, 0, width, height)
+    } finally {
+      vp.mode = previousMode
+      r.setPixelRatio(ratio)
+      this.resize()
+    }
+    return out
+  }
+}
+
+/** The output pass (tone mapping, sRGB) with the backdrop color mixed in where nothing was drawn. */
+function backdropOutputPass(color: number): OutputPass {
+  const pass = new OutputPass()
+  // The color as written, already in sRGB like the pass's result.
+  pass.uniforms.background = { value: new THREE.Color().setHex(color, THREE.LinearSRGBColorSpace) }
+  pass.material.fragmentShader = pass.material.fragmentShader
+    .replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse;\nuniform vec3 background;')
+    .replace(/}\s*$/, '\tgl_FragColor = vec4( mix( background, gl_FragColor.rgb, gl_FragColor.a ), 1.0 );\n}')
+  return pass
 }
 
 function pointMaterial(color: string, size: number): THREE.PointsMaterial {
@@ -541,7 +680,10 @@ function draftMaterial(angle: number, pull: THREE.Vector3): THREE.ShaderMaterial
     polygonOffset: true,
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,
-    uniforms: { draft: { value: (angle * Math.PI) / 180 }, pull: { value: pull.clone().normalize() } },
+    uniforms: {
+      draft: { value: (angle * Math.PI) / 180 },
+      pull: { value: pull.clone().normalize() },
+    },
     vertexShader: `
       varying vec3 vNormal;
       void main() {

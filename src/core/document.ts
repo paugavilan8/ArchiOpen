@@ -1,3 +1,4 @@
+import { DEFAULT_RENDER_SETTINGS, layerMaterial, Material, materialFromJSON, RenderSettings, renderSettingsFromJSON } from './materials'
 import { controlPoints } from './curves'
 import { BlockDefinition, Geometry, geometryFromJSON, geometryToJSON } from './geometry'
 import type { Layout } from './layout'
@@ -12,6 +13,8 @@ export interface Layer {
   linetype?: string
   /** Pen width for printing, in millimeters; the default width when missing or 0. */
   printWidth?: number
+  /** Name of the render material of the layer's objects; their layer color when missing. */
+  material?: string
 }
 
 export interface CadObject {
@@ -24,6 +27,8 @@ export interface CadObject {
   hidden?: 'user' | 'isolate'
   /** Locked objects are drawn but cannot be picked. */
   locked?: boolean
+  /** Render material, by name, in place of the layer's. */
+  material?: string
 }
 
 /** A saved camera: which kind of view it was, and where it looked from. */
@@ -44,6 +49,7 @@ export interface NamedCPlane {
 export interface ObjectState {
   hidden?: 'user' | 'isolate'
   locked?: boolean
+  material?: string
 }
 
 /**
@@ -100,6 +106,27 @@ export class Document {
   setNamedCPlanes(planes: NamedCPlane[]): void {
     this.namedCPlanes = planes
     this.emit('layers')
+  }
+
+  /** Render materials, by name; layers and objects refer to them by name. */
+  materials: Material[] = []
+  renderSettings: RenderSettings = { ...DEFAULT_RENDER_SETTINGS }
+
+  setMaterials(materials: Material[]): void {
+    this.materials = materials
+    this.emit('layers')
+  }
+
+  setRenderSettings(patch: Partial<RenderSettings>): void {
+    this.renderSettings = { ...this.renderSettings, ...patch }
+    this.emit('layers')
+  }
+
+  /** The material an object renders with: its own, its layer's, or its layer color. */
+  materialOf(obj: CadObject): Material {
+    const layer = this.layerOf(obj)
+    const name = obj.material ?? layer.material
+    return (name && this.materials.find((m) => m.name === name)) || layerMaterial(layer.color)
   }
 
   /** Sheets for printing; replaced as a whole on every change. */
@@ -162,13 +189,13 @@ export class Document {
     return this.nextObjectId
   }
 
-  /** Hides, shows, locks or unlocks an object (undoable). */
+  /** Hides, shows, locks or unlocks an object, or sets its material (undoable). */
   setState(id: number, patch: ObjectState): void {
     const obj = this.objects.get(id)
     if (!obj) return
-    const before: ObjectState = { hidden: obj.hidden, locked: obj.locked }
+    const before: ObjectState = { hidden: obj.hidden, locked: obj.locked, material: obj.material }
     const after: ObjectState = { ...before, ...patch }
-    if (before.hidden !== after.hidden || before.locked !== after.locked) this.record({ type: 'state', id, before, after })
+    if (before.hidden !== after.hidden || before.locked !== after.locked || before.material !== after.material) this.record({ type: 'state', id, before, after })
   }
 
   /** The objects added by the last change (a command's whole step, or a single edit). */
@@ -333,6 +360,8 @@ export class Document {
         else delete obj.hidden
         if (state.locked) obj.locked = true
         else delete obj.locked
+        if (state.material) obj.material = state.material
+        else delete obj.material
         break
       }
       case 'block': {
@@ -505,11 +534,14 @@ export class Document {
         ...(o.groups ? { groups: o.groups } : {}),
         ...(o.hidden ? { hidden: o.hidden } : {}),
         ...(o.locked ? { locked: true } : {}),
+        ...(o.material ? { material: o.material } : {}),
         geometry: geometryToJSON(o.geometry),
       })),
       ...(this.layouts.length > 0 ? { layouts: this.layouts } : {}),
       ...(this.namedViews.length > 0 ? { namedViews: this.namedViews } : {}),
       ...(this.namedCPlanes.length > 0 ? { namedCPlanes: this.namedCPlanes } : {}),
+      ...(this.materials.length > 0 ? { materials: this.materials } : {}),
+      renderSettings: this.renderSettings,
       ...(this.blockEdit ? { blockEdit: this.blockEdit } : {}),
     }
   }
@@ -530,6 +562,7 @@ export class Document {
       ...(o.groups?.length ? { groups: o.groups } : {}),
       ...(o.hidden === 'user' || o.hidden === 'isolate' ? { hidden: o.hidden } : {}),
       ...(o.locked ? { locked: true } : {}),
+      ...(typeof o.material === 'string' && o.material ? { material: o.material } : {}),
       geometry: geometryFromJSON(o.geometry, lookup),
     }))
 
@@ -544,6 +577,8 @@ export class Document {
     this.layouts = Array.isArray(json.layouts) ? json.layouts : []
     this.namedViews = Array.isArray(json.namedViews) ? json.namedViews : []
     this.namedCPlanes = Array.isArray(json.namedCPlanes) ? json.namedCPlanes : []
+    this.materials = Array.isArray(json.materials) ? json.materials.map(materialFromJSON).filter((m: Material | null): m is Material => m !== null) : []
+    this.renderSettings = renderSettingsFromJSON(json.renderSettings)
     this.lastCreated = []
     this.previousSelection = []
     this.selection.clear()

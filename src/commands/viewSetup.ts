@@ -122,6 +122,7 @@ const namedCPlane: Command = {
 const MODES: [string, DisplayMode][] = [
   ['Wireframe', 'wireframe'],
   ['Shaded', 'shaded'],
+  ['Rendered', 'rendered'],
   ['Ghosted', 'ghosted'],
   ['XRay', 'xray'],
 ]

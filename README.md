@@ -106,6 +106,20 @@ se adjuntan a un borrador de *release*.
   - `What` describe los objetos; `Check` busca problemas (geometría no válida, aristas de más de
     dos caras, caras sin área, curvas sin longitud) e indica si están cerrados; `SelBadObjects`
     selecciona los que tienen problemas.
+- Render:
+  - Modo de vista `Rendered` (menú de cada vista o `SetDisplayMode`): materiales físicos con
+    reflejos de un entorno de estudio, sol con sombras suaves y sombra sobre un suelo bajo el
+    modelo. Las aristas de superficies se ocultan, salvo en lo seleccionado.
+  - Materiales: la pestaña *Materials* añade materiales a partir de presets (yeso, hormigón,
+    madera, ladrillo, plástico, cerámica, acero, cromo, oro, cobre, vidrio, agua…), los edita
+    (color, rugosidad, metal y transparencia) y los asigna a objetos o capas. Sin material, un
+    objeto usa el color de su capa. También desde *Properties* (por objeto), el panel de capas y
+    `SetObjectMaterial`. Se guardan en el `.archi`.
+  - `Sun`: dirección (`Azimuth`, desde el norte), altura e intensidad del sol, fondo (`Studio`,
+    `White`, `Sky`) y sombras en el suelo.
+  - `Render` dibuja la vista activa a 1280 × 720, 1920 × 1080, 3840 × 2160 o el tamaño de la vista,
+    con suavizado y oclusión ambiental, y la muestra en una ventana desde la que se guarda como PNG.
+    `ViewCaptureToFile` guarda una imagen de la vista tal como se ve (opciones `Scale` y `Grid`).
 - Planos 2D: `Make2D` dibuja la selección vista desde una dirección, con eliminación de líneas
   ocultas, como curvas planas en el plano XY (alzados, plantas y axonometrías). Opciones: `View`
   (la vista activa, `Top`, `Front`, `Right`, `Back`, `Left` o `FourView`, que coloca alzado, planta,

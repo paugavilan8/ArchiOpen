@@ -9,6 +9,7 @@ import { CommandLine } from './ui/commandLine'
 import { LayersPanel } from './ui/layersPanel'
 import { BlocksPanel } from './ui/blocksPanel'
 import { ViewsPanel } from './ui/viewsPanel'
+import { MaterialsPanel } from './ui/materialsPanel'
 import { installBlockEditBanner } from './ui/blockEditBanner'
 import { LayoutEditor } from './ui/layoutEditor'
 import { Gumball } from './ui/gumball'
@@ -36,9 +37,10 @@ registerCommands(runner)
 
 const commandLine = new CommandLine(runner, input)
 const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, settings)
-const [propertiesPane, layersPane, blocksPane, viewsPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Blocks', 'Views'])
+const [propertiesPane, layersPane, materialsPane, blocksPane, viewsPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Materials', 'Blocks', 'Views'])
 new PropertiesPanel(propertiesPane, doc, runner)
 new LayersPanel(layersPane, doc, ctx.log)
+new MaterialsPanel(materialsPane, doc, runner, ctx.log)
 new BlocksPanel(blocksPane, doc, runner, ctx.log)
 new ViewsPanel(viewsPane, doc, display, runner)
 installBlockEditBanner(document.getElementById('viewports')!, doc, runner)

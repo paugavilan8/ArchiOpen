@@ -140,7 +140,7 @@ export class PropertiesPanel {
         ['Type', selected.length === 1 ? capitalize(typeName(selected[0].geometry)) : type],
         ...(groups.size > 0 ? ([['Grouped', groups.size === 1 ? 'Yes' : `In ${groups.size} groups`]] as Row[]) : []),
       ])
-      object.querySelector('dl')!.append(...this.layerField(selected))
+      object.querySelector('dl')!.append(...this.layerField(selected), ...this.materialField(selected))
       sections.push(object)
       if (selected.length === 1) {
         const g = selected[0].geometry
@@ -271,6 +271,27 @@ export class PropertiesPanel {
       // One undo step for the whole selection.
       this.doc.begin()
       for (const obj of selected) this.doc.setLayer(obj.id, layerId)
+      this.doc.commit()
+    })
+    dd.appendChild(select)
+    return [dt, dd]
+  }
+
+  /** The render material: by layer, or one of the document's materials. */
+  private materialField(selected: CadObject[]): HTMLElement[] {
+    const dt = document.createElement('dt')
+    dt.textContent = 'Material'
+    const dd = document.createElement('dd')
+    const select = document.createElement('select')
+    const names = new Set(selected.map((o) => o.material ?? ''))
+    if (names.size > 1) select.add(new Option('(varies)', '\u0000', true, true))
+    const only = (name: string) => names.size === 1 && names.has(name)
+    select.add(new Option('By layer', '', only(''), only('')))
+    for (const m of this.doc.materials) select.add(new Option(m.name, m.name, only(m.name), only(m.name)))
+    select.addEventListener('change', () => {
+      if (select.value === '\u0000' || this.runner.busy) return
+      this.doc.begin()
+      for (const obj of selected) this.doc.setState(obj.id, { material: select.value || undefined })
       this.doc.commit()
     })
     dd.appendChild(select)

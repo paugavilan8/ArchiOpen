@@ -4,7 +4,7 @@ import type { Plane } from '../core/geometry'
 export type ViewKind = 'Top' | 'Front' | 'Right' | 'Perspective'
 
 /** How a viewport draws surfaces: not at all, solid, see-through, or see-through with every edge on top. */
-export type DisplayMode = 'wireframe' | 'shaded' | 'ghosted' | 'xray'
+export type DisplayMode = 'wireframe' | 'shaded' | 'rendered' | 'ghosted' | 'xray'
 
 /** Where a viewport looks from, to save and restore views. */
 export interface ViewState {

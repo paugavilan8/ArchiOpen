@@ -24,6 +24,7 @@ export const PDF: FileType = { name: 'PDF drawing', extension: 'pdf', mime: 'app
 export const DXF: FileType = { name: 'DXF drawing', extension: 'dxf', mime: 'application/dxf' }
 export const STEP: FileType = { name: 'STEP model', extension: 'step', extensions: ['step', 'stp'], mime: 'model/step' }
 export const STL: FileType = { name: 'STL mesh', extension: 'stl', mime: 'model/stl' }
+export const PNG: FileType = { name: 'PNG image', extension: 'png', mime: 'image/png' }
 export const OBJ: FileType = { name: 'OBJ mesh', extension: 'obj', mime: 'model/obj' }
 const UNTITLED = 'Untitled'
 

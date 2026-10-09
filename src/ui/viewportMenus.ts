@@ -23,6 +23,7 @@ export function installViewportMenus(display: Display, runner: CommandRunner): v
         'separator',
         { label: 'Wireframe', action: () => setMode('wireframe'), checked: () => vp.mode === 'wireframe' },
         { label: 'Shaded', action: () => setMode('shaded'), checked: () => vp.mode === 'shaded' },
+        { label: 'Rendered', action: () => setMode('rendered'), checked: () => vp.mode === 'rendered' },
         { label: 'Ghosted', action: () => setMode('ghosted'), checked: () => vp.mode === 'ghosted' },
         { label: 'X-Ray', action: () => setMode('xray'), checked: () => vp.mode === 'xray' },
         'separator',
