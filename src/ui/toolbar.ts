@@ -53,6 +53,7 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'BooleanDifference', tip: 'Boolean difference  (BD)', icon: 'booleanDifference' },
     { macro: 'BooleanIntersection', tip: 'Boolean intersection  (BI)', icon: 'booleanIntersection' },
   ],
+  [{ macro: 'Make2D', tip: 'Make2D: 2D drawing of the selection', icon: 'make2d' }],
 ]
 
 /** File, history and view tools, in the horizontal bar under the command line. */
