@@ -251,7 +251,13 @@ se adjuntan a un borrador de *release*.
     no se cargan y se avisa de cuántos hay.
   - `Save` nunca sobrescribe un `.3dm` abierto (podría perder lo que no se cargó): guarda un `.archi`.
   - `Export` escribe un `.3dm` con las curvas, las mallas, las capas (también las anidadas) y las
-    unidades. Las superficies y sólidos se exportan como mallas.
+    unidades. Las superficies y sólidos van exactos, como polisuperficies de Rhino con sus caras
+    recortadas y agujeros: los planos como superficies planas; cilindros, conos, esferas, toros y
+    revoluciones como superficies de revolución; las extrusiones de curvas como suma de curva y
+    recta; y las NURBS tal cual. Como rhino3dm no sabe construir polisuperficies recortadas, se
+    escriben en el formato binario de openNURBS (leído en su código fuente abierto, solo para
+    conocer el formato) y rhino3dm las valida antes de guardarlas. Lo que no tiene equivalente
+    exacto (p. ej. superficies desplazadas) va como malla y el mensaje lo dice.
   - `Import` añade un `.3dm` al modelo actual, escalándolo a sus unidades.
   - `Units` cambia las unidades del modelo (sin escalar la geometría).
 - Archivos STEP (`.step`, `.stp`, AP242), el formato que leen casi todos los programas de CAD:

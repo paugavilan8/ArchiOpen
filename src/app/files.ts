@@ -1,12 +1,14 @@
 import type { Document } from '../core/document'
 import { readDxf } from '../io/dxfRead'
 import { readObj, readStl } from '../io/meshFiles'
-import { describeSkipped, readRhinoFile, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
+import { describeSkipped, readRhinoFile, RhinoExportReport, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
 import { loadRhino } from '../io/loadRhino'
 import { toBrep } from '../kernel/brep'
 import { shapeFromRhino } from '../kernel/fromRhino'
 import { loadKernel } from '../kernel/loadKernel'
 import { readStep, StepObject, writeStep } from '../kernel/step'
+import { exactRhinoBrep } from '../kernel/toRhino'
+import { flatten } from '../core/blocks'
 import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
 
 interface FileType {
@@ -282,19 +284,23 @@ export class FileManager {
     return { ids, message: `Imported ${file.fileName}: ${this.rhinoSummary(result)}${scaled}` }
   }
 
-  /** Writes the document's curves to a .3dm file. Resolves to the file name, or null if cancelled. */
-  async exportRhino(): Promise<string | null> {
+  /**
+   * Writes the document to a .3dm file. Resolves to the file name and how its surfaces and solids
+   * went (exactly or as meshes), or null if cancelled.
+   */
+  async exportRhino(): Promise<{ fileName: string; report: RhinoExportReport } | null> {
     const location = await pickSaveLocation(this.name, RHINO)
     if (!location) return null
     const rhino = await loadRhino()
-    const bytes = writeRhinoFile(rhino, {
-      units: this.doc.units,
-      layers: this.doc.layers,
-      objects: [...this.doc.objects.values()].map((o) => ({ layerId: o.layerId, geometry: o.geometry })),
-    })
+    const objects = [...this.doc.objects.values()].map((o) => ({ layerId: o.layerId, geometry: o.geometry }))
+    // Surfaces and solids go exactly, which takes the geometry kernel.
+    const hasBreps = objects.some((o) => flatten(o.geometry).some((g) => g.type === 'brep'))
+    if (hasBreps) await loadKernel()
+    const report: RhinoExportReport = { exact: 0, meshed: 0 }
+    const bytes = writeRhinoFile(rhino, { units: this.doc.units, layers: this.doc.layers, objects, exactBrep: hasBreps ? exactRhinoBrep : undefined }, report)
     const fileName = location === 'download' ? `${this.name}.${RHINO.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
     await writeFile(location, bytes, fileName, RHINO)
-    return fileName
+    return { fileName, report }
   }
 
   /** Asks where to save, then writes the bytes made by `make`. Resolves to the file name, or null if cancelled. */

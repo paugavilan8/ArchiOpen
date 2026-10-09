@@ -27,6 +27,17 @@ export interface RhinoExport {
   units: string
   layers: Layer[]
   objects: { layerId: number; geometry: Geometry }[]
+  /**
+   * The openNURBS bytes of a surface or solid (see writeBrep), or null if it has no exact form.
+   * Without this, or when it gives null, surfaces and solids are written as meshes.
+   */
+  exactBrep?: (g: BrepGeometry) => Uint8Array | null
+}
+
+/** How the surfaces and solids of an export were written. */
+export interface RhinoExportReport {
+  exact: number
+  meshed: number
 }
 
 type Triple = number[]
@@ -352,7 +363,7 @@ function writeCurve(rhino: RhinoModule, g: AnyCurve): Curve {
   }
 }
 
-/** A mesh as it is, or a surface or solid as a mesh of its display triangles (exact breps cannot be written yet). */
+/** A mesh as it is, or a surface or solid as a mesh of its display triangles. */
 function writeMesh(rhino: RhinoModule, g: BrepGeometry | MeshGeometry): GeometryBase {
   const mesh = new rhino.Mesh()
   const vertices = g.type === 'mesh' ? g.vertices : g.display.vertices
@@ -372,7 +383,26 @@ function writeMesh(rhino: RhinoModule, g: BrepGeometry | MeshGeometry): Geometry
   return mesh
 }
 
-export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Array {
+function base64(bytes: Uint8Array): string {
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(s)
+}
+
+/** A Brep from openNURBS object bytes, or null if rhino3dm finds it invalid. */
+function decodeBrep(rhino: RhinoModule, bytes: Uint8Array): GeometryBase | null {
+  // The version of openNURBS the bytes are written for: that of this rhino3dm.
+  const { opennurbs } = new rhino.Point([0, 0, 0]).encode() as unknown as { opennurbs: number }
+  try {
+    const brep = rhino.CommonObject.decode({ version: 10000, archive3dm: 60, opennurbs, data: base64(bytes) } as never) as unknown as GeometryBase | null
+    if (brep && brep.isValid) return brep
+  } catch {
+    // Unreadable: written as a mesh instead.
+  }
+  return null
+}
+
+export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport, report: RhinoExportReport = { exact: 0, meshed: 0 }): Uint8Array {
   const file = new rhino.File3dm()
   try {
     file.applicationName = 'ArchiOpen'
@@ -420,8 +450,15 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Arr
           }
         } else if (g.type === 'point') {
           file.objects().add(new rhino.Point(triple(g.point)), attributes)
+        } else if (g.type === 'brep') {
+          // Exact when possible, else the display mesh.
+          const bytes = model.exactBrep?.(g)
+          const brep = bytes ? decodeBrep(rhino, bytes) : null
+          if (brep) report.exact++
+          else report.meshed++
+          file.objects().add(brep ?? writeMesh(rhino, g), attributes)
         } else {
-          file.objects().add(g.type === 'brep' || g.type === 'mesh' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
+          file.objects().add(g.type === 'mesh' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
         }
       }
     }

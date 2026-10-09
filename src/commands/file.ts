@@ -56,8 +56,12 @@ const exportRhino: Command = {
   history: false,
   repeat: false,
   async run({ files, log }) {
-    const fileName = await files.exportRhino()
-    if (fileName) log(`Exported ${fileName}`)
+    const result = await files.exportRhino()
+    if (!result) return
+    const { exact, meshed } = result.report
+    // How the surfaces and solids went: exactly, or as meshes where they have no exact Rhino form.
+    const parts = [exact > 0 ? `${exact} exact` : '', meshed > 0 ? `${meshed} as ${meshed === 1 ? 'a mesh' : 'meshes'}` : ''].filter(Boolean)
+    log(`Exported ${result.fileName}${parts.length > 0 ? ` (surfaces and solids: ${parts.join(', ')})` : ''}`)
   },
 }
 
