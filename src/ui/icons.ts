@@ -45,6 +45,8 @@ export const ICONS = {
   dimRadius: 'M10 3.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM10 10l4.6-4.6M14.6 5.4l-2.9.8 2.1 2.1Z',
   dimAngle: 'M3 16.5h14M3 16.5 13 4M10.5 16.5a7.5 7.5 0 0 0-2.7-5.8',
   leader: 'M3 17l7-7h7M3 17l1-3.2 2.2 2.2ZM12 6.5h5',
+  hatch: 'M3 3h14v14H3ZM3 9l6-6M3 15 15 3M9 17l8-8',
+  print: 'M5.5 7.5V3h9v4.5M5.5 14H3V7.5h14V14h-2.5M5.5 11h9v6h-9Z',
   move: 'M10 3v14M3 10h14M8 5l2-2 2 2M8 15l2 2 2-2M5 8l-2 2 2 2M15 8l2 2-2 2',
   copy: 'M7 7h9v9H7ZM4 13V4h9',
   delete: 'M4.5 5.5h11M8 5.5V3.5h4v2M6 5.5l.8 11h6.4l.8-11',

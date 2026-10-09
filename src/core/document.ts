@@ -7,6 +7,10 @@ export interface Layer {
   color: string
   visible: boolean
   locked: boolean
+  /** Name of a linetype (see LINETYPES); Continuous when missing. */
+  linetype?: string
+  /** Pen width for printing, in millimeters; the default width when missing or 0. */
+  printWidth?: number
 }
 
 export interface CadObject {

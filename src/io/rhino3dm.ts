@@ -371,6 +371,12 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Arr
       if (g.type === 'annotation') {
         // Texts and dimensions go as their line work.
         for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
+      } else if (g.type === 'hatch') {
+        // Hatches go as their boundaries and pattern lines.
+        for (const loop of g.loops) file.objects().add(writeCurve(rhino, loop), attributes)
+        if (g.pattern !== 'Solid') {
+          for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
+        }
       } else {
         file.objects().add(g.type === 'brep' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
       }

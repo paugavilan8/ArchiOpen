@@ -1,6 +1,7 @@
 import { Box3, Vector3 } from 'three'
 import { clampedKnots, evalBSpline } from '../math/nurbs'
 import { annotationLines } from './annotation'
+import { hatchLines } from './hatch'
 
 export interface Plane {
   origin: Vector3
@@ -103,12 +104,28 @@ export interface AnnotationGeometry {
   precision: number
 }
 
+/**
+ * A hatch: the region inside closed planar loops (loops inside loops are holes), filled solid or
+ * with a pattern of lines. The pattern is laid out in the plane of `xaxis` and `yaxis` (unit
+ * vectors) from `origin`, at `scale` and turned by `rotation` radians.
+ */
+export interface HatchGeometry {
+  type: 'hatch'
+  loops: AnyCurve[]
+  pattern: string
+  scale: number
+  rotation: number
+  origin: Vector3
+  xaxis: Vector3
+  yaxis: Vector3
+}
+
 export type AnyCurve = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
 
 // Geometry values are immutable: edits produce a new value, which keeps the caches below valid.
-export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry
+export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry
 
-export const isCurve = (g: Geometry): g is AnyCurve => g.type !== 'brep' && g.type !== 'annotation'
+export const isCurve = (g: Geometry): g is AnyCurve => g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch'
 
 export interface SnapPoints {
   end: Vector3[]
@@ -293,7 +310,9 @@ export function wireframe(g: Geometry): Vector3[][] {
       ? [tessellate(g)]
       : g.type === 'annotation'
         ? annotationLines(g)
-        : g.display.edges.map((flat) => {
+        : g.type === 'hatch'
+          ? hatchWires(g)
+          : g.display.edges.map((flat) => {
           const pts: Vector3[] = []
           for (let i = 0; i < flat.length; i += 3) pts.push(new Vector3(flat[i], flat[i + 1], flat[i + 2]))
           return pts
@@ -301,6 +320,17 @@ export function wireframe(g: Geometry): Vector3[][] {
     wireframeCache.set(g, lines)
   }
   return lines
+}
+
+/** Pattern lines of a hatch; a solid hatch (or one too dense to draw) shows its boundary instead. */
+function hatchWires(g: HatchGeometry): Vector3[][] {
+  let lines: Vector3[][] = []
+  try {
+    lines = hatchLines(g)
+  } catch {
+    // Too dense: fall through to the boundary.
+  }
+  return lines.length > 0 ? lines : g.loops.map((loop) => tessellate(loop))
 }
 
 /** Point halfway along the curve, measured by length. */
@@ -354,6 +384,8 @@ function buildSnapPoints(g: Geometry): SnapPoints {
     case 'annotation':
       snaps.end = g.points
       break
+    case 'hatch':
+      break
     case 'brep':
       // Corners and edge midpoints of surfaces and solids.
       for (const edge of wireframe(g)) {
@@ -382,6 +414,7 @@ export function expandBox(box: Box3, g: Geometry): void {
 export function typeName(g: Geometry): string {
   if (g.type === 'polyline') return g.points.length === 2 ? 'line' : 'polyline'
   if (g.type === 'brep') return g.kind
+  if (g.type === 'hatch') return 'hatch'
   if (g.type === 'annotation') return g.kind === 'text' || g.kind === 'leader' ? g.kind : 'dimension'
   return g.type
 }
@@ -412,6 +445,17 @@ export function geometryToJSON(g: Geometry): unknown {
       return { type: g.type, degree: g.degree, points: g.points.map(toTriple), knots: g.knots }
     case 'polycurve':
       return { type: g.type, segments: g.segments.map(geometryToJSON) }
+    case 'hatch':
+      return {
+        type: g.type,
+        loops: g.loops.map(geometryToJSON),
+        pattern: g.pattern,
+        scale: g.scale,
+        rotation: g.rotation,
+        origin: toTriple(g.origin),
+        xaxis: toTriple(g.xaxis),
+        yaxis: toTriple(g.yaxis),
+      }
     case 'annotation':
       return {
         type: g.type,
@@ -453,6 +497,17 @@ export function geometryFromJSON(j: any): Geometry {
     }
     case 'polycurve':
       return { type: 'polycurve', segments: j.segments.map(geometryFromJSON) }
+    case 'hatch':
+      return {
+        type: 'hatch',
+        loops: j.loops.map(geometryFromJSON),
+        pattern: j.pattern,
+        scale: j.scale,
+        rotation: j.rotation ?? 0,
+        origin: fromTriple(j.origin),
+        xaxis: fromTriple(j.xaxis),
+        yaxis: fromTriple(j.yaxis),
+      }
     case 'annotation':
       return {
         type: 'annotation',

@@ -1,8 +1,11 @@
 import type { Document, Layer } from '../core/document'
+import { DEFAULT_PRINT_WIDTH, LINETYPE_NAMES, PRINT_WIDTHS } from '../core/linetypes'
 import { iconButton } from './icons'
 
 export class LayersPanel {
   private readonly list = document.createElement('ul')
+  /** Linetype and print width of the current layer. */
+  private readonly details = document.createElement('div')
 
   constructor(
     container: HTMLElement,
@@ -27,7 +30,8 @@ export class LayersPanel {
       const layer = doc.layers.find((l) => String(l.id) === label?.dataset.layerId)
       if (label && layer) this.rename(layer, label)
     })
-    container.append(header, this.list)
+    this.details.className = 'properties layer-properties'
+    container.append(header, this.list, this.details)
 
     doc.on((kind) => {
       if (kind !== 'selection') this.render()
@@ -44,6 +48,36 @@ export class LayersPanel {
     const counts = new Map<number, number>()
     for (const obj of this.doc.objects.values()) counts.set(obj.layerId, (counts.get(obj.layerId) ?? 0) + 1)
     this.list.replaceChildren(...this.doc.layers.map((layer) => this.row(layer, counts.get(layer.id) ?? 0)))
+    this.renderDetails()
+  }
+
+  private renderDetails(): void {
+    const { doc } = this
+    const layer = doc.currentLayer
+    const section = document.createElement('section')
+    const heading = document.createElement('h3')
+    heading.textContent = `Layer ${layer.name}`
+    const list = document.createElement('dl')
+    const field = (label: string, input: HTMLElement) => {
+      const dt = document.createElement('dt')
+      dt.textContent = label
+      const dd = document.createElement('dd')
+      dd.appendChild(input)
+      list.append(dt, dd)
+    }
+    const linetype = document.createElement('select')
+    for (const name of LINETYPE_NAMES) linetype.add(new Option(name, name, false, (layer.linetype ?? 'Continuous') === name))
+    linetype.addEventListener('change', () => doc.updateLayer(layer.id, { linetype: linetype.value }))
+    field('Linetype', linetype)
+    const width = document.createElement('select')
+    for (const w of PRINT_WIDTHS) {
+      const label = w === 0 ? `Default (${DEFAULT_PRINT_WIDTH} mm)` : `${w} mm`
+      width.add(new Option(label, String(w), false, (layer.printWidth ?? 0) === w))
+    }
+    width.addEventListener('change', () => doc.updateLayer(layer.id, { printWidth: Number(width.value) }))
+    field('Print width', width)
+    section.append(heading, list)
+    this.details.replaceChildren(section)
   }
 
   private row(layer: Layer, count: number): HTMLLIElement {

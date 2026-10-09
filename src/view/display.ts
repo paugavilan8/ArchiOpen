@@ -2,6 +2,8 @@ import * as THREE from 'three'
 import type { Document } from '../core/document'
 import { controlPoints } from '../core/curves'
 import { BrepGeometry, expandBox, wireframe } from '../core/geometry'
+import { hatchTriangles } from '../core/hatch'
+import { dashesOf } from '../core/linetypes'
 import { Viewport, ViewKind } from './viewport'
 
 const GAP_COLOR = 0x15171a
@@ -14,6 +16,8 @@ const POLYGON_COLOR = '#6b7280'
 const POINT_SIZE = 7
 /** Three.js layer for shaded surfaces, so only shaded viewports draw them. */
 const SHADED_LAYER = 1
+/** Screen pixels per millimeter at 96 dpi. */
+const MM_TO_PX = 96 / 25.4
 
 const VIEW_ORDER: ViewKind[] = ['Top', 'Perspective', 'Front', 'Right']
 
@@ -26,9 +30,12 @@ export class Display {
   private readonly scene = new THREE.Scene()
   private readonly objectsGroup = new THREE.Group()
   private readonly previewGroup = new THREE.Group()
-  private readonly materials = new Map<string, THREE.LineBasicMaterial>()
+  private readonly materials = new Map<string, THREE.LineBasicMaterial | THREE.LineDashedMaterial>()
+  private readonly dashedMaterials: THREE.LineDashedMaterial[] = []
+  private readonly fillMaterials = new Map<string, THREE.MeshBasicMaterial>()
   private readonly pointsGroup = new THREE.Group()
   private readonly surfaceGroup = new THREE.Group()
+  private readonly fillGroup = new THREE.Group()
   private readonly surfaceMaterials = new Map<string, THREE.MeshStandardMaterial>()
   private readonly headlight = new THREE.DirectionalLight(0xffffff, 1.6)
   private readonly raycaster = new THREE.Raycaster()
@@ -65,7 +72,7 @@ export class Display {
     this.active.el.classList.add('active')
 
     this.previewGroup.renderOrder = 2
-    this.scene.add(this.objectsGroup, this.surfaceGroup, this.pointsGroup, this.previewGroup)
+    this.scene.add(this.fillGroup, this.objectsGroup, this.surfaceGroup, this.pointsGroup, this.previewGroup)
     // Ambient sky/ground light plus a light at the camera, as in most modelers' shaded modes.
     const ambient = new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.1)
     ambient.layers.set(SHADED_LAYER)
@@ -149,15 +156,26 @@ export class Display {
   private rebuildObjects(): void {
     this.clearGroup(this.objectsGroup)
     this.clearGroup(this.surfaceGroup)
+    this.clearGroup(this.fillGroup)
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
       if (!layer.visible || this.hidden.has(obj.id)) continue
       const selected = this.doc.selection.has(obj.id)
       const color = selected ? SELECTED_COLOR : layer.locked ? LOCKED_COLOR : layer.color
+      const material = this.material(color, layer.linetype)
       for (const pts of wireframe(obj.geometry)) {
-        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), this.material(color))
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), material)
+        if (material instanceof THREE.LineDashedMaterial) line.computeLineDistances()
         line.renderOrder = selected ? 1 : 0
         this.objectsGroup.add(line)
+      }
+      if (obj.geometry.type === 'hatch' && obj.geometry.pattern === 'Solid') {
+        // Solid hatches are filled in every viewport, under the line work.
+        const fill = new THREE.BufferGeometry()
+        fill.setAttribute('position', new THREE.Float32BufferAttribute(hatchTriangles(obj.geometry), 3))
+        const mesh = new THREE.Mesh(fill, this.fillMaterial(color))
+        mesh.userData.id = obj.id
+        this.fillGroup.add(mesh)
       }
       if (obj.geometry.type === 'brep') {
         const mesh = new THREE.Mesh(surfaceGeometry(obj.geometry), this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked))
@@ -220,23 +238,51 @@ export class Display {
     return material
   }
 
-  /** The surface under the cursor in a shaded viewport, and the point hit on it. */
+  /** The surface (in a shaded viewport) or solid hatch under the cursor, and the point hit on it. */
   pickShaded(vp: Viewport, sx: number, sy: number, accept: (id: number) => boolean): { id: number; point: THREE.Vector3 } | null {
-    if (!vp.shaded) return null
+    const targets = [...(vp.shaded ? this.surfaceGroup.children : []), ...this.fillGroup.children]
+    if (targets.length === 0) return null
     const ndc = new THREE.Vector2((sx / vp.width) * 2 - 1, -(sy / vp.height) * 2 + 1)
     this.raycaster.setFromCamera(ndc, vp.camera)
-    for (const hit of this.raycaster.intersectObjects(this.surfaceGroup.children, false)) {
+    this.raycaster.layers.enableAll()
+    for (const hit of this.raycaster.intersectObjects(targets, false)) {
       const id = hit.object.userData.id as number
       if (accept(id)) return { id, point: hit.point.clone() }
     }
     return null
   }
 
-  private material(color: string): THREE.LineBasicMaterial {
-    let material = this.materials.get(color)
+  /** Line material for a color and linetype. Dashes are sized in pixels; see renderNow(). */
+  private material(color: string, linetype?: string): THREE.LineBasicMaterial | THREE.LineDashedMaterial {
+    const dashes = dashesOf(linetype)
+    const key = dashes.length > 0 ? `${color}:${linetype}` : color
+    let material = this.materials.get(key)
     if (!material) {
-      material = new THREE.LineBasicMaterial({ color })
-      this.materials.set(color, material)
+      if (dashes.length > 0) {
+        // The viewport shows the first dash and gap of the pattern, at about their printed size.
+        const pixels = (mm: number) => Math.max(1.5, Math.abs(mm) * MM_TO_PX)
+        const dashed = new THREE.LineDashedMaterial({ color, dashSize: pixels(dashes[0]), gapSize: pixels(dashes[1] ?? dashes[0]) })
+        this.dashedMaterials.push(dashed)
+        material = dashed
+      } else {
+        material = new THREE.LineBasicMaterial({ color })
+      }
+      this.materials.set(key, material)
+    }
+    return material
+  }
+
+  private fillMaterial(color: string): THREE.MeshBasicMaterial {
+    let material = this.fillMaterials.get(color)
+    if (!material) {
+      material = new THREE.MeshBasicMaterial({
+        color,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
+      })
+      this.fillMaterials.set(color, material)
     }
     return material
   }
@@ -267,6 +313,9 @@ export class Display {
       if (!vp.isVisible) continue
       vp.updateCamera()
       vp.updateGizmo()
+      // Dashed lines measure their length in pixels of this viewport.
+      const perPixel = vp.worldPerPixel(vp.target)
+      for (const m of this.dashedMaterials) m.scale = 1 / perPixel
       const x = vp.el.offsetLeft
       const y = fullHeight - vp.el.offsetTop - vp.height
       r.setViewport(x, y, vp.width, vp.height)

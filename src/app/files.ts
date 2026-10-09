@@ -18,6 +18,8 @@ interface FileType {
 
 export const ARCHI: FileType = { name: 'ArchiOpen model', extension: 'archi', mime: 'application/json' }
 export const RHINO: FileType = { name: 'Rhino 3D model', extension: '3dm', mime: 'application/octet-stream' }
+export const PDF: FileType = { name: 'PDF drawing', extension: 'pdf', mime: 'application/pdf' }
+export const DXF: FileType = { name: 'DXF drawing', extension: 'dxf', mime: 'application/dxf' }
 export const STEP: FileType = { name: 'STEP model', extension: 'step', extensions: ['step', 'stp'], mime: 'model/step' }
 const UNTITLED = 'Untitled'
 const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']
@@ -251,6 +253,16 @@ export class FileManager {
     })
     const fileName = location === 'download' ? `${this.name}.${RHINO.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
     await writeFile(location, bytes, fileName, RHINO)
+    return fileName
+  }
+
+  /** Asks where to save, then writes the bytes made by `make`. Resolves to the file name, or null if cancelled. */
+  async exportFile(type: FileType, make: () => Promise<Uint8Array> | Uint8Array): Promise<string | null> {
+    const location = await pickSaveLocation(this.name, type)
+    if (!location) return null
+    const bytes = await make()
+    const fileName = location === 'download' ? `${this.name}.${type.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
+    await writeFile(location, bytes, fileName, type)
     return fileName
   }
 

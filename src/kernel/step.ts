@@ -64,6 +64,8 @@ function inFileUnits(g: Geometry, toFile: Matrix4, scale: number): R.AnyShape {
     // Texts and dimensions go as their line work.
     return R.makeCompound(wireframe(scaled).map((points) => curveToWire({ type: 'polyline', points, closed: false })))
   }
+  // Hatches go as their boundaries.
+  if (scaled.type === 'hatch') return R.makeCompound(scaled.loops.map(curveToWire))
   return scaled.type === 'brep' ? shapeOf(scaled) : curveToWire(scaled)
 }
 

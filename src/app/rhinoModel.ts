@@ -3,20 +3,7 @@ import { transform } from '../core/curves'
 import type { Document } from '../core/document'
 import { geometryToJSON } from '../core/geometry'
 import type { RhinoImport } from '../io/rhino3dm'
-
-/** Length of one unit in meters, for the units a model is likely to use. */
-const METERS: Record<string, number> = {
-  Microns: 1e-6,
-  Millimeters: 1e-3,
-  Centimeters: 1e-2,
-  Decimeters: 0.1,
-  Meters: 1,
-  Kilometers: 1000,
-  Inches: 0.0254,
-  Feet: 0.3048,
-  Yards: 0.9144,
-  Miles: 1609.344,
-}
+import { METERS } from '../core/units'
 
 /** Replaces the document with the content of a .3dm file, keeping its units. */
 export function applyRhinoImport(doc: Document, model: RhinoImport): void {

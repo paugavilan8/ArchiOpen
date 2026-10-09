@@ -52,6 +52,20 @@ se adjuntan a un borrador de *release*.
   escalar o editar sus puntos (`PointsOn`). En el panel de propiedades se cambian el texto (`<>`
   es el valor medido, p. ej. `L = <> m`), la altura, las flechas y los decimales. `Explode` las
   convierte en líneas; al exportar a `.3dm` o STEP van como líneas.
+- Sombreados: `Hatch` (alias `H`) rellena el interior de curvas cerradas planas (las curvas
+  dentro de otras son huecos) con un relleno sólido o un patrón: `Lines`, `Cross`, `Grid`, `Brick`
+  y `Dashes`, con opciones `Pattern`, `Scale` y `Rotation` (también editables en el panel de
+  propiedades).
+- Tipos de línea y grosores por capa (en el panel de capas): `Continuous`, `Dashed`, `Hidden`,
+  `Center`, `DashDot` y `Dots`, y plumillas de 0,13 a 1 mm. `Make2D` pone las ocultas en
+  discontinua.
+- Planos: `ExportPDF` (alias `Print`) imprime la vista activa a PDF vectorial con opciones
+  `Paper` (A4 a A0, Letter, Tabloid), `Orientation`, `Scale` (p. ej. 1:50, o ajustar al papel),
+  `Area` (todo o lo que se ve en la vista) y `Color` (de pantalla o todo en negro). Usa los
+  grosores y tipos de línea de cada capa. `ExportDXF` escribe la selección (o todo lo visible) en
+  DXF R12, que leen AutoCAD, LibreCAD, Illustrator y casi cualquier programa de CAD: capas con su
+  color, tipo de línea y unidades; líneas, polilíneas, círculos y arcos exactos; el resto como
+  polilíneas y los sombreados sólidos como relleno.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.

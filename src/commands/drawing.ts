@@ -44,11 +44,11 @@ const shift = (drawing: Drawing2D, offset: Vector3): Drawing2D => {
 }
 
 /** The layer with this name, created if missing. */
-function layerNamed(ctx: CommandContext, name: string, color: string): Layer {
+function layerNamed(ctx: CommandContext, name: string, color: string, linetype?: string): Layer {
   const existing = ctx.doc.layers.find((l) => l.name === name)
   if (existing) return existing
   const layer = ctx.doc.addLayer()
-  ctx.doc.updateLayer(layer.id, { name, color })
+  ctx.doc.updateLayer(layer.id, { name, color, linetype })
   return layer
 }
 
@@ -137,7 +137,7 @@ const make2d: Command = {
     const m = new Matrix4().makeTranslation(offset.x, offset.y, offset.z)
 
     const visibleLayer = layerNamed(ctx, 'Make2D Visible', '#000000')
-    const hiddenLayer = memory.hidden ? layerNamed(ctx, 'Make2D Hidden', '#8c8c8c') : null
+    const hiddenLayer = memory.hidden ? layerNamed(ctx, 'Make2D Hidden', '#8c8c8c', 'Hidden') : null
     const created: number[] = []
     for (const d of drawings) {
       for (const c of d.visible) created.push(doc.add(transform(c, m), visibleLayer.id).id)

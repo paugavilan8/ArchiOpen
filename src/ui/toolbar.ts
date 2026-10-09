@@ -61,6 +61,7 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'DimRadius', tip: 'Radius dimension', icon: 'dimRadius' },
     { macro: 'DimAngle', tip: 'Angle dimension', icon: 'dimAngle' },
     { macro: 'Leader', tip: 'Leader', icon: 'leader' },
+    { macro: 'Hatch', tip: 'Hatch  (H)', icon: 'hatch' },
   ],
 ]
 
@@ -70,6 +71,7 @@ const STANDARD_TOOLS: Tool[][] = [
     { macro: 'New', tip: 'New  (Ctrl+N)', icon: 'new' },
     { macro: 'Open', tip: 'Open  (Ctrl+O)', icon: 'open' },
     { macro: 'Save', tip: 'Save  (Ctrl+S)', icon: 'save' },
+    { macro: 'ExportPDF', tip: 'Print to PDF  (Print)', icon: 'print' },
   ],
   [
     { macro: 'Undo', tip: 'Undo  (Ctrl+Z)', icon: 'undo' },

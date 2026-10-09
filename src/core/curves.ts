@@ -3,6 +3,7 @@ import { clampedKnots, interpolate, reverseBSpline, splitBSpline } from '../math
 import {
   AnnotationGeometry,
   AnyCurve,
+  HatchGeometry,
   ArcGeometry,
   BrepGeometry,
   CircleGeometry,
@@ -51,11 +52,26 @@ function arcAsCurve(g: CircleGeometry | ArcGeometry): CurveGeometry {
 export function transform<G extends Geometry>(
   g: G,
   m: Matrix4,
-): G extends BrepGeometry ? BrepGeometry : G extends AnnotationGeometry ? AnnotationGeometry : AnyCurve
+): G extends BrepGeometry ? BrepGeometry : G extends AnnotationGeometry ? AnnotationGeometry : G extends HatchGeometry ? HatchGeometry : AnyCurve
 export function transform(g: Geometry, m: Matrix4): Geometry {
   if (g.type === 'brep') return transformBrep(g, m)
   const linear = new Matrix3().setFromMatrix4(m)
   if (g.type === 'annotation') return transformAnnotation(g, m, linear)
+  if (g.type === 'hatch') {
+    const x = g.xaxis.clone().applyMatrix3(linear)
+    const y = g.yaxis.clone().applyMatrix3(linear)
+    const scale = Math.sqrt(x.length() * y.length())
+    x.normalize()
+    y.addScaledVector(x, -y.dot(x)).normalize()
+    return {
+      ...g,
+      loops: g.loops.map((loop) => transform(loop, m)),
+      origin: g.origin.clone().applyMatrix4(m),
+      xaxis: x,
+      yaxis: y,
+      scale: g.scale * scale,
+    }
+  }
   const point = (p: Vector3) => p.clone().applyMatrix4(m)
   switch (g.type) {
     case 'polyline':

@@ -3,7 +3,8 @@ import type { CommandRunner } from '../commands/runner'
 import type { CadObject, Document } from '../core/document'
 import { length } from '../core/curves'
 import { measure } from '../core/annotation'
-import { AnnotationGeometry, endPoint, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
+import { PATTERN_NAMES } from '../core/hatch'
+import { AnnotationGeometry, endPoint, HatchGeometry, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
 
 type Row = [label: string, value: string]
 
@@ -58,6 +59,8 @@ function geometryRows(g: Geometry): Row[] {
         ['Segments', String(g.segments.length)],
         ['Closed', isClosed(g) ? 'Yes' : 'No'],
       ]
+    case 'hatch':
+      return [['Loops', String(g.loops.length)]]
     case 'annotation':
       if (g.kind === 'text' || g.kind === 'leader') return [['Insertion point', point(g.points[g.kind === 'text' ? 0 : g.points.length - 1])]]
       return [['Value', g.kind === 'angle' ? `${fmt(measure(g))}°` : fmt(measure(g))]]
@@ -115,6 +118,7 @@ export class PropertiesPanel {
         const g = selected[0].geometry
         sections.push(this.section('Geometry', geometryRows(g)))
         if (g.type === 'annotation') sections.push(this.annotationSection(selected[0].id, g))
+        if (g.type === 'hatch') sections.push(this.hatchSection(selected[0].id, g))
       }
     }
     this.body.replaceChildren(...sections)
@@ -133,6 +137,43 @@ export class PropertiesPanel {
       list.append(dt, dd)
     }
     section.append(heading, list)
+    return section
+  }
+
+  /** Editable pattern, scale and rotation of a hatch. */
+  private hatchSection(id: number, g: HatchGeometry): HTMLElement {
+    const section = this.section('Hatch', [])
+    const list = section.querySelector('dl')!
+    const update = (patch: Partial<HatchGeometry>) => {
+      if (this.runner.busy) return
+      this.doc.begin()
+      this.doc.setGeometry(id, { ...g, ...patch })
+      this.doc.commit()
+    }
+    const field = (label: string, input: HTMLElement) => {
+      const dt = document.createElement('dt')
+      dt.textContent = label
+      const dd = document.createElement('dd')
+      dd.appendChild(input)
+      list.append(dt, dd)
+    }
+    const pattern = document.createElement('select')
+    for (const name of PATTERN_NAMES) pattern.add(new Option(name, name, false, g.pattern === name))
+    pattern.addEventListener('change', () => update({ pattern: pattern.value }))
+    field('Pattern', pattern)
+    const number = (value: number, apply: (v: number) => void) => {
+      const input = document.createElement('input')
+      input.type = 'number'
+      input.step = 'any'
+      input.value = String(Number(value.toFixed(6)))
+      input.addEventListener('change', () => {
+        const v = Number(input.value)
+        if (Number.isFinite(v)) apply(v)
+      })
+      return input
+    }
+    field('Scale', number(g.scale, (v) => v > 0 && update({ scale: v })))
+    field('Rotation', number((g.rotation * 180) / Math.PI, (v) => update({ rotation: (v * Math.PI) / 180 })))
     return section
   }
 

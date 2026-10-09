@@ -24,6 +24,9 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         'separator',
         item('Import STEP…', 'ImportSTEP'),
         item('Export STEP…', 'ExportSTEP'),
+        'separator',
+        item('Print to PDF…', 'ExportPDF'),
+        item('Export DXF…', 'ExportDXF'),
       ],
     ],
     [
@@ -115,6 +118,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Diameter Dimension', 'DimDiameter'),
         item('Angle Dimension', 'DimAngle'),
         item('Leader', 'Leader'),
+        'separator',
+        item('Hatch', 'Hatch', 'H'),
       ],
     ],
     [
