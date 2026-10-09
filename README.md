@@ -66,6 +66,21 @@ se adjuntan a un borrador de *release*.
   DXF R12, que leen AutoCAD, LibreCAD, Illustrator y casi cualquier programa de CAD: capas con su
   color, tipo de línea y unidades; líneas, polilíneas, círculos y arcos exactos; el resto como
   polilíneas y los sombreados sólidos como relleno.
+- Abrir e importar DXF (ASCII, de R12 a 2018): `Open` abre un `.dxf` como modelo nuevo e `Import`
+  lo añade al actual, convertido a sus unidades. Se leen:
+  - las capas con su color (también color verdadero), tipo de línea, grosor, apagadas y
+    bloqueadas, y las unidades (`$INSUNITS`; sin unidades se toman milímetros o las del modelo);
+  - líneas, polilíneas con arcos, círculos y arcos (también en planos inclinados), elipses,
+    splines, caras 3D y `SOLID`;
+  - textos y textos de varias líneas (sin formato, con `%%c`, `%%d`, `%%p` y acentos);
+  - cotas lineales, alineadas, de radio, diámetro y ángulo, que se convierten en cotas de
+    ArchiOpen que siguen midiendo;
+  - directrices, sombreados (con huecos; los patrones de AutoCAD se aproximan con los de
+    ArchiOpen) y bloques, que se descomponen en sus objetos (con escala, giro, matrices y bloques
+    anidados).
+  - Puntos, multilíneas, multidirectrices, sólidos ACIS, imágenes y tablas aún no se cargan y se
+    avisa de cuántos hay. Los DXF binarios y los DWG no se leen: guárdalos como DXF ASCII desde
+    el programa de origen (o conviértelos con ODA File Converter, gratuito).
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.
@@ -116,6 +131,9 @@ npm test           # pruebas de la geometría
 ```
 
 ## Créditos
+
+- El archivo de prueba `src/io/fixtures/ezdxf-sample.dxf` está generado con
+  [ezdxf](https://github.com/mozman/ezdxf) (MIT).
 
 - Tipografía de los textos: fuentes Hershey (A. V. Hershey, U.S. National Bureau of Standards), en
   la conversión de [hersheytext](https://github.com/techninja/hersheytextjs) (MIT).

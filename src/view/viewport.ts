@@ -123,12 +123,21 @@ export class Viewport {
     return this.kind !== 'Perspective'
   }
 
+  // The size is read from the page once per frame (see measure()), not for every projected point:
+  // reading layout while the cursor overlays change forces the browser to lay out the page again.
+  private size = { width: 1, height: 1 }
+
+  /** Reads the viewport's size from the page; updateCamera() does, once per frame. */
+  measure(): void {
+    this.size = { width: Math.max(1, this.el.clientWidth), height: Math.max(1, this.el.clientHeight) }
+  }
+
   get width(): number {
-    return Math.max(1, this.el.clientWidth)
+    return this.size.width
   }
 
   get height(): number {
-    return Math.max(1, this.el.clientHeight)
+    return this.size.height
   }
 
   get isVisible(): boolean {
@@ -137,6 +146,7 @@ export class Viewport {
 
   /** Recomputes the camera from the view parameters and the element size. */
   updateCamera(): void {
+    this.measure()
     const aspect = this.width / this.height
     const cam = this.camera
     if (cam instanceof THREE.OrthographicCamera) {
@@ -244,6 +254,7 @@ export class Viewport {
       this.updateCamera()
       return
     }
+    this.measure()
     const aspect = this.width / this.height
     box.getCenter(this.target)
     const radius = box.getSize(new THREE.Vector3()).length() / 2

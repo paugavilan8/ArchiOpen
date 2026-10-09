@@ -1,4 +1,5 @@
 import type { Document } from '../core/document'
+import { readDxf } from '../io/dxfRead'
 import { describeSkipped, readRhinoFile, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
 import { loadRhino } from '../io/loadRhino'
 import { toBrep } from '../kernel/brep'
@@ -204,9 +205,16 @@ export class FileManager {
    */
   async open(): Promise<string | null> {
     if (!(await this.confirmDiscard())) return null
-    const file = await pickFile([ARCHI, RHINO])
+    const file = await pickFile([ARCHI, RHINO, DXF])
     if (!file) return null
     const bytes = await file.read()
+    if (extensionOf(file.fileName) === DXF.extension) {
+      // DXF files without units are taken as millimeters.
+      const result = readDxf(bytes, 'Millimeters')
+      applyRhinoImport(this.doc, result)
+      this.setLocation(baseName(file.fileName), null)
+      return `Opened ${file.fileName}: ${this.rhinoSummary(result)}. Save stores it as an .archi file; use ExportDXF to write a DXF`
+    }
     if (extensionOf(file.fileName) === RHINO.extension) {
       const result = await this.readRhino(bytes)
       applyRhinoImport(this.doc, result)
@@ -231,11 +239,13 @@ export class FileManager {
     return true
   }
 
-  /** Adds the contents of a .3dm file to the document. Resolves to the new object ids, or null. */
-  async importRhino(): Promise<{ ids: number[]; message: string } | null> {
-    const file = await pickFile([RHINO])
+  /** Adds the contents of a .3dm or .dxf file to the document. Resolves to the new object ids, or null. */
+  async importModel(): Promise<{ ids: number[]; message: string } | null> {
+    const file = await pickFile([RHINO, DXF])
     if (!file) return null
-    const result = await this.readRhino(await file.read())
+    const bytes = await file.read()
+    // DXF files without units are taken to be in the model's units.
+    const result = extensionOf(file.fileName) === DXF.extension ? readDxf(bytes, this.doc.units) : await this.readRhino(bytes)
     const { ids, scaledFrom } = mergeRhinoImport(this.doc, result)
     const scaled = scaledFrom ? `, scaled from ${scaledFrom.toLowerCase()} to ${this.doc.units.toLowerCase()}` : ''
     return { ids, message: `Imported ${file.fileName}: ${this.rhinoSummary(result)}${scaled}` }
@@ -309,7 +319,7 @@ export class FileManager {
   private rhinoSummary(result: RhinoImport): string {
     const breps = result.objects.filter((o) => o.geometry.type === 'brep').length
     const curveCount = result.objects.length - breps
-    const parts = [`${curveCount} curve${curveCount === 1 ? '' : 's'}`]
+    const parts = [`${curveCount} object${curveCount === 1 ? '' : 's'}`]
     if (breps > 0) parts.push(`${breps} polysurface${breps === 1 ? '' : 's'}`)
     const curves = `${parts.join(' and ')} on ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}`
     const skipped = describeSkipped(result.skipped)

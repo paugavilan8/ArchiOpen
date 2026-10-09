@@ -4,6 +4,7 @@ import { iconButton } from './icons'
 
 export class LayersPanel {
   private readonly list = document.createElement('ul')
+  private frame = 0
   /** Linetype and print width of the current layer. */
   private readonly details = document.createElement('div')
 
@@ -33,8 +34,9 @@ export class LayersPanel {
     this.details.className = 'properties layer-properties'
     container.append(header, this.list, this.details)
 
+    // Render once per frame, however many objects an import adds.
     doc.on((kind) => {
-      if (kind !== 'selection') this.render()
+      if (kind !== 'selection' && !this.frame) this.frame = requestAnimationFrame(() => this.render())
     })
     this.render()
   }
@@ -45,6 +47,7 @@ export class LayersPanel {
   }
 
   private render(): void {
+    this.frame = 0
     const counts = new Map<number, number>()
     for (const obj of this.doc.objects.values()) counts.set(obj.layerId, (counts.get(obj.layerId) ?? 0) + 1)
     this.list.replaceChildren(...this.doc.layers.map((layer) => this.row(layer, counts.get(layer.id) ?? 0)))

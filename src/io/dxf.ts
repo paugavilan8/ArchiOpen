@@ -56,6 +56,13 @@ const ACI: [number, [number, number, number]][] = (() => {
   return out
 })()
 
+/** The color of an AutoCAD color index; 7 (black or white) is black, as on paper. */
+export function aciToHex(index: number): string {
+  const entry = ACI.find(([i]) => i === Math.abs(index))
+  const [r, g, b] = entry ? entry[1] : [0, 0, 0]
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`
+}
+
 /** The nearest AutoCAD color index. White counts as black (index 7 shows as either). */
 export function aciOf(hex: string): number {
   const v = parseInt(hex.replace('#', '').slice(0, 6), 16)

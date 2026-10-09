@@ -49,6 +49,7 @@ export class Display {
   /** Called for each visible viewport after it is drawn, to update HTML overlays such as the gumball. */
   readonly overlays: ((vp: Viewport) => void)[] = []
   private frame = 0
+  private stale = false
 
   constructor(
     private readonly container: HTMLElement,
@@ -81,7 +82,12 @@ export class Display {
     this.raycaster.layers.set(SHADED_LAYER)
 
     new ResizeObserver(() => this.resize()).observe(container)
-    doc.on(() => this.rebuildObjects())
+    // Many changes can come at once (an import adds thousands of objects), so the scene is rebuilt
+    // once, when it is next drawn or picked from.
+    doc.on(() => {
+      this.stale = true
+      this.requestRender()
+    })
     this.resize()
     this.rebuildObjects()
   }
@@ -154,20 +160,32 @@ export class Display {
   }
 
   private rebuildObjects(): void {
+    this.stale = false
     this.clearGroup(this.objectsGroup)
     this.clearGroup(this.surfaceGroup)
     this.clearGroup(this.fillGroup)
+    // Line work is batched into one set of segments per material, so large drawings take a few draw
+    // calls instead of one per line.
+    const batches = new Map<THREE.Material, { positions: number[]; distances: number[]; selected: boolean }>()
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
       if (!layer.visible || this.hidden.has(obj.id)) continue
       const selected = this.doc.selection.has(obj.id)
       const color = selected ? SELECTED_COLOR : layer.locked ? LOCKED_COLOR : layer.color
       const material = this.material(color, layer.linetype)
+      let batch = batches.get(material)
+      if (!batch) batches.set(material, (batch = { positions: [], distances: [], selected }))
       for (const pts of wireframe(obj.geometry)) {
-        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), material)
-        if (material instanceof THREE.LineDashedMaterial) line.computeLineDistances()
-        line.renderOrder = selected ? 1 : 0
-        this.objectsGroup.add(line)
+        // Distances run along each polyline, so dashes flow around curves.
+        let along = 0
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1]
+          const b = pts[i]
+          const d = a.distanceTo(b)
+          batch.positions.push(a.x, a.y, a.z, b.x, b.y, b.z)
+          batch.distances.push(along, along + d)
+          along += d
+        }
       }
       if (obj.geometry.type === 'hatch' && obj.geometry.pattern === 'Solid') {
         // Solid hatches are filled in every viewport, under the line work.
@@ -183,6 +201,14 @@ export class Display {
         mesh.userData.id = obj.id
         this.surfaceGroup.add(mesh)
       }
+    }
+    for (const [material, batch] of batches) {
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3))
+      if (material instanceof THREE.LineDashedMaterial) geometry.setAttribute('lineDistance', new THREE.Float32BufferAttribute(batch.distances, 1))
+      const segments = new THREE.LineSegments(geometry, material)
+      segments.renderOrder = batch.selected ? 1 : 0
+      this.objectsGroup.add(segments)
     }
     this.rebuildPoints()
     this.requestRender()
@@ -240,6 +266,7 @@ export class Display {
 
   /** The surface (in a shaded viewport) or solid hatch under the cursor, and the point hit on it. */
   pickShaded(vp: Viewport, sx: number, sy: number, accept: (id: number) => boolean): { id: number; point: THREE.Vector3 } | null {
+    if (this.stale) this.rebuildObjects()
     const targets = [...(vp.shaded ? this.surfaceGroup.children : []), ...this.fillGroup.children]
     if (targets.length === 0) return null
     const ndc = new THREE.Vector2((sx / vp.width) * 2 - 1, -(sy / vp.height) * 2 + 1)
@@ -301,6 +328,7 @@ export class Display {
   }
 
   private renderNow(): void {
+    if (this.stale) this.rebuildObjects()
     const r = this.renderer
     const fullHeight = this.container.clientHeight
     r.setScissorTest(false)

@@ -40,10 +40,10 @@ const saveAs: Command = {
   },
 }
 
-const importRhino: Command = {
+const importModel: Command = {
   name: 'Import',
   async run({ doc, files, display, log }) {
-    const result = await files.importRhino()
+    const result = await files.importModel()
     if (!result) return
     doc.select(result.ids)
     display.fit(display.viewports, result.ids)
@@ -90,4 +90,4 @@ const importStep: Command = {
   },
 }
 
-export const fileCommands: Command[] = [newFile, open, save, saveAs, importRhino, exportRhino, importStep, exportStep]
+export const fileCommands: Command[] = [newFile, open, save, saveAs, importModel, exportRhino, importStep, exportStep]
