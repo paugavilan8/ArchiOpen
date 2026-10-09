@@ -1,5 +1,6 @@
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
+import { HistoryManager } from './app/historyManager'
 import { registerCommands } from './commands'
 import { CommandContext, CommandRunner } from './commands/runner'
 import { Document } from './core/document'
@@ -31,7 +32,8 @@ const files = new FileManager(doc)
 const settings = new Settings()
 const display = new Display(document.getElementById('viewports')!, doc)
 const input = new Interaction(doc, display, settings)
-const ctx: CommandContext = { doc, display, input, settings, files, log: (text) => commandLine.log(text) }
+const history = new HistoryManager(doc, settings, (text) => commandLine.log(text))
+const ctx: CommandContext = { doc, display, input, settings, files, history, log: (text) => commandLine.log(text) }
 const runner = new CommandRunner(ctx)
 registerCommands(runner)
 
@@ -207,4 +209,4 @@ commandLine.log('ArchiOpen 0.1. Type a command name, or pick one from the menus 
 commandLine.focus()
 updateTitle()
 
-if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings, files } })
+if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings, files, history } })

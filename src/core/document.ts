@@ -29,6 +29,17 @@ export interface CadObject {
   locked?: boolean
   /** Render material, by name, in place of the layer's. */
   material?: string
+  /** How the object was made from others, so it can be made again when they change. */
+  history?: HistoryRecord
+}
+
+/** The command and inputs an object was built from (see the history manager). */
+export interface HistoryRecord {
+  command: string
+  /** Ids of the input objects, in the order the command takes them. */
+  inputs: number[]
+  /** Anything else the command needs: distances, directions, options. */
+  params?: Record<string, unknown>
 }
 
 /** A saved camera: which kind of view it was, and where it looked from. */
@@ -65,6 +76,9 @@ export interface BlockEdit {
 }
 
 export type ChangeKind = 'objects' | 'selection' | 'layers'
+
+/** What a step changed, as onStep() listeners see it. */
+export type StepChange = Action
 export type SelectMode = 'replace' | 'add' | 'remove'
 
 type Action =
@@ -77,6 +91,7 @@ type Action =
   | { type: 'block'; name: string; before: BlockDefinition | undefined; after: BlockDefinition | undefined }
   | { type: 'blockEdit'; before: BlockEdit | null; after: BlockEdit | null }
   | { type: 'layouts'; before: Layout[]; after: Layout[] }
+  | { type: 'history'; id: number; before: HistoryRecord | undefined; after: HistoryRecord | undefined }
 
 const LAYER_COLORS = ['#c0392b', '#1f6fb5', '#1e8449', '#b9770e', '#7d3c98', '#117a8b']
 
@@ -278,18 +293,57 @@ export class Document {
 
   // --- History ---------------------------------------------------------------
 
+  /** Sets or clears how an object was built (undoable). */
+  setHistory(id: number, record: HistoryRecord | undefined): void {
+    const obj = this.objects.get(id)
+    if (!obj || (!obj.history && !record)) return
+    this.record({ type: 'history', id, before: obj.history, after: record })
+  }
+
+  private stepListeners = new Set<(step: readonly Action[]) => void>()
+  private amending: Action[] | null = null
+
+  /**
+   * Called after each finished step (a committed transaction or a single change, not undo or redo),
+   * with its changes, so dependents can follow.
+   */
+  onStep(listener: (step: readonly StepChange[]) => void): void {
+    this.stepListeners.add(listener as (step: readonly Action[]) => void)
+  }
+
+  /**
+   * Like begin(), but commit() adds the changes to `step` (as given to onStep listeners), so undoing
+   * that step undoes them too. If other steps came after it, the changes get their own undo step.
+   */
+  beginAmend(step: readonly StepChange[]): void {
+    this.tx = []
+    this.amending = this.undoStack[this.undoStack.length - 1] === step ? (step as Action[]) : null
+  }
+
   /** Groups every change until commit() into a single undo step. */
   begin(): void {
     this.tx = []
+    this.amending = null
   }
 
   commit(): void {
-    if (this.tx && this.tx.length > 0) {
-      this.undoStack.push(this.tx)
-      this.redoStack = []
-      this.noteCreated(this.tx)
-    }
+    const tx = this.tx
+    const amending = this.amending
     this.tx = null
+    this.amending = null
+    if (!tx || tx.length === 0) return
+    if (amending) {
+      amending.push(...tx)
+      return
+    }
+    this.undoStack.push(tx)
+    this.redoStack = []
+    this.noteCreated(tx)
+    this.finishStep(tx)
+  }
+
+  private finishStep(step: Action[]): void {
+    for (const listener of this.stepListeners) listener(step)
   }
 
   private noteCreated(actions: Action[]): void {
@@ -328,6 +382,7 @@ export class Document {
     }
     this.pruneSelection()
     this.emit('objects')
+    if (!this.tx) this.finishStep(this.undoStack[this.undoStack.length - 1])
   }
 
   private apply(action: Action, inverse: boolean): void {
@@ -376,6 +431,14 @@ export class Document {
       case 'layouts':
         this.layouts = inverse ? action.before : action.after
         break
+      case 'history': {
+        const obj = this.objects.get(action.id)
+        if (!obj) break
+        const record = inverse ? action.before : action.after
+        if (record) obj.history = record
+        else delete obj.history
+        break
+      }
     }
   }
 
@@ -535,6 +598,7 @@ export class Document {
         ...(o.hidden ? { hidden: o.hidden } : {}),
         ...(o.locked ? { locked: true } : {}),
         ...(o.material ? { material: o.material } : {}),
+        ...(o.history ? { history: o.history } : {}),
         geometry: geometryToJSON(o.geometry),
       })),
       ...(this.layouts.length > 0 ? { layouts: this.layouts } : {}),
@@ -563,6 +627,7 @@ export class Document {
       ...(o.hidden === 'user' || o.hidden === 'isolate' ? { hidden: o.hidden } : {}),
       ...(o.locked ? { locked: true } : {}),
       ...(typeof o.material === 'string' && o.material ? { material: o.material } : {}),
+      ...(o.history && typeof o.history.command === 'string' && Array.isArray(o.history.inputs) ? { history: o.history } : {}),
       geometry: geometryFromJSON(o.geometry, lookup),
     }))
 

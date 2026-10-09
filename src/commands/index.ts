@@ -21,6 +21,7 @@ import { analyzeCommands } from './analyze'
 import { analysisDisplayCommands } from './analysisDisplay'
 import { advancedSurfaceCommands } from './advancedSurfaces'
 import { renderCommands } from './render'
+import { historyCommands } from './history'
 
 // Short aliases, following the conventions most NURBS modelers share.
 const ALIASES: Record<string, string> = {
@@ -64,6 +65,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...organizeCommands, ...viewSetupCommands, ...meshCommands, ...analyzeCommands, ...analysisDisplayCommands, ...advancedSurfaceCommands, ...renderCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...organizeCommands, ...viewSetupCommands, ...meshCommands, ...analyzeCommands, ...analysisDisplayCommands, ...advancedSurfaceCommands, ...renderCommands, ...historyCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }

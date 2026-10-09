@@ -139,6 +139,9 @@ export class PropertiesPanel {
       const object = this.section('Object', [
         ['Type', selected.length === 1 ? capitalize(typeName(selected[0].geometry)) : type],
         ...(groups.size > 0 ? ([['Grouped', groups.size === 1 ? 'Yes' : `In ${groups.size} groups`]] as Row[]) : []),
+        ...(selected.length === 1 && selected[0].history
+          ? ([['History', `${selected[0].history.command} of ${selected[0].history.inputs.length} ${plural('curve', selected[0].history.inputs.length)}`]] as Row[])
+          : []),
       ])
       object.querySelector('dl')!.append(...this.layerField(selected), ...this.materialField(selected))
       sections.push(object)

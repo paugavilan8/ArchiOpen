@@ -106,6 +106,13 @@ se adjuntan a un borrador de *release*.
   - `What` describe los objetos; `Check` busca problemas (geometría no válida, aristas de más de
     dos caras, caras sin área, curvas sin longitud) e indica si están cerrados; `SelBadObjects`
     selecciona los que tienen problemas.
+- Historial de construcción (como `Record History` de Rhino, activo por defecto; botón *History*
+  en la barra de estado o menú *Tools*): las superficies y sólidos hechos con `ExtrudeCrv`,
+  `Revolve`, `Loft`, `Sweep1`, `Sweep2`, `Pipe`, `PlanarSrf`, `EdgeSrf`, `NetworkSrf` y `Patch`
+  recuerdan sus curvas y se rehacen al moverlas, girarlas, escalarlas o editar sus puntos, en el
+  mismo paso de deshacer. Editar el resultado a mano o borrar una de sus curvas rompe el historial
+  (el objeto se queda como está). `SelChildren`, `SelParents` y `HistoryPurge`; el panel de
+  propiedades indica de qué está hecho cada objeto. Se guarda en el `.archi`.
 - Render:
   - Modo de vista `Rendered` (menú de cada vista o `SetDisplayMode`): materiales físicos con
     reflejos de un entorno de estudio, sol con sombras suaves y sombra sobre un suelo bajo el

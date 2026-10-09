@@ -1,3 +1,4 @@
+import type { HistoryManager } from '../app/historyManager'
 import type { FileManager } from '../app/files'
 import type { Document } from '../core/document'
 import type { Settings } from '../core/settings'
@@ -10,6 +11,8 @@ export interface CommandContext {
   input: Interaction
   settings: Settings
   files: FileManager
+  /** Construction history; missing where history is not followed (e.g. in tests). */
+  history?: HistoryManager
   log(text: string): void
 }
 

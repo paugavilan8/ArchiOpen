@@ -23,6 +23,7 @@ import {
   toBrep,
 } from '../kernel/brep'
 import { brepHooks } from './curveEdit'
+import { triple } from '../kernel/rebuild'
 import { kernelReady, loadKernel } from '../kernel/loadKernel'
 import { isOption, plural, valueOption, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
@@ -213,9 +214,12 @@ const extrudeCrv: Command = {
       if (Math.abs(distance) < 1e-9) throw new Error('The distance must not be zero')
       memory.extrudeDistance = Math.abs(distance)
       await kernel(ctx)
-      const created = ids.map((id) =>
-        addShape(ctx, () => extrudeCurve(curveOf(ctx, id)!, n.clone().multiplyScalar(distance), memory.extrudeSolid), 'extrude the curve', doc.objects.get(id)!.layerId),
-      )
+      const direction = n.clone().multiplyScalar(distance)
+      const created = ids.map((id) => {
+        const made = addShape(ctx, () => extrudeCurve(curveOf(ctx, id)!, direction, memory.extrudeSolid), 'extrude the curve', doc.objects.get(id)!.layerId)
+        ctx.history?.record(made, 'ExtrudeCrv', [id], { direction: triple(direction), cap: memory.extrudeSolid })
+        return made
+      })
       doc.select(created)
       log(`${plural('object', created.length)} created`)
       return
@@ -239,9 +243,13 @@ const revolve: Command = {
     if (typeof angle !== 'number') return
     memory.revolveAngle = angle
     await kernel(ctx)
-    const created = ids.map((id) =>
-      addShape(ctx, () => revolveCurve(curveOf(ctx, id)!, start.point, axis.normalize(), (angle * Math.PI) / 180), 'revolve the curve', doc.objects.get(id)!.layerId),
-    )
+    axis.normalize()
+    const radians = (angle * Math.PI) / 180
+    const created = ids.map((id) => {
+      const made = addShape(ctx, () => revolveCurve(curveOf(ctx, id)!, start.point, axis, radians), 'revolve the curve', doc.objects.get(id)!.layerId)
+      ctx.history?.record(made, 'Revolve', [id], { origin: triple(start.point), axis: triple(axis), angle: radians })
+      return made
+    })
     doc.select(created)
     log(`${plural('object', created.length)} created`)
   },
@@ -256,6 +264,7 @@ const loft: Command = {
     if (ids.length < 2) throw new Error('Select at least two curves')
     await kernel(ctx)
     const id = addShape(ctx, () => loftCurves(ids.map((i) => curveOf(ctx, i)!)), 'loft the curves', doc.objects.get(ids[0])!.layerId)
+    ctx.history?.record(id, 'Loft', ids)
     doc.select([id])
   },
 }
@@ -269,7 +278,10 @@ const planarSrf: Command = {
     const created: number[] = []
     for (const id of ids) {
       const face = planarFace(curveOf(ctx, id)!)
-      if (face) created.push(doc.add(toBrep(face), doc.objects.get(id)!.layerId).id)
+      if (!face) continue
+      const made = doc.add(toBrep(face), doc.objects.get(id)!.layerId).id
+      ctx.history?.record(made, 'PlanarSrf', [id])
+      created.push(made)
     }
     doc.select(created)
     log(created.length === ids.length ? `${plural('surface', created.length)} created` : `${created.length} of ${ids.length} curves were closed and planar`)
@@ -384,7 +396,11 @@ const sweep1: Command = {
     const ids = (await input.getObjects('Select cross-section curves')).filter((id) => id !== rail.id && curveOf(ctx, id))
     if (ids.length === 0) throw new Error('Select at least one cross-section curve')
     await kernel(ctx)
-    const created = ids.map((id) => addShape(ctx, () => sweep(curveOf(ctx, id)!, path), 'sweep the curve', doc.objects.get(id)!.layerId))
+    const created = ids.map((id) => {
+      const made = addShape(ctx, () => sweep(curveOf(ctx, id)!, path), 'sweep the curve', doc.objects.get(id)!.layerId)
+      ctx.history?.record(made, 'Sweep1', [id, rail.id])
+      return made
+    })
     doc.select(created)
     log(`${plural('object', created.length)} created`)
   },

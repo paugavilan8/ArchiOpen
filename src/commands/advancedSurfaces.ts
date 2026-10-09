@@ -73,7 +73,8 @@ const sweep2Command: Command = {
       profiles.push(id)
     }
     if (profiles.length === 0) return
-    await build(ctx, profiles[0], () => sweep2(curveOf(ctx, rail1)!, curveOf(ctx, rail2)!, profiles.map((id) => curveOf(ctx, id)!)), 'sweep: each profile must run from one rail to the other')
+    const made = await build(ctx, profiles[0], () => sweep2(curveOf(ctx, rail1)!, curveOf(ctx, rail2)!, profiles.map((id) => curveOf(ctx, id)!)), 'sweep: each profile must run from one rail to the other')
+    ctx.history?.record(made, 'Sweep2', [rail1, rail2, ...profiles])
     log(`Swept ${plural('profile', profiles.length)} along two rails`)
   },
 }
@@ -83,7 +84,7 @@ const networkSrf: Command = {
   async run(ctx) {
     const { ids, curves } = await getCurves(ctx, 'Select curves in two directions')
     if (ids.length < 4) throw new Error('Select at least two curves in each direction')
-    await build(ctx, ids[0], () => networkSurface(curves), 'build a surface from this network')
+    ctx.history?.record(await build(ctx, ids[0], () => networkSurface(curves), 'build a surface from this network'), 'NetworkSrf', ids)
   },
 }
 
@@ -92,7 +93,7 @@ const patchCommand: Command = {
   async run(ctx) {
     const { ids, curves } = await getCurves(ctx, 'Select curves: a closed boundary and any curves inside it')
     if (ids.length === 0) throw new Error('Select curves')
-    await build(ctx, ids[0], () => patch(curves), 'fit a patch to these curves')
+    ctx.history?.record(await build(ctx, ids[0], () => patch(curves), 'fit a patch to these curves'), 'Patch', ids)
   },
 }
 
@@ -100,7 +101,7 @@ const edgeSrf: Command = {
   name: 'EdgeSrf',
   async run(ctx) {
     const { ids, curves } = await getCurves(ctx, 'Select two, three or four edge curves')
-    await build(ctx, ids[0], () => edgeSurface(curves), 'make a surface from these edges')
+    ctx.history?.record(await build(ctx, ids[0], () => edgeSurface(curves), 'make a surface from these edges'), 'EdgeSrf', ids)
   },
 }
 
@@ -186,7 +187,11 @@ const pipeCommand: Command = {
     const end = await input.getNumber('Radius at the end', start)
     if (typeof end !== 'number' || end <= 0) throw new Error('The radius must be more than zero')
     await kernel(ctx)
-    const made = ids.map((id) => addShape(ctx, () => pipe(curveOf(ctx, id)!, start!, end, memory.pipeCap), 'make the pipe (the radius may be too large for the bends)', doc.objects.get(id)!.layerId))
+    const made = ids.map((id) => {
+      const pipeId = addShape(ctx, () => pipe(curveOf(ctx, id)!, start!, end, memory.pipeCap), 'make the pipe (the radius may be too large for the bends)', doc.objects.get(id)!.layerId)
+      ctx.history?.record(pipeId, 'Pipe', [id], { start, end, cap: memory.pipeCap })
+      return pipeId
+    })
     doc.select(made)
     log(`${plural('pipe', made.length)} made${memory.pipeCap ? ', capped' : ''}`)
   },

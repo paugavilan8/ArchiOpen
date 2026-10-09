@@ -15,6 +15,7 @@ const TOGGLES: [ToggleKey, string, string][] = [
   ['ortho', 'Ortho', 'F8'],
   ['osnap', 'Osnap', 'F3'],
   ['gumball', 'Gumball', ''],
+  ['history', 'History', ''],
 ]
 
 /** Bottom bar: cursor coordinates, current layer, selection, object snaps and drawing aids. */
