@@ -39,7 +39,7 @@ const memory = {
   contourSpacing: 3,
 }
 
-async function kernel(ctx: CommandContext): Promise<void> {
+export async function kernel(ctx: CommandContext): Promise<void> {
   if (kernelReady()) return
   ctx.log('Loading the geometry kernel (only the first time)…')
   await loadKernel()

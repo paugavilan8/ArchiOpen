@@ -104,6 +104,10 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
       ],
     ],
     [
+      'Drawing',
+      [item('Make 2D Drawing', 'Make2D')],
+    ],
+    [
       'Transform',
       [
         item('Move', 'Move', 'M'),

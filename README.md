@@ -38,6 +38,12 @@ se adjuntan a un borrador de *release*.
   plantas por niveles). `Explode` separa una polisuperficie en caras y `Join` las une de nuevo. Se ven sombreados en Perspective
   (cambia Wireframe/Shaded desde el menú de cada vista) y se mueven, giran, escalan y copian como
   cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`, `SW`.
+- Planos 2D: `Make2D` dibuja la selección vista desde una dirección, con eliminación de líneas
+  ocultas, como curvas planas en el plano XY (alzados, plantas y axonometrías). Opciones: `View`
+  (la vista activa, `Top`, `Front`, `Right`, `Back`, `Left` o `FourView`, que coloca alzado, planta,
+  perfil y axonometría en el sistema americano) y `HiddenLines` (dibuja también las ocultas). Las
+  líneas visibles van a la capa *Make2D Visible* y las ocultas a *Make2D Hidden*. Las vistas en
+  perspectiva se dibujan como proyección paralela.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.
