@@ -7,6 +7,8 @@ import { Settings } from './core/settings'
 import { Interaction } from './input/interaction'
 import { CommandLine } from './ui/commandLine'
 import { LayersPanel } from './ui/layersPanel'
+import { BlocksPanel } from './ui/blocksPanel'
+import { installBlockEditBanner } from './ui/blockEditBanner'
 import { Gumball } from './ui/gumball'
 import { closeMenu, isMenuOpen } from './ui/menu'
 import { buildMenuBar } from './ui/menuBar'
@@ -32,9 +34,11 @@ registerCommands(runner)
 
 const commandLine = new CommandLine(runner, input)
 const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, settings)
-const [propertiesPane, layersPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers'])
+const [propertiesPane, layersPane, blocksPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Blocks'])
 new PropertiesPanel(propertiesPane, doc, runner)
 new LayersPanel(layersPane, doc, ctx.log)
+new BlocksPanel(blocksPane, doc, runner, ctx.log)
+installBlockEditBanner(document.getElementById('viewports')!, doc, runner)
 buildMenuBar(document.getElementById('menus')!, runner, ctx)
 buildToolbars(document.getElementById('toolbar')!, document.getElementById('standard-bar')!, runner)
 installViewportMenus(display, runner)

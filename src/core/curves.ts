@@ -4,6 +4,7 @@ import {
   AnnotationGeometry,
   AnyCurve,
   HatchGeometry,
+  InstanceGeometry,
   ArcGeometry,
   BrepGeometry,
   CircleGeometry,
@@ -52,11 +53,20 @@ function arcAsCurve(g: CircleGeometry | ArcGeometry): CurveGeometry {
 export function transform<G extends Geometry>(
   g: G,
   m: Matrix4,
-): G extends BrepGeometry ? BrepGeometry : G extends AnnotationGeometry ? AnnotationGeometry : G extends HatchGeometry ? HatchGeometry : AnyCurve
+): G extends BrepGeometry
+  ? BrepGeometry
+  : G extends AnnotationGeometry
+    ? AnnotationGeometry
+    : G extends HatchGeometry
+      ? HatchGeometry
+      : G extends InstanceGeometry
+        ? InstanceGeometry
+        : AnyCurve
 export function transform(g: Geometry, m: Matrix4): Geometry {
   if (g.type === 'brep') return transformBrep(g, m)
   const linear = new Matrix3().setFromMatrix4(m)
   if (g.type === 'annotation') return transformAnnotation(g, m, linear)
+  if (g.type === 'instance') return { ...g, matrix: m.clone().multiply(new Matrix4().fromArray(g.matrix)).toArray() }
   if (g.type === 'hatch') {
     const x = g.xaxis.clone().applyMatrix3(linear)
     const y = g.yaxis.clone().applyMatrix3(linear)

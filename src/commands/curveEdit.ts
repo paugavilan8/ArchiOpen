@@ -6,6 +6,7 @@ import { intersect } from '../core/intersect'
 import { offset as offsetCurve } from '../core/offset'
 import { CancelError } from '../input/interaction'
 import { isOption, memory, plural, valueOption } from './helpers'
+import { explodeInstance } from './blocks'
 import type { Command, CommandContext } from './runner'
 
 /** Parameters where `target` meets any of the cutting objects (other than itself). */
@@ -140,7 +141,16 @@ const explode: Command = {
     const ids = await input.getObjects('Select objects to explode')
     let pieces = await brepHooks.explode(ctx, ids.filter((id) => doc.objects.get(id)?.geometry.type === 'brep'))
     for (const id of ids) {
-      const g = doc.objects.get(id)?.geometry
+      const obj = doc.objects.get(id)
+      const g = obj?.geometry
+      if (obj && g?.type === 'instance') {
+        // Blocks become their objects, one level at a time.
+        const parts = explodeInstance(ctx, obj)
+        doc.remove(id)
+        for (const part of parts) doc.add(part.geometry, part.layerId)
+        pieces += parts.length
+        continue
+      }
       if (g?.type === 'annotation') {
         // Texts and dimensions become their line work.
         const parts = wireframe(g).map((points): AnyCurve => ({ type: 'polyline', points, closed: false }))

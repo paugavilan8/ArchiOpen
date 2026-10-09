@@ -76,11 +76,24 @@ se adjuntan a un borrador de *release*.
   - cotas lineales, alineadas, de radio, diámetro y ángulo, que se convierten en cotas de
     ArchiOpen que siguen midiendo;
   - directrices, sombreados (con huecos; los patrones de AutoCAD se aproximan con los de
-    ArchiOpen) y bloques, que se descomponen en sus objetos (con escala, giro, matrices y bloques
+    ArchiOpen) y bloques, que siguen siendo bloques (con escala, giro, matrices y bloques
     anidados).
   - Puntos, multilíneas, multidirectrices, sólidos ACIS, imágenes y tablas aún no se cargan y se
     avisa de cuántos hay. Los DXF binarios y los DWG no se leen: guárdalos como DXF ASCII desde
     el programa de origen (o conviértelos con ODA File Converter, gratuito).
+- Bloques: `Block` (alias `B`) convierte la selección en un bloque con nombre y punto base;
+  `Insert` (alias `I`) coloca copias con escala y giro (en el plano de construcción de la vista);
+  `BlockEdit` edita un bloque en su sitio (el resto del modelo se atenúa y no se puede tocar) y al
+  terminar (`BlockEditFinish` o el botón *Finish*) se actualizan todas sus copias, también las que
+  están dentro de otros bloques; `BlockEditCancel` lo deja como estaba. `Explode` descompone una
+  copia en sus objetos y `Purge` borra los bloques sin usar. La pestaña *Blocks* lista los bloques
+  con una miniatura y el número de copias, y permite insertar, seleccionar sus copias, renombrar
+  (doble clic) y borrar. Se guardan en el `.archi`, se exportan al DXF como bloques e `INSERT`, y
+  al abrir o importar un DXF sus bloques se mantienen como bloques (pasados a las unidades del
+  modelo; si el nombre ya existe se numera). En `.3dm` y STEP se exportan descompuestos.
+- Grupos: `Group` (alias `G`), `Ungroup` (`UG`), `AddToGroup` y `RemoveFromGroup`. Al hacer clic
+  en un objeto agrupado se selecciona el grupo entero, y las copias de un grupo forman su propio
+  grupo.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.

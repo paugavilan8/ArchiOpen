@@ -1,6 +1,7 @@
-import { Vector3 } from 'three'
+import { Matrix4, Vector3 } from 'three'
+import { instanceContents } from '../core/blocks'
 import type { Layer } from '../core/document'
-import { endPoint, Geometry, isCurve, startPoint, tessellate, wireframe } from '../core/geometry'
+import { BlockDefinition, endPoint, Geometry, isCurve, startPoint, tessellate, wireframe } from '../core/geometry'
 import { hatchTriangles } from '../core/hatch'
 import { LINETYPES } from '../core/linetypes'
 
@@ -166,9 +167,38 @@ export function writeDxf(model: DxfModel): string {
   w.pair(0, 'ENDTAB')
   w.pair(0, 'ENDSEC')
 
+  // Blocks used by the objects (and by those blocks), each under a unique R12 name.
+  const blockNames = new Map<BlockDefinition, string>()
+  const usedNames = new Set<string>()
+  const collect = (g: Geometry) => {
+    if (g.type !== 'instance' || blockNames.has(g.definition)) return
+    let name = dxfName(g.definition.name)
+    for (let n = 2; usedNames.has(name); n++) name = `${dxfName(g.definition.name)}_${n}`
+    usedNames.add(name)
+    blockNames.set(g.definition, name)
+    for (const o of g.definition.objects) collect(o.geometry)
+  }
+  for (const obj of model.objects) collect(obj.geometry)
+  const out: Out = { w, blockNames }
+
+  w.pair(0, 'SECTION')
+  w.pair(2, 'BLOCKS')
+  for (const [definition, name] of blockNames) {
+    w.pair(0, 'BLOCK')
+    w.pair(8, '0')
+    w.pair(2, name)
+    w.pair(70, 0)
+    w.point(10, new Vector3())
+    w.pair(3, name)
+    for (const o of definition.objects) writeEntity(out, layerName.get(o.layerId) ?? '0', o.geometry)
+    w.pair(0, 'ENDBLK')
+    w.pair(8, '0')
+  }
+  w.pair(0, 'ENDSEC')
+
   w.pair(0, 'SECTION')
   w.pair(2, 'ENTITIES')
-  for (const obj of model.objects) writeEntity(w, layerName.get(obj.layerId) ?? '0', obj.geometry)
+  for (const obj of model.objects) writeEntity(out, layerName.get(obj.layerId) ?? '0', obj.geometry)
   w.pair(0, 'ENDSEC')
   w.pair(0, 'EOF')
   return w.toString()
@@ -200,7 +230,48 @@ function polyline(w: Writer, layer: string, points: Vector3[], closed: boolean):
   w.pair(8, layer)
 }
 
-function writeEntity(w: Writer, layer: string, g: Geometry): void {
+interface Out {
+  w: Writer
+  blockNames: Map<BlockDefinition, string>
+}
+
+/**
+ * An instance transform as an INSERT: position, rotation about Z and scales (a negative Y scale for a
+ * mirror). Null when it tilts out of the XY plane or shears, which INSERT cannot express.
+ */
+export function insertParameters(matrix: number[]): { at: Vector3; rotation: number; sx: number; sy: number; sz: number } | null {
+  const m = new Matrix4().fromArray(matrix)
+  const c0 = new Vector3().setFromMatrixColumn(m, 0)
+  const c1 = new Vector3().setFromMatrixColumn(m, 1)
+  const c2 = new Vector3().setFromMatrixColumn(m, 2)
+  const sx = c0.length()
+  const size = Math.max(sx, c1.length(), c2.length())
+  const tol = 1e-9 * size
+  if (Math.abs(c0.z) > tol || Math.abs(c1.z) > tol || Math.abs(c2.x) > tol || Math.abs(c2.y) > tol || Math.abs(c0.dot(c1)) > tol * size) return null
+  const rotation = Math.atan2(c0.y, c0.x)
+  const sy = c1.length() * Math.sign(c0.x * c1.y - c0.y * c1.x || 1)
+  return { at: new Vector3().setFromMatrixPosition(m), rotation, sx, sy, sz: c2.z }
+}
+
+function writeEntity(out: Out, layer: string, g: Geometry): void {
+  const { w } = out
+  if (g.type === 'instance') {
+    const insert = insertParameters(g.matrix)
+    if (!insert) {
+      // Tilted or sheared blocks go as what they hold.
+      for (const o of instanceContents(g)) writeEntity(out, layer, o.geometry)
+      return
+    }
+    w.pair(0, 'INSERT')
+    w.pair(8, layer)
+    w.pair(2, out.blockNames.get(g.definition)!)
+    w.point(10, insert.at)
+    w.pair(41, insert.sx)
+    w.pair(42, insert.sy)
+    w.pair(43, insert.sz)
+    w.pair(50, (insert.rotation * 180) / Math.PI)
+    return
+  }
   if (g.type === 'polyline') return polyline(w, layer, g.points, g.closed)
   if ((g.type === 'circle' || g.type === 'arc') && Math.abs(g.xaxis.clone().cross(g.yaxis).dot(Z)) > 1 - 1e-9) {
     const up = g.xaxis.clone().cross(g.yaxis).dot(Z) > 0
@@ -219,7 +290,7 @@ function writeEntity(w: Writer, layer: string, g: Geometry): void {
   }
   if (isCurve(g)) {
     if (g.type === 'polycurve') {
-      for (const segment of g.segments) writeEntity(w, layer, segment)
+      for (const segment of g.segments) writeEntity(out, layer, segment)
       return
     }
     return polyline(w, layer, tessellate(g), false)

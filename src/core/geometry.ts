@@ -2,6 +2,7 @@ import { Box3, Vector3 } from 'three'
 import { clampedKnots, evalBSpline } from '../math/nurbs'
 import { annotationLines } from './annotation'
 import { hatchLines } from './hatch'
+import { insertionPoint, instanceContents } from './blocks'
 
 export interface Plane {
   origin: Vector3
@@ -123,9 +124,29 @@ export interface HatchGeometry {
 export type AnyCurve = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
 
 // Geometry values are immutable: edits produce a new value, which keeps the caches below valid.
-export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry
+/** An object of a block definition, with the layer it had when the block was made. */
+export interface BlockObject {
+  layerId: number
+  geometry: Geometry
+}
 
-export const isCurve = (g: Geometry): g is AnyCurve => g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch'
+/** A named set of objects around a base point at the origin. Definitions are never changed in place. */
+export interface BlockDefinition {
+  name: string
+  objects: BlockObject[]
+}
+
+/** A block definition placed with a transform (column-major 4×4). Drawn with the instance's layer. */
+export interface InstanceGeometry {
+  type: 'instance'
+  definition: BlockDefinition
+  matrix: number[]
+}
+
+export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry | InstanceGeometry
+
+export const isCurve = (g: Geometry): g is AnyCurve =>
+  g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'instance'
 
 export interface SnapPoints {
   end: Vector3[]
@@ -312,7 +333,9 @@ export function wireframe(g: Geometry): Vector3[][] {
         ? annotationLines(g)
         : g.type === 'hatch'
           ? hatchWires(g)
-          : g.display.edges.map((flat) => {
+          : g.type === 'instance'
+            ? instanceContents(g).flatMap((o) => wireframe(o.geometry))
+            : g.display.edges.map((flat) => {
           const pts: Vector3[] = []
           for (let i = 0; i < flat.length; i += 3) pts.push(new Vector3(flat[i], flat[i + 1], flat[i + 2]))
           return pts
@@ -386,6 +409,17 @@ function buildSnapPoints(g: Geometry): SnapPoints {
       break
     case 'hatch':
       break
+    case 'instance':
+      // The insertion point, then the snaps of what the block draws.
+      snaps.end.push(insertionPoint(g))
+      for (const o of instanceContents(g)) {
+        const s = snapPoints(o.geometry)
+        snaps.end.push(...s.end)
+        snaps.mid.push(...s.mid)
+        snaps.cen.push(...s.cen)
+        snaps.quad.push(...s.quad)
+      }
+      break
     case 'brep':
       // Corners and edge midpoints of surfaces and solids.
       for (const edge of wireframe(g)) {
@@ -415,6 +449,7 @@ export function typeName(g: Geometry): string {
   if (g.type === 'polyline') return g.points.length === 2 ? 'line' : 'polyline'
   if (g.type === 'brep') return g.kind
   if (g.type === 'hatch') return 'hatch'
+  if (g.type === 'instance') return 'block'
   if (g.type === 'annotation') return g.kind === 'text' || g.kind === 'leader' ? g.kind : 'dimension'
   return g.type
 }
@@ -470,11 +505,17 @@ export function geometryToJSON(g: Geometry): unknown {
       }
     case 'brep':
       return { type: g.type, brep: g.brep, matrix: g.matrix, kind: g.kind, faces: g.faces, display: g.display }
+    case 'instance':
+      return { type: g.type, block: g.definition.name, matrix: g.matrix }
   }
 }
 
+/** Block definitions by name, for reading instances. */
+export type BlockLookup = (name: string) => BlockDefinition | undefined
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function geometryFromJSON(j: any): Geometry {
+export function geometryFromJSON(j: any, blocks?: BlockLookup): Geometry {
+  const read = (x: unknown) => geometryFromJSON(x, blocks)
   switch (j.type) {
     case 'polyline':
       return { type: 'polyline', points: j.points.map(fromTriple), closed: !!j.closed }
@@ -496,11 +537,11 @@ export function geometryFromJSON(j: any): Geometry {
       return { type: 'curve', degree, points, knots: j.knots ?? clampedKnots(points.length, degree) }
     }
     case 'polycurve':
-      return { type: 'polycurve', segments: j.segments.map(geometryFromJSON) }
+      return { type: 'polycurve', segments: j.segments.map(read) }
     case 'hatch':
       return {
         type: 'hatch',
-        loops: j.loops.map(geometryFromJSON),
+        loops: j.loops.map(read),
         pattern: j.pattern,
         scale: j.scale,
         rotation: j.rotation ?? 0,
@@ -522,6 +563,9 @@ export function geometryFromJSON(j: any): Geometry {
       }
     case 'brep':
       return { type: 'brep', brep: j.brep, matrix: j.matrix ?? null, kind: j.kind, faces: j.faces, display: j.display }
+    case 'instance':
+      // A missing definition reads as an empty block rather than failing the whole file.
+      return { type: 'instance', definition: blocks?.(j.block) ?? { name: j.block, objects: [] }, matrix: j.matrix }
     default:
       throw new Error(`Unknown geometry type: ${j.type}`)
   }

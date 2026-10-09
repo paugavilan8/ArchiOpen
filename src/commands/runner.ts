@@ -72,7 +72,8 @@ export class CommandRunner {
       this.cancel()
       await this.current
     }
-    const [name, ...script] = macro.trim().split(/\s+/)
+    // Quoted answers can hold spaces: Insert "Mesa redonda".
+    const [name, ...script] = (macro.trim().match(/"[^"]*"|\S+/g) ?? ['']).map((t) => t.replace(/^"(.*)"$/, '$1'))
     const command = this.commands.get(name.toLowerCase())
     if (!command) {
       this.ctx.log(`Unknown command: ${name}`)

@@ -37,13 +37,20 @@ export function transformedPreview(ctx: CommandContext, ids: number[], makeMatri
 
 /** Transforms the objects in place, or adds transformed copies on the same layers. */
 export function applyTransform(ctx: CommandContext, ids: number[], m: Matrix4, copy: boolean): void {
+  // Copies of grouped objects make groups of their own, one for each original group.
+  const newGroups = new Map<number, number[]>()
   for (const id of ids) {
     const obj = ctx.doc.objects.get(id)
     if (!obj) continue
     const moved = transform(obj.geometry, m)
-    if (copy) ctx.doc.add(moved, obj.layerId)
-    else ctx.doc.setGeometry(id, moved)
+    if (!copy) {
+      ctx.doc.setGeometry(id, moved)
+      continue
+    }
+    const added = ctx.doc.add(moved, obj.layerId)
+    for (const g of obj.groups ?? []) newGroups.set(g, [...(newGroups.get(g) ?? []), added.id])
   }
+  for (const members of newGroups.values()) ctx.doc.group(members)
 }
 
 export function rotationAbout(center: Vector3, axis: Vector3, angle: number): Matrix4 {

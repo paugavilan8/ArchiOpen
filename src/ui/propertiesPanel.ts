@@ -1,4 +1,4 @@
-import type { Vector3 } from 'three'
+import { Matrix4, Vector3 } from 'three'
 import type { CommandRunner } from '../commands/runner'
 import type { CadObject, Document } from '../core/document'
 import { length } from '../core/curves'
@@ -61,6 +61,18 @@ function geometryRows(g: Geometry): Row[] {
       ]
     case 'hatch':
       return [['Loops', String(g.loops.length)]]
+    case 'instance': {
+      const m = new Matrix4().fromArray(g.matrix)
+      const scale = new Vector3().setFromMatrixScale(m)
+      const x = new Vector3().setFromMatrixColumn(m, 0)
+      return [
+        ['Block', g.definition.name],
+        ['Insertion point', point(new Vector3().setFromMatrixPosition(m))],
+        ['Scale', [scale.x, scale.y, scale.z].every((s) => Math.abs(s - scale.x) < 1e-9) ? fmt(scale.x) : `${fmt(scale.x)}, ${fmt(scale.y)}, ${fmt(scale.z)}`],
+        ['Rotation', `${fmt((Math.atan2(x.y, x.x) * 180) / Math.PI)}°`],
+        ['Objects', String(g.definition.objects.length)],
+      ]
+    }
     case 'annotation':
       if (g.kind === 'text' || g.kind === 'leader') return [['Insertion point', point(g.points[g.kind === 'text' ? 0 : g.points.length - 1])]]
       return [['Value', g.kind === 'angle' ? `${fmt(measure(g))}°` : fmt(measure(g))]]
@@ -111,7 +123,11 @@ export class PropertiesPanel {
         counts.set(type, (counts.get(type) ?? 0) + 1)
       }
       const type = [...counts].map(([name, n]) => `${n} ${plural(name, n)}`).join(', ')
-      const object = this.section('Object', [['Type', selected.length === 1 ? capitalize(typeName(selected[0].geometry)) : type]])
+      const groups = new Set(selected.flatMap((o) => o.groups ?? []))
+      const object = this.section('Object', [
+        ['Type', selected.length === 1 ? capitalize(typeName(selected[0].geometry)) : type],
+        ...(groups.size > 0 ? ([['Grouped', groups.size === 1 ? 'Yes' : `In ${groups.size} groups`]] as Row[]) : []),
+      ])
       object.querySelector('dl')!.append(...this.layerField(selected))
       sections.push(object)
       if (selected.length === 1) {

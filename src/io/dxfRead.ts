@@ -1,7 +1,7 @@
 import { Matrix4, Vector3 } from 'three'
 import { transform } from '../core/curves'
 import type { Layer } from '../core/document'
-import type { AnnotationGeometry, AnyCurve, Geometry, SegmentGeometry } from '../core/geometry'
+import type { AnnotationGeometry, AnyCurve, BlockDefinition, BlockObject, Geometry, SegmentGeometry } from '../core/geometry'
 import { LINETYPE_NAMES, PRINT_WIDTHS } from '../core/linetypes'
 import { evalBSpline, interpolate } from '../math/nurbs'
 import { textShape, LINE_SPACING } from '../text/strokeFont'
@@ -25,6 +25,7 @@ interface Rec {
 }
 
 interface Block {
+  name: string
   base: Vector3
   entities: Rec[]
 }
@@ -454,7 +455,7 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
       let body: Rec[] = []
       for (const r of recs) {
         if (r.type === 'BLOCK') {
-          current = { base: point(r, 10), entities: [] }
+          current = { name: str(r, 2), base: point(r, 10), entities: [] }
           body = []
           blocks.set(str(r, 2).toUpperCase(), current)
         } else if (r.type === 'ENDBLK') {
@@ -490,18 +491,37 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
   const defaultStyle = dimStyles.get('STANDARD') ?? dimStyles.get('ISO-25') ?? { height: 2.5, precision: 2, tick: false }
   const styleOf = (r: Rec) => dimStyles.get(str(r, 3).toUpperCase()) ?? defaultStyle
 
-  /** Adds an entity (or, for a block reference, its contents) with a transform and the layer that stands in for layer 0. */
-  const add = (r: Rec, m: Matrix4 | null, byBlock: string | null, depth: number): void => {
+  type Emit = (g: Geometry, layerName: string) => void
+  const toModel: Emit = (g, layerName) => objects.push({ layer: layerOf(layerName), geometry: g })
+
+  // Block definitions, converted the first time a reference needs them.
+  const definitions = new Map<string, BlockDefinition | null>()
+  const definitionOf = (key: string, depth: number): BlockDefinition | null => {
+    if (definitions.has(key)) return definitions.get(key)!
+    const block = blocks.get(key)
+    if (!block || depth > 16) return null
+    definitions.set(key, null) // A block that refers to itself gets nothing.
+    const toBase = new Matrix4().makeTranslation(-block.base.x, -block.base.y, -block.base.z)
+    const objects: BlockObject[] = []
+    for (const child of block.entities) add(child, (g, layerName) => objects.push({ layerId: layerOf(layerName), geometry: transform(g, toBase) }), depth + 1)
+    const definition = { name: block.name, objects }
+    definitions.set(key, definition)
+    return definition
+  }
+
+  /** Converts an entity and hands the result (geometry and layer name) to `emit`. */
+  const add = (r: Rec, emit: Emit, depth: number): void => {
     if (num(r, 67) === 1) return // Paper space.
-    let layerName = str(r, 8, '0')
-    if (layerName === '0' && byBlock) layerName = byBlock
+    const layerName = str(r, 8, '0')
     const out = (g: Geometry | null) => {
-      if (g) objects.push({ layer: layerOf(layerName), geometry: m ? transform(g, m) : g })
+      if (g) emit(g, layerName)
     }
 
     if (r.type === 'INSERT') {
-      const block = blocks.get(str(r, 2).toUpperCase())
-      if (!block || depth > 16) return
+      // Block references stay blocks; MINSERT grids make one reference per cell.
+      const definition = definitionOf(str(r, 2).toUpperCase(), depth)
+      for (const attrib of r.children) if (!(num(attrib, 70) & 1)) add({ ...attrib, type: 'TEXT' }, emit, depth)
+      if (!definition || definition.objects.length === 0) return
       const o = ocs(r)
       const basis = new Matrix4().makeBasis(o.ax, o.ay, o.n)
       const at = point(r, 10)
@@ -519,12 +539,9 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
             .multiply(rotation)
             .multiply(new Matrix4().makeTranslation(ci * num(r, 44), ri * num(r, 45), 0))
             .multiply(new Matrix4().makeScale(scale.x, scale.y, scale.z))
-            .multiply(new Matrix4().makeTranslation(-block.base.x, -block.base.y, -block.base.z))
-          const world = m ? m.clone().multiply(local) : local
-          for (const child of block.entities) add(child, world, layerName, depth + 1)
+          out({ type: 'instance', definition, matrix: local.toArray() })
         }
       }
-      for (const attrib of r.children) if (!(num(attrib, 70) & 1)) add({ ...attrib, type: 'TEXT' }, m, byBlock, depth)
       return
     }
 
@@ -648,9 +665,9 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
       case 'DIMENSION': {
         const dim = dimension(r, styleOf(r))
         if (dim) return out(dim)
-        // Other kinds (ordinate) are drawn from their block.
+        // Other kinds (ordinate) are drawn from their block, which is in model coordinates.
         const block = blocks.get(str(r, 2).toUpperCase())
-        if (block) for (const child of block.entities) add(child, m, layerName, depth + 1)
+        if (block && depth < 16) for (const child of block.entities) add(child, emit, depth + 1)
         return
       }
       case 'LEADER': {
@@ -703,7 +720,7 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
     }
   }
 
-  for (const r of entities) add(r, null, null, 0)
+  for (const r of entities) add(r, toModel, 0)
 
   const skippedNamed = new Map<[string, string], number>()
   for (const [type, count] of skipped) skippedNamed.set(SKIPPED_NAMES[type] ?? [`${type.toLowerCase()} entity`, `${type.toLowerCase()} entities`], count)

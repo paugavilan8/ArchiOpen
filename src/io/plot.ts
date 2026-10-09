@@ -1,4 +1,5 @@
 import { PerspectiveCamera, Vector3 } from 'three'
+import { flatten } from '../core/blocks'
 import type { CadObject, Document } from '../core/document'
 import { tessellate, wireframe } from '../core/geometry'
 import { dashesOf, DEFAULT_PRINT_WIDTH } from '../core/linetypes'
@@ -72,27 +73,29 @@ export function plotSheet(doc: Document, vp: Viewport, objects: CadObject[], opt
   for (const obj of objects) {
     let entry = byLayer.get(obj.layerId)
     if (!entry) byLayer.set(obj.layerId, (entry = { lines: [], fills: [] }))
-    const g = obj.geometry
-    if (g.type === 'hatch' && g.pattern === 'Solid') {
-      const region = g.loops.map((loop) => tessellate(loop).map(project).filter((p): p is Point => p !== null))
-      region.flat().forEach(grow)
-      entry.fills.push(region)
-      continue
-    }
-    for (const line of wireframe(g)) {
-      // A line that passes behind a perspective camera is split there.
-      let run: Point[] = []
-      for (const p of line) {
-        const q = project(p)
-        if (q) {
-          run.push(q)
-          grow(q)
-        } else if (run.length > 0) {
-          entry.lines.push(run)
-          run = []
-        }
+    // Blocks print what they hold, on the block's layer.
+    for (const g of flatten(obj.geometry)) {
+      if (g.type === 'hatch' && g.pattern === 'Solid') {
+        const region = g.loops.map((loop) => tessellate(loop).map(project).filter((p): p is Point => p !== null))
+        region.flat().forEach(grow)
+        entry.fills.push(region)
+        continue
       }
-      if (run.length > 1) entry.lines.push(run)
+      for (const line of wireframe(g)) {
+        // A line that passes behind a perspective camera is split there.
+        let run: Point[] = []
+        for (const p of line) {
+          const q = project(p)
+          if (q) {
+            run.push(q)
+            grow(q)
+          } else if (run.length > 0) {
+            entry.lines.push(run)
+            run = []
+          }
+        }
+        if (run.length > 1) entry.lines.push(run)
+      }
     }
   }
 

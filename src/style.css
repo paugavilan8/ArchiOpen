@@ -914,3 +914,74 @@ input:focus-visible {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Blocks */
+
+.block-thumb {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.block-thumb polyline {
+  vector-effect: non-scaling-stroke;
+}
+
+.block-list li {
+  grid-template-columns: 26px minmax(0, 1fr) auto 24px 24px 24px;
+  height: 34px;
+}
+
+.block-list li.panel-empty {
+  display: block;
+  height: auto;
+  cursor: default;
+}
+
+.block-edit-banner {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 12px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+}
+
+.block-edit-banner[hidden] {
+  display: none;
+}
+
+.block-edit-banner span {
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.block-edit-banner button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.block-edit-banner button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}

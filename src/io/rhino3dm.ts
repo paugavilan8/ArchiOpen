@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import type { Brep, Curve, GeometryBase, NurbsCurve, RhinoModule } from 'rhino3dm'
 import { chain } from '../core/curves'
 import type { Layer } from '../core/document'
+import { flatten } from '../core/blocks'
 import { wireframe } from '../core/geometry'
 import type { AnyCurve, BrepGeometry, Geometry, SegmentGeometry } from '../core/geometry'
 import { interpolate } from '../math/nurbs'
@@ -367,18 +368,21 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Arr
     for (const obj of model.objects) {
       const attributes = new rhino.ObjectAttributes()
       attributes.layerIndex = indexOf.get(obj.layerId) ?? 0
-      const g = obj.geometry
-      if (g.type === 'annotation') {
-        // Texts and dimensions go as their line work.
-        for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
-      } else if (g.type === 'hatch') {
-        // Hatches go as their boundaries and pattern lines.
-        for (const loop of g.loops) file.objects().add(writeCurve(rhino, loop), attributes)
-        if (g.pattern !== 'Solid') {
+      // Blocks go as the objects they draw.
+      for (const g of flatten(obj.geometry)) {
+        if (g.type === 'instance') continue
+        if (g.type === 'annotation') {
+          // Texts and dimensions go as their line work.
           for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
+        } else if (g.type === 'hatch') {
+          // Hatches go as their boundaries and pattern lines.
+          for (const loop of g.loops) file.objects().add(writeCurve(rhino, loop), attributes)
+          if (g.pattern !== 'Solid') {
+            for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
+          }
+        } else {
+          file.objects().add(g.type === 'brep' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
         }
-      } else {
-        file.objects().add(g.type === 'brep' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
       }
     }
     return file.toByteArray()

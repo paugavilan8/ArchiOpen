@@ -1,6 +1,7 @@
 import { Matrix4 } from 'three'
 import * as R from 'replicad'
 import { join, transform } from '../core/curves'
+import { flatten } from '../core/blocks'
 import { wireframe } from '../core/geometry'
 import type { AnyCurve, Geometry } from '../core/geometry'
 import { curveToWire, shapeOf } from './brep'
@@ -49,11 +50,14 @@ export async function writeStep(objects: StepObject[], units: string): Promise<U
   const { code, scale } = unitOf(units)
   const unit = code as R.SupportedUnit
   const toFile = new Matrix4().makeScale(scale, scale, scale)
-  const shapes = objects.map((o) => ({
-    shape: inFileUnits(o.geometry, toFile, scale),
-    name: o.name,
-    color: o.color,
-  }))
+  // Blocks go as the objects they draw.
+  const shapes = objects.flatMap((o) =>
+    flatten(o.geometry).map((g) => ({
+      shape: inFileUnits(g, toFile, scale),
+      name: o.name,
+      color: o.color,
+    })),
+  )
   const blob = R.exportSTEP(shapes, { unit, modelUnit: unit })
   return new Uint8Array(await blob.arrayBuffer())
 }
@@ -66,6 +70,7 @@ function inFileUnits(g: Geometry, toFile: Matrix4, scale: number): R.AnyShape {
   }
   // Hatches go as their boundaries.
   if (scaled.type === 'hatch') return R.makeCompound(scaled.loops.map(curveToWire))
+  if (scaled.type === 'instance') return R.makeCompound([])
   return scaled.type === 'brep' ? shapeOf(scaled) : curveToWire(scaled)
 }
 

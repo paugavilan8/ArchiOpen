@@ -1,5 +1,5 @@
 import { controlPoints } from './curves'
-import { Geometry, geometryFromJSON, geometryToJSON } from './geometry'
+import { BlockDefinition, Geometry, geometryFromJSON, geometryToJSON } from './geometry'
 
 export interface Layer {
   id: number
@@ -17,6 +17,20 @@ export interface CadObject {
   id: number
   layerId: number
   geometry: Geometry
+  /** Groups the object belongs to; picking one member picks them all. */
+  groups?: number[]
+}
+
+/**
+ * Editing a block in place: the definition's objects are in the model (from `startId` on, with
+ * anything drawn meanwhile), the instance being edited is hidden and everything else is shown dimmed.
+ */
+export interface BlockEdit {
+  block: string
+  instanceId: number
+  /** The edited instance's transform, to take the objects back into the block's own coordinates. */
+  matrix: number[]
+  startId: number
 }
 
 export type ChangeKind = 'objects' | 'selection' | 'layers'
@@ -27,6 +41,9 @@ type Action =
   | { type: 'remove'; obj: CadObject }
   | { type: 'modify'; id: number; before: Geometry; after: Geometry }
   | { type: 'relayer'; id: number; before: number; after: number }
+  | { type: 'groups'; id: number; before: number[] | undefined; after: number[] | undefined }
+  | { type: 'block'; name: string; before: BlockDefinition | undefined; after: BlockDefinition | undefined }
+  | { type: 'blockEdit'; before: BlockEdit | null; after: BlockEdit | null }
 
 const LAYER_COLORS = ['#c0392b', '#1f6fb5', '#1e8449', '#b9770e', '#7d3c98', '#117a8b']
 
@@ -42,6 +59,10 @@ export class Document {
   /** Selected control points, by object id. */
   readonly pointSelection = new Map<number, Set<number>>()
   layers: Layer[] = defaultLayers()
+  /** Block definitions by name. */
+  readonly blocks = new Map<string, BlockDefinition>()
+  /** Set while a block is being edited in place. */
+  blockEdit: BlockEdit | null = null
   currentLayerId = 1
   /** Model units, named as in Rhino ("Millimeters", "Meters", ...). */
   units = 'Millimeters'
@@ -50,6 +71,7 @@ export class Document {
 
   private nextObjectId = 1
   private nextLayerId = 2
+  private nextGroupId = 1
   private undoStack: Action[][] = []
   private redoStack: Action[][] = []
   private tx: Action[] | null = null
@@ -87,6 +109,57 @@ export class Document {
     if (obj && obj.layerId !== layerId) this.record({ type: 'relayer', id, before: obj.layerId, after: layerId })
   }
 
+  /** The id the next added object will get. */
+  get nextId(): number {
+    return this.nextObjectId
+  }
+
+  /** Puts the objects in a new group. Returns its id. */
+  group(ids: Iterable<number>): number {
+    const group = this.nextGroupId++
+    for (const id of ids) this.setGroups(id, [...(this.objects.get(id)?.groups ?? []), group])
+    return group
+  }
+
+  setGroups(id: number, groups: number[] | undefined): void {
+    const obj = this.objects.get(id)
+    if (!obj) return
+    const after = groups && groups.length > 0 ? [...new Set(groups)] : undefined
+    if (String(obj.groups ?? '') !== String(after ?? '')) this.record({ type: 'groups', id, before: obj.groups, after })
+  }
+
+  /** The objects, with every other member of the groups they belong to. */
+  withGroups(ids: Iterable<number>): number[] {
+    const out = new Set(ids)
+    const groups = new Set<number>()
+    for (const id of out) for (const g of this.objects.get(id)?.groups ?? []) groups.add(g)
+    if (groups.size === 0) return [...out]
+    for (const obj of this.objects.values()) if (obj.groups?.some((g) => groups.has(g)) && this.isSelectable(obj)) out.add(obj.id)
+    return [...out]
+  }
+
+  /** Adds, replaces (or with null removes) a block definition. */
+  setBlock(name: string, definition: BlockDefinition | null): void {
+    const before = this.blocks.get(name)
+    if (before !== (definition ?? undefined)) this.record({ type: 'block', name, before, after: definition ?? undefined })
+  }
+
+  /** How many objects place each block, counting the ones nested in other blocks' definitions once. */
+  blockUsage(): Map<string, number> {
+    const usage = new Map<string, number>()
+    for (const obj of this.objects.values()) {
+      if (obj.geometry.type === 'instance') usage.set(obj.geometry.definition.name, (usage.get(obj.geometry.definition.name) ?? 0) + 1)
+    }
+    for (const def of this.blocks.values()) {
+      for (const o of def.objects) if (o.geometry.type === 'instance') usage.set(o.geometry.definition.name, (usage.get(o.geometry.definition.name) ?? 0) + 1)
+    }
+    return usage
+  }
+
+  setBlockEdit(state: BlockEdit | null): void {
+    this.record({ type: 'blockEdit', before: this.blockEdit, after: state })
+  }
+
   layerOf(obj: CadObject): Layer {
     return this.layers.find((l) => l.id === obj.layerId) ?? this.layers[0]
   }
@@ -97,7 +170,12 @@ export class Document {
 
   isSelectable(obj: CadObject): boolean {
     const layer = this.layerOf(obj)
-    return layer.visible && !layer.locked
+    return layer.visible && !layer.locked && this.isEditable(obj)
+  }
+
+  /** While a block is edited, only its objects can be picked. */
+  isEditable(obj: CadObject): boolean {
+    return !this.blockEdit || obj.id >= this.blockEdit.startId
   }
 
   // --- History ---------------------------------------------------------------
@@ -164,6 +242,20 @@ export class Document {
         if (obj) obj.layerId = inverse ? action.before : action.after
         break
       }
+      case 'groups': {
+        const obj = this.objects.get(action.id)
+        if (obj) obj.groups = inverse ? action.before : action.after
+        break
+      }
+      case 'block': {
+        const definition = inverse ? action.before : action.after
+        if (definition) this.blocks.set(action.name, definition)
+        else this.blocks.delete(action.name)
+        break
+      }
+      case 'blockEdit':
+        this.blockEdit = inverse ? action.before : action.after
+        break
     }
   }
 
@@ -308,21 +400,35 @@ export class Document {
       units: this.units,
       layers: this.layers,
       currentLayerId: this.currentLayerId,
+      blocks: [...this.blocks.values()].map((b) => ({
+        name: b.name,
+        objects: b.objects.map((o) => ({ layerId: o.layerId, geometry: geometryToJSON(o.geometry) })),
+      })),
       objects: [...this.objects.values()].map((o) => ({
         id: o.id,
         layerId: o.layerId,
+        ...(o.groups ? { groups: o.groups } : {}),
         geometry: geometryToJSON(o.geometry),
       })),
+      ...(this.blockEdit ? { blockEdit: this.blockEdit } : {}),
     }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   load(json: any): void {
     const layers: Layer[] = json.layers?.length ? json.layers : defaultLayers()
+    // Definitions first, empty, so that blocks nested in blocks find each other in any order.
+    const blocks = new Map<string, BlockDefinition>()
+    for (const b of json.blocks ?? []) blocks.set(b.name, { name: b.name, objects: [] })
+    const lookup = (name: string) => blocks.get(name)
+    for (const b of json.blocks ?? []) {
+      blocks.get(b.name)!.objects.push(...b.objects.map((o: any) => ({ layerId: o.layerId, geometry: geometryFromJSON(o.geometry, lookup) })))
+    }
     const objects: CadObject[] = (json.objects ?? []).map((o: any) => ({
       id: o.id,
       layerId: o.layerId,
-      geometry: geometryFromJSON(o.geometry),
+      ...(o.groups?.length ? { groups: o.groups } : {}),
+      geometry: geometryFromJSON(o.geometry, lookup),
     }))
 
     this.layers = layers
@@ -330,11 +436,16 @@ export class Document {
     this.currentLayerId = layers.some((l) => l.id === json.currentLayerId) ? json.currentLayerId : layers[0].id
     this.objects.clear()
     for (const obj of objects) this.objects.set(obj.id, obj)
+    this.blocks.clear()
+    for (const [name, definition] of blocks) this.blocks.set(name, definition)
+    this.blockEdit = json.blockEdit ?? null
     this.selection.clear()
     this.pointsOn.clear()
     this.pointSelection.clear()
-    this.nextObjectId = Math.max(0, ...objects.map((o) => o.id)) + 1
-    this.nextLayerId = Math.max(0, ...layers.map((l) => l.id)) + 1
+    // (A loop rather than Math.max(...ids), which overflows the stack for very large drawings.)
+    this.nextObjectId = objects.reduce((max, o) => Math.max(max, o.id), 0) + 1
+    this.nextLayerId = layers.reduce((max, l) => Math.max(max, l.id), 0) + 1
+    this.nextGroupId = objects.reduce((max, o) => Math.max(max, ...(o.groups ?? [])), 0) + 1
     this.undoStack = []
     this.redoStack = []
     this.tx = null

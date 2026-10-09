@@ -1,4 +1,5 @@
 import { annotationCommands } from './annotate'
+import { blockCommands } from './blocks'
 import { curveEditCommands } from './curveEdit'
 import { drawCommands } from './draw'
 import { drawingCommands } from './drawing'
@@ -34,6 +35,10 @@ const ALIASES: Record<string, string> = {
   FE: 'FilletEdge',
   SW: 'Sweep1',
   H: 'Hatch',
+  B: 'Block',
+  I: 'Insert',
+  G: 'Group',
+  UG: 'Ungroup',
   PRINT: 'ExportPDF',
   U: 'Undo',
   S: 'Snap',
@@ -45,6 +50,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }

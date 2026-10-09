@@ -63,6 +63,12 @@ const SIDE_TOOLS: Tool[][] = [
     { macro: 'Leader', tip: 'Leader', icon: 'leader' },
     { macro: 'Hatch', tip: 'Hatch  (H)', icon: 'hatch' },
   ],
+  [
+    { macro: 'Block', tip: 'Make a block from the selection  (B)', icon: 'block' },
+    { macro: 'Insert', tip: 'Insert a block  (I)', icon: 'insert' },
+    { macro: 'Group', tip: 'Group  (G)', icon: 'group' },
+    { macro: 'Ungroup', tip: 'Ungroup  (UG)', icon: 'ungroup' },
+  ],
 ]
 
 /** File, history and view tools, in the horizontal bar under the command line. */

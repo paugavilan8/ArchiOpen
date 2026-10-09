@@ -1,6 +1,7 @@
-import type { Vector3 } from 'three'
+import { Matrix4, type Vector3 } from 'three'
 import { removeControlPoints, translate } from '../core/curves'
 import { wireframe } from '../core/geometry'
+import { applyTransform } from './helpers'
 import type { Command, CommandContext } from './runner'
 
 /** Preview callback that draws the given objects displaced from `from` to the cursor. */
@@ -43,10 +44,7 @@ const copy: Command = {
       const to = await input.getPoint({ prompt: 'Point to copy to', base: from.point, preview })
       if (to.kind !== 'point') break
       const delta = to.point.clone().sub(from.point)
-      for (const id of ids) {
-        const source = doc.objects.get(id)!
-        doc.add(translate(source.geometry, delta), source.layerId)
-      }
+      applyTransform(ctx, ids, new Matrix4().makeTranslation(delta.x, delta.y, delta.z), true)
     }
   },
 }

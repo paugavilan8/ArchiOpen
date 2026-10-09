@@ -297,7 +297,7 @@ export class Interaction {
     if (!hit) return null
     if (!this.doc.selection.has(hit.id)) {
       this.doc.clearPointSelection()
-      this.doc.select([hit.id])
+      this.doc.select(this.doc.withGroups([hit.id]))
     }
     return this.doc.selectedPointCount > 0 ? null : hit.point
   }
@@ -403,7 +403,7 @@ export class Interaction {
         return
       }
       if (mode === 'replace') this.doc.clearPointSelection()
-      this.doc.select(this.pickWindow(vp, drag.startX, drag.startY, pos.x, pos.y, crossing), mode)
+      this.doc.select(this.doc.withGroups(this.pickWindow(vp, drag.startX, drag.startY, pos.x, pos.y, crossing)), mode)
       return
     }
     const cp = this.request?.kind === 'objects' ? null : this.pickControlPoint(vp, pos.x, pos.y)
@@ -414,7 +414,8 @@ export class Interaction {
     }
     if (mode === 'replace') this.doc.clearPointSelection()
     const id = this.pickObject(vp, pos.x, pos.y)
-    this.doc.select(id === null ? [] : [id], mode)
+    // Picking a member of a group picks the whole group.
+    this.doc.select(id === null ? [] : this.doc.withGroups([id]), mode)
   }
 
   /** The control point under the cursor, among objects with points on. */

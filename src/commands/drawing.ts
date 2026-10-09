@@ -1,4 +1,5 @@
 import { Box3, Matrix4, Vector3 } from 'three'
+import { flatten } from '../core/blocks'
 import { transform } from '../core/curves'
 import { AnyCurve, expandBox, isCurve, tessellate } from '../core/geometry'
 import type { Layer } from '../core/document'
@@ -83,7 +84,8 @@ const make2d: Command = {
   async run(ctx) {
     const { doc, input, display, log } = ctx
     const ids = await input.getObjects('Select objects to draw')
-    const objects = ids.map((id) => doc.objects.get(id)!.geometry)
+    // Blocks are drawn from what they hold.
+    const objects = ids.flatMap((id) => flatten(doc.objects.get(id)!.geometry))
 
     const model = new Box3()
     for (const g of objects) {

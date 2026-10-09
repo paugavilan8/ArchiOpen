@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Document } from '../core/document'
 import { controlPoints } from '../core/curves'
 import { BrepGeometry, expandBox, wireframe } from '../core/geometry'
+import { flatten } from '../core/blocks'
 import { hatchTriangles } from '../core/hatch'
 import { dashesOf } from '../core/linetypes'
 import { Viewport, ViewKind } from './viewport'
@@ -167,11 +168,13 @@ export class Display {
     // Line work is batched into one set of segments per material, so large drawings take a few draw
     // calls instead of one per line.
     const batches = new Map<THREE.Material, { positions: number[]; distances: number[]; selected: boolean }>()
+    const edit = this.doc.blockEdit
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
-      if (!layer.visible || this.hidden.has(obj.id)) continue
+      if (!layer.visible || this.hidden.has(obj.id) || edit?.instanceId === obj.id) continue
       const selected = this.doc.selection.has(obj.id)
-      const color = selected ? SELECTED_COLOR : layer.locked ? LOCKED_COLOR : layer.color
+      // While a block is edited, everything else is shown dimmed.
+      const color = selected ? SELECTED_COLOR : layer.locked || !this.doc.isEditable(obj) ? LOCKED_COLOR : layer.color
       const material = this.material(color, layer.linetype)
       let batch = batches.get(material)
       if (!batch) batches.set(material, (batch = { positions: [], distances: [], selected }))
@@ -187,19 +190,22 @@ export class Display {
           along += d
         }
       }
-      if (obj.geometry.type === 'hatch' && obj.geometry.pattern === 'Solid') {
-        // Solid hatches are filled in every viewport, under the line work.
-        const fill = new THREE.BufferGeometry()
-        fill.setAttribute('position', new THREE.Float32BufferAttribute(hatchTriangles(obj.geometry), 3))
-        const mesh = new THREE.Mesh(fill, this.fillMaterial(color))
-        mesh.userData.id = obj.id
-        this.fillGroup.add(mesh)
-      }
-      if (obj.geometry.type === 'brep') {
-        const mesh = new THREE.Mesh(surfaceGeometry(obj.geometry), this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked))
-        mesh.layers.set(SHADED_LAYER)
-        mesh.userData.id = obj.id
-        this.surfaceGroup.add(mesh)
+      // Blocks fill and shade what they hold like loose objects.
+      for (const g of flatten(obj.geometry)) {
+        if (g.type === 'hatch' && g.pattern === 'Solid') {
+          // Solid hatches are filled in every viewport, under the line work.
+          const fill = new THREE.BufferGeometry()
+          fill.setAttribute('position', new THREE.Float32BufferAttribute(hatchTriangles(g), 3))
+          const mesh = new THREE.Mesh(fill, this.fillMaterial(color))
+          mesh.userData.id = obj.id
+          this.fillGroup.add(mesh)
+        }
+        if (g.type === 'brep') {
+          const mesh = new THREE.Mesh(surfaceGeometry(g), this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj)))
+          mesh.layers.set(SHADED_LAYER)
+          mesh.userData.id = obj.id
+          this.surfaceGroup.add(mesh)
+        }
       }
     }
     for (const [material, batch] of batches) {
