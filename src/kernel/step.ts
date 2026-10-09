@@ -73,6 +73,7 @@ function inFileUnits(g: Geometry, toFile: Matrix4, scale: number): R.AnyShape {
   if (scaled.type === 'instance') return R.makeCompound([])
   // Meshes go as faces of flat polygons, sewn together.
   if (scaled.type === 'mesh') return meshToShape(scaled)
+  if (scaled.type === 'point') return R.makeVertex([scaled.point.x, scaled.point.y, scaled.point.z])
   return scaled.type === 'brep' ? shapeOf(scaled) : curveToWire(scaled)
 }
 

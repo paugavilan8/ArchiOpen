@@ -197,4 +197,5 @@ export const organizeCommands: Command[] = [
   selector('SelText', 'texts', (o) => o.geometry.type === 'annotation' && o.geometry.kind === 'text'),
   selector('SelHatch', 'hatches', (o) => o.geometry.type === 'hatch'),
   selector('SelMesh', 'meshes', (o) => o.geometry.type === 'mesh'),
+  selector('SelPt', 'points', (o) => o.geometry.type === 'point'),
 ]

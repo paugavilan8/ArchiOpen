@@ -272,6 +272,8 @@ export class Display {
     // Line work is batched into one set of segments per material, so large drawings take a few draw
     // calls instead of one per line.
     const batches = new Map<string, LineBatch>()
+    // Point objects, by color.
+    const dots = new Map<string, number[]>()
     const edit = this.doc.blockEdit
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
@@ -304,6 +306,11 @@ export class Display {
       this.addLines(batchOf(surface && !selected ? `edge:${material.uuid}` : material.uuid), mesh ? openBorders(mesh) : wireframe(obj.geometry))
       // Blocks fill and shade what they hold like loose objects.
       for (const g of flatten(obj.geometry)) {
+        if (g.type === 'point') {
+          let list = dots.get(color)
+          if (!list) dots.set(color, (list = []))
+          list.push(g.point.x, g.point.y, g.point.z)
+        }
         if (g.type === 'hatch' && g.pattern === 'Solid') {
           // Solid hatches are filled in every viewport, under the line work.
           const fill = new THREE.BufferGeometry()
@@ -335,6 +342,13 @@ export class Display {
       if (batch.wireOnly) segments.layers.set(WIRE_LAYER)
       else if (batch.edges) segments.layers.set(EDGE_LAYER)
       this.objectsGroup.add(segments)
+    }
+    for (const [color, positions] of dots) {
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      const points = new THREE.Points(geometry, this.dotMaterial(color))
+      points.renderOrder = color === SELECTED_COLOR ? 1 : 0
+      this.objectsGroup.add(points)
     }
     this.renderScene.update(this.doc.renderSettings, modelBox)
     this.rebuildPoints()
@@ -463,6 +477,18 @@ export class Display {
         material = new THREE.LineBasicMaterial({ color })
       }
       this.materials.set(key, material)
+    }
+    return material
+  }
+
+  private readonly dotMaterials = new Map<string, THREE.PointsMaterial>()
+
+  /** Point objects: small squares in their layer color, drawn over surfaces. */
+  private dotMaterial(color: string): THREE.PointsMaterial {
+    let material = this.dotMaterials.get(color)
+    if (!material) {
+      material = pointMaterial(color, POINT_SIZE - 1)
+      this.dotMaterials.set(color, material)
     }
     return material
   }

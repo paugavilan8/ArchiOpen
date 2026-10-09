@@ -61,6 +61,8 @@ interface Drag {
   moved: boolean
 }
 
+/** Pixels by which point objects count as nearer than other objects when picking. */
+const POINT_PREFERENCE = 3
 const PICK_TOLERANCE = 6
 const SNAP_TOLERANCE = 12
 const DRAG_THRESHOLD = 4
@@ -541,6 +543,8 @@ export class Interaction {
     let best = Infinity
     let bestIndex = -1
     let bestT = 0
+    // A point object: the distance to it.
+    if (pts.length === 1) return vp.project(pts[0], this.a) ? { distance: Math.hypot(this.a.x - sx, this.a.y - sy), point: pts[0].clone() } : null
     let prevVisible = pts.length > 0 && vp.project(pts[0], this.a)
     for (let i = 1; i < pts.length; i++) {
       const visible = vp.project(pts[i], this.b)
@@ -576,10 +580,12 @@ export class Interaction {
     let result: { id: number; point: Vector3 } | null = null
     for (const obj of this.doc.objects.values()) {
       if (!this.doc.isSelectable(obj) || !accept(obj.id)) continue
+      // A point lying on a curve wins over the curve, as it would be hard to pick otherwise.
+      const preference = obj.geometry.type === 'point' ? POINT_PREFERENCE : 0
       for (const line of wireframe(obj.geometry)) {
         const hit = this.closestOnPolyline(vp, line, sx, sy)
-        if (hit && hit.distance < best) {
-          best = hit.distance
+        if (hit && hit.distance - preference < best) {
+          best = hit.distance - preference
           result = { id: obj.id, point: hit.point }
         }
       }

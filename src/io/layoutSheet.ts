@@ -4,7 +4,7 @@ import { isCurve, tessellate } from '../core/geometry'
 import { Detail, detailObjects, Layout, Point, paperFactor, sheetFrame, sheetSize, viewAxes, wireframeDrawing } from '../core/layout'
 import { dashesOf, DEFAULT_PRINT_WIDTH } from '../core/linetypes'
 import { shapeOf } from '../kernel/brep'
-import { make2D } from '../kernel/make2d'
+import { make2DWithMeshes } from '../kernel/make2d'
 import type { Sheet, SheetItem } from './pdf'
 
 /** Lines on the sheet of details drawn with hidden lines removed, by detail id. */
@@ -17,10 +17,12 @@ export type HiddenDrawings = Map<number, Point[][]>
 export function hiddenLineDrawing(doc: Document, detail: Detail): Point[][] {
   const { right, up, back } = viewAxes(detail.view)
   const objects = detailObjects(doc).map((o) => o.geometry)
-  const shapes = objects.filter((g) => g.type === 'brep').map(shapeOf)
+  const surfaces = objects.filter((g) => g.type === 'brep')
+  const shapes = surfaces.map(shapeOf)
   const curves = objects.filter(isCurve)
-  if (shapes.length === 0 && curves.length === 0) return []
-  const { visible } = make2D(shapes, curves, { direction: back, xaxis: right }, false)
+  const meshes = objects.filter((g) => g.type === 'mesh')
+  if (shapes.length === 0 && curves.length === 0 && meshes.length === 0) return []
+  const { visible } = make2DWithMeshes(shapes, surfaces, curves, meshes, { direction: back, xaxis: right }, false)
   // make2D draws in the view plane through the world origin; the detail centers its target.
   const target = new Vector3(...detail.target)
   const k = paperFactor(doc, detail)

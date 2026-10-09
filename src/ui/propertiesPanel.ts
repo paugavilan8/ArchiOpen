@@ -62,6 +62,8 @@ export function geometryRows(g: Geometry): Row[] {
       ]
     case 'hatch':
       return [['Loops', String(g.loops.length)]]
+    case 'point':
+      return [['Location', point(g.point)]]
     case 'mesh': {
       const closed = isClosedMesh(g)
       const triangles = g.faces.filter((_, i) => i % 4 === 3 && g.faces[i] === g.faces[i - 1]).length

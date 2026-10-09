@@ -220,27 +220,44 @@ export function extend(g: AnyCurve, atStart: boolean, boundaries: AnyCurve[]): A
 }
 
 /**
- * `count` points spread evenly by length along a curve (ends included), with the curve's unit
- * tangent at each.
+ * Points at the given distances along a curve from its start (by length), with the curve's unit
+ * tangent and parameter at each. Distances past the end stop at the end.
  */
-export function alongCurve(g: AnyCurve, count: number): { points: Vector3[]; tangents: Vector3[]; params: number[] } {
-  const { points: pts, params: ts } = samples(g)
+export function atLengths(g: AnyCurve, distances: number[]): { points: Vector3[]; tangents: Vector3[]; params: number[] } {
+  // Fine samples of length against parameter; the closest ones are refined linearly.
+  const [t0, t1] = domain(g)
+  const spans = g.type === 'curve' ? Math.max(1, g.points.length - g.degree) : g.type === 'polycurve' ? g.segments.length : 1
+  const n = g.type === 'polyline' ? 0 : Math.min(20000, 256 * spans)
+  const ts = g.type === 'polyline' ? samples(g).params : Array.from({ length: n + 1 }, (_, i) => t0 + ((t1 - t0) * i) / n)
+  const pts = ts.map((t) => pointAt(g, t))
   const cumulative = [0]
   for (let i = 1; i < pts.length; i++) cumulative.push(cumulative[i - 1] + pts[i].distanceTo(pts[i - 1]))
-  const total = cumulative[cumulative.length - 1]
   const points: Vector3[] = []
   const tangents: Vector3[] = []
   const params: number[] = []
-  let k = 1
-  for (let i = 0; i < count; i++) {
-    const s = (total * i) / (count - 1)
-    while (k < cumulative.length - 1 && cumulative[k] < s) k++
-    const span = cumulative[k] - cumulative[k - 1]
-    const f = span > 0 ? (s - cumulative[k - 1]) / span : 0
-    const t = ts[k - 1] + (ts[k] - ts[k - 1]) * Math.min(1, Math.max(0, f))
+  for (const s of distances) {
+    let lo = 0
+    let hi = cumulative.length - 1
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1
+      if (cumulative[mid] < s) lo = mid
+      else hi = mid
+    }
+    const span = cumulative[hi] - cumulative[lo]
+    const f = span > 0 ? Math.min(1, Math.max(0, (s - cumulative[lo]) / span)) : 0
+    const t = ts[lo] + (ts[hi] - ts[lo]) * f
     params.push(t)
     points.push(pointAt(g, t))
     tangents.push(tangentAt(g, t))
   }
   return { points, tangents, params }
+}
+
+/**
+ * `count` points spread evenly by length along a curve (ends included), with the curve's unit
+ * tangent at each.
+ */
+export function alongCurve(g: AnyCurve, count: number): { points: Vector3[]; tangents: Vector3[]; params: number[] } {
+  const total = length(g)
+  return atLengths(g, Array.from({ length: count }, (_, i) => (total * i) / (count - 1)))
 }

@@ -494,3 +494,117 @@ export function meshCylinder(center: Vector3, radius: number, height: number, xa
   }
   return makeMesh(vertices, faces)
 }
+
+/**
+ * Where a plane cuts a mesh: polylines, closed where the cut goes all round. Segments are joined
+ * where they meet, to a hundred-millionth of the mesh's size.
+ */
+export function sectionMesh(g: MeshGeometry, origin: Vector3, normal: Vector3): Vector3[][] {
+  const n = normal.clone().normalize()
+  const v = g.vertices
+  const count = vertexCount(g)
+  let size = 0
+  const side = new Float64Array(count)
+  for (let i = 0; i < count; i++) {
+    side[i] = (v[3 * i] - origin.x) * n.x + (v[3 * i + 1] - origin.y) * n.y + (v[3 * i + 2] - origin.z) * n.z
+    size = Math.max(size, Math.abs(v[3 * i]), Math.abs(v[3 * i + 1]), Math.abs(v[3 * i + 2]))
+  }
+  // Vertices exactly on the plane are nudged to one side, so every crossing is an edge crossing.
+  const eps = Math.max(size, 1) * 1e-12
+  for (let i = 0; i < count; i++) if (Math.abs(side[i]) < eps) side[i] = eps
+  const cross = (a: number, b: number) => {
+    const t = side[a] / (side[a] - side[b])
+    return new Vector3(v[3 * a] + (v[3 * b] - v[3 * a]) * t, v[3 * a + 1] + (v[3 * b + 1] - v[3 * a + 1]) * t, v[3 * a + 2] + (v[3 * b + 2] - v[3 * a + 2]) * t)
+  }
+  const tolerance = Math.max(size, 1) * 1e-8
+  const segments: [Vector3, Vector3][] = []
+  const t = meshTriangles(g)
+  for (let i = 0; i < t.length; i += 3) {
+    const tri = [t[i], t[i + 1], t[i + 2]]
+    const hits: Vector3[] = []
+    for (let k = 0; k < 3; k++) {
+      const a = tri[k]
+      const b = tri[(k + 1) % 3]
+      if (side[a] > 0 !== side[b] > 0) hits.push(cross(a, b))
+    }
+    // A triangle touching the plane only at a corner gives a segment of no length: left out.
+    if (hits.length === 2 && hits[0].distanceTo(hits[1]) > tolerance) segments.push([hits[0], hits[1]])
+  }
+  return chainSegments(segments, tolerance)
+}
+
+/** Joins segments that share ends into polylines. */
+function chainSegments(segments: [Vector3, Vector3][], tolerance: number): Vector3[][] {
+  const key = (p: Vector3) => `${Math.round(p.x / tolerance)},${Math.round(p.y / tolerance)},${Math.round(p.z / tolerance)}`
+  const at = new Map<string, number[]>()
+  segments.forEach(([a, b], i) => {
+    for (const p of [a, b]) {
+      const list = at.get(key(p))
+      if (list) list.push(i)
+      else at.set(key(p), [i])
+    }
+  })
+  const used = new Uint8Array(segments.length)
+  const lines: Vector3[][] = []
+  const extend = (line: Vector3[]) => {
+    for (;;) {
+      const end = line[line.length - 1]
+      const next = (at.get(key(end)) ?? []).find((i) => !used[i])
+      if (next === undefined) return
+      used[next] = 1
+      const [a, b] = segments[next]
+      line.push(key(a) === key(end) ? b : a)
+    }
+  }
+  for (let i = 0; i < segments.length; i++) {
+    if (used[i]) continue
+    used[i] = 1
+    const line = [segments[i][0], segments[i][1]]
+    extend(line)
+    line.reverse()
+    extend(line)
+    lines.push(line)
+  }
+  return lines
+}
+
+/** Unit normal of each face (by Newell's method, so bent quads get an average). */
+export function faceNormals(g: MeshGeometry): Vector3[] {
+  const out: Vector3[] = []
+  const f = g.faces
+  const p = new Vector3()
+  const q = new Vector3()
+  for (let i = 0; i < f.length; i += 4) {
+    const c = corners(f, i)
+    const n = new Vector3()
+    for (let k = 0; k < c.length; k++) {
+      vertexAt(g, c[k], p)
+      vertexAt(g, c[(k + 1) % c.length], q)
+      n.x += (p.y - q.y) * (p.z + q.z)
+      n.y += (p.z - q.z) * (p.x + q.x)
+      n.z += (p.x - q.x) * (p.y + q.y)
+    }
+    out.push(n.normalize())
+  }
+  return out
+}
+
+/**
+ * The edges a drawing of the mesh shows from a direction: open borders, edges where faces meet at a
+ * crease sharper than `creaseAngle`, and silhouettes (between a face turned towards the viewer and
+ * one turned away). `toViewer` points from the model towards the viewer.
+ */
+export function drawingEdges(g: MeshGeometry, toViewer: Vector3, creaseAngle = (40 * Math.PI) / 180): [Vector3, Vector3][] {
+  const normals = faceNormals(g)
+  const cosCrease = Math.cos(creaseAngle)
+  const out: [Vector3, Vector3][] = []
+  for (const e of edgeUse(g).values()) {
+    let keep = e.count !== 2
+    if (!keep) {
+      const [n1, n2] = [normals[e.faces[0]], normals[e.faces[1]]]
+      keep = n1.dot(n2) < cosCrease || n1.dot(toViewer) > 0 !== n2.dot(toViewer) > 0
+    }
+    if (keep) out.push([vertexAt(g, e.a), vertexAt(g, e.b)])
+  }
+  return out
+}

@@ -4,7 +4,7 @@ import { transform } from '../core/curves'
 import { AnyCurve, expandBox, isCurve, tessellate } from '../core/geometry'
 import type { Layer } from '../core/document'
 import { shapeOf } from '../kernel/brep'
-import { Drawing2D, DrawingView, make2D } from '../kernel/make2d'
+import { Drawing2D, DrawingView, make2DWithMeshes } from '../kernel/make2d'
 import type { Viewport } from '../view/viewport'
 import { isOption, plural, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
@@ -118,18 +118,18 @@ const make2d: Command = {
         : [memory.view === 'CurrentView' ? viewOf(display.active) : FIXED[memory.view]]
 
     await kernel(ctx)
-    const shapes = objects.filter((g) => g.type === 'brep').map(shapeOf)
+    const surfaces = objects.filter((g) => g.type === 'brep')
+    const shapes = surfaces.map(shapeOf)
     const curves = objects.filter(isCurve)
+    const meshes = objects.filter((g) => g.type === 'mesh')
     let drawings: Drawing2D[]
     try {
-      drawings = arrange(views.map((view) => make2D(shapes, curves, view, memory.hidden)), gap)
+      drawings = arrange(views.map((view) => make2DWithMeshes(shapes, surfaces, curves, meshes, view, memory.hidden)), gap)
     } catch (error) {
       console.error(error)
       throw new Error('Could not compute the drawing')
     }
 
-    const meshes = objects.filter((g) => g.type === 'mesh').length
-    if (meshes > 0) log(`${plural('mesh', meshes)} left out: Make2D draws surfaces, solids and curves (MeshToNURB turns a mesh into a polysurface)`)
     const all = drawings.flatMap((d) => [...d.visible, ...d.hidden])
     if (all.length === 0) {
       log('Nothing to draw')

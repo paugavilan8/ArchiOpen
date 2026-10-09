@@ -36,11 +36,12 @@ describe('reading a DXF 2018 file written by ezdxf', () => {
     expect(layer('Fachada').color).toBe('#1f6fb5')
   })
 
-  it('reads every model space entity and skips points and paper space', () => {
+  it('reads every model space entity, points included, and skips paper space', () => {
     // 2 lines, 1 polyline, 2 circles, 1 arc, 1 ellipse, 2 splines, 3 texts, 2 hatches, 5 dimensions,
-    // 1 solid, 1 face; block references: 1 + 6 (a 2 × 3 grid) + 1.
-    expect(model.objects).toHaveLength(21 + 8)
-    expect([...model.skipped.values()]).toEqual([1])
+    // 1 solid, 1 face, 1 point; block references: 1 + 6 (a 2 × 3 grid) + 1.
+    expect(model.objects).toHaveLength(22 + 8)
+    expect(model.objects.filter((o) => o.geometry.type === 'point')).toHaveLength(1)
+    expect(model.skipped.size).toBe(0)
   })
 
   it('reads polylines with arcs (bulges) exactly', () => {

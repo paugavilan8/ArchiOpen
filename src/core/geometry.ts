@@ -136,6 +136,12 @@ export interface MeshGeometry {
   faces: number[]
 }
 
+/** A single point in space, as Rhino's point objects (reference marks, survey points, divisions). */
+export interface PointGeometry {
+  type: 'point'
+  point: Vector3
+}
+
 export type AnyCurve = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
 
 // Geometry values are immutable: edits produce a new value, which keeps the caches below valid.
@@ -158,10 +164,10 @@ export interface InstanceGeometry {
   matrix: number[]
 }
 
-export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry | InstanceGeometry | MeshGeometry
+export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry | InstanceGeometry | MeshGeometry | PointGeometry
 
 export const isCurve = (g: Geometry): g is AnyCurve =>
-  g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'instance' && g.type !== 'mesh'
+  g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'instance' && g.type !== 'mesh' && g.type !== 'point'
 
 export interface SnapPoints {
   end: Vector3[]
@@ -352,6 +358,8 @@ export function wireframe(g: Geometry): Vector3[][] {
             ? instanceContents(g).flatMap((o) => wireframe(o.geometry))
             : g.type === 'mesh'
               ? meshEdgeLines(g)
+              : g.type === 'point'
+                ? [[g.point]]
               : g.display.edges.map((flat) => {
           const pts: Vector3[] = []
           for (let i = 0; i < flat.length; i += 3) pts.push(new Vector3(flat[i], flat[i + 1], flat[i + 2]))
@@ -426,6 +434,9 @@ function buildSnapPoints(g: Geometry): SnapPoints {
       break
     case 'hatch':
       break
+    case 'point':
+      snaps.end = [g.point]
+      break
     case 'mesh':
       // Vertices snap as ends, unless there are so many that snapping would crawl.
       if (g.vertices.length / 3 <= SNAP_VERTEX_LIMIT) snaps.end = meshVertexPoints(g)
@@ -471,6 +482,7 @@ export function typeName(g: Geometry): string {
   if (g.type === 'brep') return g.kind
   if (g.type === 'hatch') return 'hatch'
   if (g.type === 'mesh') return 'mesh'
+  if (g.type === 'point') return 'point'
   if (g.type === 'instance') return 'block'
   if (g.type === 'annotation') return g.kind === 'text' || g.kind === 'leader' ? g.kind : 'dimension'
   return g.type
@@ -531,6 +543,8 @@ export function geometryToJSON(g: Geometry): unknown {
       return { type: g.type, block: g.definition.name, matrix: g.matrix }
     case 'mesh':
       return { type: g.type, vertices: g.vertices, faces: g.faces }
+    case 'point':
+      return { type: g.type, point: toTriple(g.point) }
   }
 }
 
@@ -593,6 +607,8 @@ export function geometryFromJSON(j: any, blocks?: BlockLookup): Geometry {
       return { type: 'instance', definition: blocks?.(j.block) ?? { name: j.block, objects: [] }, matrix: j.matrix }
     case 'mesh':
       return { type: 'mesh', vertices: j.vertices, faces: j.faces }
+    case 'point':
+      return { type: 'point', point: fromTriple(j.point) }
     default:
       throw new Error(`Unknown geometry type: ${j.type}`)
   }

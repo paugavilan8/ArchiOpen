@@ -68,6 +68,11 @@ se adjuntan a un borrador de *release*.
   - Curvas sobre superficies: `Project` (a lo largo de la normal del plano de construcción, sobre
     todas las caras donde caen), `Pull` (al punto más cercano), `Intersect` (curvas donde se cortan
     superficies y sólidos), `DupBorder` (bordes abiertos) y `DupEdge` (aristas elegidas).
+- Puntos: `Point` y `Points` colocan puntos (como los de Rhino: marcas, puntos topográficos);
+  `Divide` reparte puntos a lo largo de curvas, en un número de tramos iguales (`Segments`) o cada
+  cierta longitud (`Length`). Se mueven, copian y seleccionan como cualquier objeto (con prioridad
+  sobre la curva en la que estén), sirven de referencia `End` y se guardan en `.3dm` y DXF
+  (`POINT`). `SelPt` los selecciona.
 - Mallas (como las de STL, OBJ o Rhino: triángulos y cuadriláteros):
   - `Mesh` convierte superficies y sólidos en mallas (opción `Density`: `Coarse`, `Medium` o
     `Fine`), dejando los originales; `MeshBox`, `MeshSphere`, `MeshCylinder` y `MeshPlane` crean
@@ -86,7 +91,9 @@ se adjuntan a un borrador de *release*.
     `ExportSTL` y `ExportOBJ` escriben la selección (o todo lo visible), y las superficies y sólidos
     van como mallas. No tienen unidades: al abrir se toman milímetros y al importar las del modelo.
     En `.3dm` se leen y escriben como mallas de Rhino, en DXF como caras 3D (`3DFACE`) y en STEP
-    como caras planas. `Make2D` aún no las dibuja.
+    como caras planas.
+  - `Make2D` las dibuja por sus siluetas, pliegues (de más de 40°) y bordes abiertos, ocultas por
+    otras mallas y por superficies y sólidos; `Section` y `Contour` también las cortan.
 - Análisis (menú *Analyze*):
   - Medir: `Distance` (con incrementos y ángulos en el plano de construcción), `Length`, `Angle`
     (tres puntos u opción `TwoLines`), `Radius` (radio de círculos y arcos, o de curvatura en el
@@ -179,7 +186,7 @@ se adjuntan a un borrador de *release*.
   - directrices, sombreados (con huecos; los patrones de AutoCAD se aproximan con los de
     ArchiOpen) y bloques, que siguen siendo bloques (con escala, giro, matrices y bloques
     anidados).
-  - Puntos, multilíneas, multidirectrices, sólidos ACIS, imágenes y tablas aún no se cargan y se
+  - Multilíneas, multidirectrices, sólidos ACIS, imágenes y tablas aún no se cargan y se
     avisa de cuántos hay. Los DXF binarios y los DWG no se leen: guárdalos como DXF ASCII desde
     el programa de origen (o conviértelos con ODA File Converter, gratuito). Las caras 3D
     (`3DFACE`) se juntan en una malla por capa.

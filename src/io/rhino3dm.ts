@@ -283,7 +283,14 @@ export function readRhinoFile(rhino: RhinoModule, bytes: Uint8Array): RhinoImpor
       if (attributes.isInstanceDefinitionObject) continue
       const geometry = obj.geometry()
       const layer = Math.min(Math.max(0, attributes.layerIndex), Math.max(0, layers.length - 1))
-      const converted = geometry instanceof rhino.Curve ? readCurve(rhino, geometry) : geometry instanceof rhino.Mesh ? readMesh(geometry) : null
+      const converted =
+        geometry instanceof rhino.Curve
+          ? readCurve(rhino, geometry)
+          : geometry instanceof rhino.Mesh
+            ? readMesh(geometry)
+            : geometry instanceof rhino.Point
+              ? ({ type: 'point', point: vec(geometry.location as number[]) } as const)
+              : null
       const brep = converted ? null : readBrep(rhino, geometry)
       if (converted) objects.push({ layer, geometry: converted })
       else if (brep) breps.push({ layer, data: brep })
@@ -411,6 +418,8 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport): Uint8Arr
           if (g.pattern !== 'Solid') {
             for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
           }
+        } else if (g.type === 'point') {
+          file.objects().add(new rhino.Point(triple(g.point)), attributes)
         } else {
           file.objects().add(g.type === 'brep' || g.type === 'mesh' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
         }

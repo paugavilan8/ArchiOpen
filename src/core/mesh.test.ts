@@ -13,6 +13,7 @@ import {
   meshCylinder,
   meshPieces,
   meshPlane,
+  sectionMesh,
   meshSphere,
   meshVolume,
   nakedEdges,
@@ -107,6 +108,25 @@ describe('meshes', () => {
     expect(isClosedMesh(mesh)).toBe(true)
     expect(meshVolume(mesh)).toBeCloseTo(24)
     expect(fillHoles(b).holes).toBe(0)
+  })
+
+  it('cuts sections through a plane', () => {
+    const b = box()
+    // Halfway up the box: one closed loop round its four sides.
+    const [loop, ...rest] = sectionMesh(b, new Vector3(0, 0, 2), new Vector3(0, 0, 1))
+    expect(rest).toHaveLength(0)
+    expect(loop[0].distanceTo(loop[loop.length - 1])).toBeLessThan(1e-9)
+    let perimeter = 0
+    for (let i = 1; i < loop.length; i++) perimeter += loop[i].distanceTo(loop[i - 1])
+    expect(perimeter).toBeCloseTo(10, 9)
+    for (const p of loop) expect(p.z).toBeCloseTo(2, 9)
+    // Through a vertex row (z = 1 is a row of the 4-high grid) the loop is still one piece.
+    expect(sectionMesh(b, new Vector3(0, 0, 1), new Vector3(0, 0, 1))).toHaveLength(1)
+    expect(sectionMesh(b, new Vector3(0, 0, 9), new Vector3(0, 0, 1))).toHaveLength(0)
+    // A sphere cut through its middle: a circle of its radius.
+    const s = meshSphere(new Vector3(), 2, undefined, undefined, 64, 32)
+    const [ring] = sectionMesh(s, new Vector3(0, 0, 0.3), new Vector3(0, 0, 1))
+    for (const p of ring) expect(Math.hypot(p.x, p.y)).toBeLessThan(Math.sqrt(4 - 0.09) + 1e-9)
   })
 
   it('saves and loads', () => {

@@ -6,6 +6,7 @@ import {
   HatchGeometry,
   InstanceGeometry,
   MeshGeometry,
+  PointGeometry,
   ArcGeometry,
   BrepGeometry,
   CircleGeometry,
@@ -65,10 +66,13 @@ export function transform<G extends Geometry>(
         ? InstanceGeometry
         : G extends MeshGeometry
           ? MeshGeometry
-          : AnyCurve
+          : G extends PointGeometry
+            ? PointGeometry
+            : AnyCurve
 export function transform(g: Geometry, m: Matrix4): Geometry {
   if (g.type === 'brep') return transformBrep(g, m)
   if (g.type === 'mesh') return transformMesh(g, m)
+  if (g.type === 'point') return { ...g, point: g.point.clone().applyMatrix4(m) }
   const linear = new Matrix3().setFromMatrix4(m)
   if (g.type === 'annotation') return transformAnnotation(g, m, linear)
   if (g.type === 'instance') return { ...g, matrix: m.clone().multiply(new Matrix4().fromArray(g.matrix)).toArray() }
@@ -483,6 +487,7 @@ export function controlPoints(g: Geometry): Vector3[] | null {
     if (!pts) meshPointCache.set(g, (pts = meshPoints(g)))
     return pts
   }
+  if (g.type === 'point') return [g.point]
   return g.type === 'polyline' || g.type === 'curve' || g.type === 'annotation' ? g.points : null
 }
 
@@ -490,6 +495,7 @@ export function controlPoints(g: Geometry): Vector3[] | null {
 export function withControlPoints(g: Geometry, points: Vector3[]): Geometry {
   if (g.type === 'polyline' || g.type === 'curve' || g.type === 'annotation') return { ...g, points }
   if (g.type === 'mesh') return withMeshPoints(g, points)
+  if (g.type === 'point') return { ...g, point: points[0] }
   return g
 }
 

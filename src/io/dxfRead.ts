@@ -716,6 +716,9 @@ export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
         const pts = c.distanceTo(d) < 1e-12 ? [a, b, c] : [a, b, d, c]
         return out({ type: 'hatch', loops: [{ type: 'polyline', points: pts, closed: true }], pattern: 'Solid', scale: 1, rotation: 0, origin: a.clone(), xaxis: o.ax, yaxis: o.ay })
       }
+      case 'POINT':
+        // Points are in world coordinates.
+        return out({ type: 'point', point: point(r, 10) })
       case '3DFACE': {
         const pts = [10, 11, 12, 13].map((code) => point(r, code)).filter((p, i, all) => i === 0 || p.distanceTo(all[i - 1]) > 1e-12)
         if (pts.length > 2 && pts[pts.length - 1].distanceTo(pts[0]) < 1e-12) pts.pop()

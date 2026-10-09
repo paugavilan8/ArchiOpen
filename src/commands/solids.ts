@@ -23,6 +23,7 @@ import {
   toBrep,
 } from '../kernel/brep'
 import { brepHooks } from './curveEdit'
+import { sectionMesh } from '../core/mesh'
 import { triple } from '../kernel/rebuild'
 import { kernelReady, loadKernel } from '../kernel/loadKernel'
 import { isOption, plural, valueOption, yesNo } from './helpers'
@@ -458,9 +459,23 @@ const shell: Command = {
 }
 
 /** Adds section curves through the selected surfaces and solids for each plane. */
+const sectionable = (ctx: CommandContext, id: number) => !!brepOf(ctx, id) || ctx.doc.objects.get(id)?.geometry.type === 'mesh'
+
 function addSections(ctx: CommandContext, ids: number[], planes: { origin: Vector3; normal: Vector3 }[]): number {
   let count = 0
   for (const id of ids) {
+    const mesh = ctx.doc.objects.get(id)?.geometry
+    if (mesh?.type === 'mesh') {
+      for (const { origin, normal } of planes) {
+        for (const points of sectionMesh(mesh, origin, normal)) {
+          // A cut that goes all round comes back to its start: it becomes a closed polyline.
+          const closed = points.length > 3 && points[0].distanceTo(points[points.length - 1]) < 1e-9 * Math.max(1, points[0].length())
+          ctx.doc.add({ type: 'polyline', points: closed ? points.slice(0, -1) : points, closed })
+          count++
+        }
+      }
+      continue
+    }
     const g = brepOf(ctx, id)
     if (!g) continue
     const shape = shapeOf(g)
@@ -478,8 +493,8 @@ const section: Command = {
   name: 'Section',
   async run(ctx) {
     const { input, log } = ctx
-    const ids = (await input.getObjects('Select surfaces and solids to section')).filter((id) => brepOf(ctx, id))
-    if (ids.length === 0) throw new Error('Select surfaces or solids')
+    const ids = (await input.getObjects('Select surfaces, solids and meshes to section')).filter((id) => sectionable(ctx, id))
+    if (ids.length === 0) throw new Error('Select surfaces, solids or meshes')
     const start = await input.getPoint({ prompt: 'Start of section plane' })
     if (start.kind !== 'point') return
     const end = await input.getPoint({ prompt: 'End of section plane', base: start.point })
@@ -497,8 +512,8 @@ const contour: Command = {
   name: 'Contour',
   async run(ctx) {
     const { doc, input, log } = ctx
-    const ids = (await input.getObjects('Select surfaces and solids to contour')).filter((id) => brepOf(ctx, id))
-    if (ids.length === 0) throw new Error('Select surfaces or solids')
+    const ids = (await input.getObjects('Select surfaces, solids and meshes to contour')).filter((id) => sectionable(ctx, id))
+    if (ids.length === 0) throw new Error('Select surfaces, solids or meshes')
     const base = await input.getPoint({ prompt: 'Base point for contours' })
     if (base.kind !== 'point') return
     const end = await input.getPoint({ prompt: 'Direction perpendicular to the contours (e.g. up in a side view)', base: base.point })
@@ -514,7 +529,8 @@ const contour: Command = {
     let min = Infinity
     let max = -Infinity
     for (const id of ids) {
-      const v = brepOf(ctx, id)!.display.vertices
+      const g = ctx.doc.objects.get(id)!.geometry
+      const v = g.type === 'mesh' ? g.vertices : brepOf(ctx, id)!.display.vertices
       for (let i = 0; i < v.length; i += 3) {
         const t = new Vector3(v[i], v[i + 1], v[i + 2]).sub(base.point).dot(direction)
         min = Math.min(min, t)

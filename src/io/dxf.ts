@@ -308,6 +308,12 @@ function writeEntity(out: Out, layer: string, g: Geometry): void {
     }
     return
   }
+  if (g.type === 'point') {
+    w.pair(0, 'POINT')
+    w.pair(8, layer)
+    w.point(10, g.point)
+    return
+  }
   if (g.type === 'mesh') {
     // One 3D face per mesh face; a triangle repeats its last corner, as in the mesh itself.
     const f = g.faces

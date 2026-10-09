@@ -1,7 +1,8 @@
 import { Box3, Vector3 } from 'three'
 import * as R from 'replicad'
 import { join } from '../core/curves'
-import { AnyCurve, tessellate } from '../core/geometry'
+import { AnyCurve, BrepGeometry, MeshGeometry, tessellate } from '../core/geometry'
+import { drawMeshes } from '../core/meshDrawing'
 import { curveToEdges } from './brep'
 import { edgeToCurve } from './edges'
 
@@ -16,6 +17,23 @@ export interface DrawingView {
 export interface Drawing2D {
   visible: AnyCurve[]
   hidden: AnyCurve[]
+}
+
+/**
+ * Make2D with meshes too: surfaces, solids and curves through the kernel's hidden line removal, and
+ * meshes by their silhouettes, creases and borders, hidden by the meshes and by the surfaces.
+ * (Surfaces' own lines are not hidden by meshes.)
+ */
+export function make2DWithMeshes(shapes: R.AnyShape[], surfaces: BrepGeometry[], curves: AnyCurve[], meshes: MeshGeometry[], view: DrawingView, withHidden: boolean): Drawing2D {
+  const drawing = shapes.length > 0 || curves.length > 0 ? make2D(shapes, curves, view, withHidden) : { visible: [], hidden: [] }
+  if (meshes.length === 0) return drawing
+  const occluders = surfaces.map((g) => {
+    const { vertices: v, triangles: t } = g.display
+    return t.flatMap((i) => [v[3 * i], v[3 * i + 1], v[3 * i + 2]])
+  })
+  const lines = drawMeshes(meshes, view, occluders, withHidden)
+  const polyline = (points: Vector3[]): AnyCurve => ({ type: 'polyline', points, closed: false })
+  return { visible: [...drawing.visible, ...lines.visible.map(polyline)], hidden: [...drawing.hidden, ...lines.hidden.map(polyline)] }
 }
 
 const edgesOf = (shape: TopoShape): R.Edge[] => (shape.IsNull() ? [] : R.cast(shape).edges)
