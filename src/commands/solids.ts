@@ -338,7 +338,7 @@ const filletEdge: Command = {
     let target: number | null = null
     const edges: number[] = []
     for (;;) {
-      const pick = await input.getPick(edges.length === 0 ? 'Select edges to fillet' : 'Select more edges. Press Enter to fillet', [valueOption('Radius', memory.filletRadius)])
+      const pick = await input.getPick(edges.length === 0 ? 'Select edges to fillet' : 'Select more edges. Press Enter to fillet', [valueOption('Radius', memory.filletRadius)], (id) => !!brepOf(ctx, id))
       if (pick.kind === 'option' && isOption(pick.option, 'Radius')) {
         const r = await input.getNumber('Fillet radius', memory.filletRadius)
         if (typeof r === 'number' && r > 0) memory.filletRadius = r

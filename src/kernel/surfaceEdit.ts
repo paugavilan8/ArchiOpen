@@ -98,7 +98,7 @@ export function splitShape(shape: AnyShape, tools: AnyShape[]): AnyShape[] {
 }
 
 /** The distance from a point to a shape, and the closest point of the shape; null if it fails. */
-function closestOn(shape: AnyShape, point: Vector3): { distance: number; point: Vector3 } | null {
+export function closestOn(shape: AnyShape, point: Vector3): { distance: number; point: Vector3 } | null {
   const vertex = R.makeVertex([point.x, point.y, point.z])
   const dist = new (oc().BRepExtrema_DistShapeShape)()
   dist.LoadS1(vertex.wrapped)

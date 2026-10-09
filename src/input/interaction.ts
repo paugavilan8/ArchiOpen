@@ -30,6 +30,8 @@ export interface GetPointOptions {
   acceptNumber?: boolean
   rubberBand?: boolean
   preview?: (point: Vector3) => Vector3[][]
+  /** For picks: only objects this accepts can be picked (others under the cursor are passed over). */
+  accept?: (id: number) => boolean
 }
 
 export interface InteractionUI {
@@ -137,8 +139,8 @@ export class Interaction {
   }
 
   /** Asks the user to click on one object; the result also says where on the object they clicked. */
-  getPick(prompt: string, options: string[] = []): Promise<GetResult> {
-    return this.start('pick', { prompt, options })
+  getPick(prompt: string, options: string[] = [], accept?: (id: number) => boolean): Promise<GetResult> {
+    return this.start('pick', { prompt, options, accept })
   }
 
   /** Uses the current selection if there is one; otherwise lets the user select until Enter. */
@@ -271,7 +273,7 @@ export class Interaction {
       return
     }
     if (e.button === 0 && this.request?.kind === 'pick') {
-      const hit = this.pickPoint(vp, pos.x, pos.y)
+      const hit = this.pickPoint(vp, pos.x, pos.y, this.request.opts.accept)
       if (hit) this.finish({ kind: 'pick', id: hit.id, point: hit.point, viewport: vp })
       return
     }
@@ -569,11 +571,11 @@ export class Interaction {
   }
 
   /** The selectable object nearest the cursor, and the point on it under the cursor. */
-  private pickPoint(vp: Viewport, sx: number, sy: number): { id: number; point: Vector3 } | null {
+  private pickPoint(vp: Viewport, sx: number, sy: number, accept: (id: number) => boolean = () => true): { id: number; point: Vector3 } | null {
     let best = PICK_TOLERANCE
     let result: { id: number; point: Vector3 } | null = null
     for (const obj of this.doc.objects.values()) {
-      if (!this.doc.isSelectable(obj)) continue
+      if (!this.doc.isSelectable(obj) || !accept(obj.id)) continue
       for (const line of wireframe(obj.geometry)) {
         const hit = this.closestOnPolyline(vp, line, sx, sy)
         if (hit && hit.distance < best) {
@@ -584,7 +586,7 @@ export class Interaction {
     }
     // In shaded views, clicking on a surface picks it too. A click near an edge of a shaded surface
     // takes the point on the surface itself, so commands that pick faces get the face under the cursor.
-    const shaded = this.display.pickShaded(vp, sx, sy, (id) => this.doc.isSelectable(this.doc.objects.get(id)!))
+    const shaded = this.display.pickShaded(vp, sx, sy, (id) => this.doc.isSelectable(this.doc.objects.get(id)!) && accept(id))
     if (result && shaded && shaded.id === result.id) return shaded
     return result ?? shaded
   }

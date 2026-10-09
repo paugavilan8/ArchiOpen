@@ -45,6 +45,18 @@ se adjuntan a un borrador de *release*.
   plantas por niveles). `Explode` separa una polisuperficie en caras y `Join` las une de nuevo. Se ven sombreados en Perspective
   (cambia el modo desde el menú de cada vista) y se mueven, giran, escalan y copian como
   cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`, `SW`.
+- Superficies avanzadas:
+  - `Sweep2`: barre perfiles a lo largo de dos carriles; cada perfil se mueve, gira y escala para
+    que sus extremos sigan los carriles, y entre varios perfiles la forma se interpola.
+  - `NetworkSrf`: superficie a partir de una red de curvas en dos direcciones (las de cada
+    dirección se reconocen solas porque cruzan las de la otra); las exteriores la limitan y las
+    interiores le dan forma.
+  - `Patch`: superficie ajustada a un contorno cerrado y a las curvas que haya dentro.
+  - `EdgeSrf` (de dos, tres o cuatro curvas de borde) y `SrfPt` (de tres o cuatro esquinas).
+  - `BlendSrf`: superficie de transición entre aristas de dos superficies, tangente a ambas
+    (opción `Bulge`).
+  - `Pipe`: tubo a lo largo de curvas, con radio inicial y final (cónico si difieren) y opción
+    `Cap` para cerrarlo como sólido.
 - Edición de superficies:
   - `Split` y `Trim` también parten y recortan superficies, polisuperficies y sólidos, con curvas
     (que cortan tal como se ven en la vista: una curva dibujada en planta corta todo lo que tiene
@@ -80,8 +92,9 @@ se adjuntan a un borrador de *release*.
     (tres puntos u opción `TwoLines`), `Radius` (radio de círculos y arcos, o de curvatura en el
     punto elegido de una curva), `Area` (curvas cerradas planas, sombreados, superficies, sólidos y
     mallas) y `Volume` (sólidos y mallas cerradas), ambos con su centroide. Las medidas de
-    superficies y sólidos son exactas (núcleo, con integración adaptativa donde la normal no
-    basta); las de curvas, a una millonésima.
+    superficies y sólidos son exactas en caras planas, cilíndricas, cónicas, esféricas, tóricas,
+    B-splines de grado bajo y extrusiones; en B-splines de grado alto (lofts, tubos cónicos) se
+    extrapolan de dos triangulaciones, a una cienmilésima. Las de curvas, a una milmillonésima.
   - `BoundingBox` dibuja la caja que contiene la selección (en coordenadas del mundo o del plano de
     construcción): un sólido, o un rectángulo si todo es plano.
   - `CurvatureGraphOn` / `CurvatureGraphOff`: peine de curvatura sobre curvas (opciones `Scale` y

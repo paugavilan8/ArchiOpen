@@ -2,8 +2,9 @@ import { Vector3 } from 'three'
 import opencascade from 'replicad-opencascadejs'
 import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { box, extrudeCurve, joinShapes, loftCurves, planarFace, sphere } from './brep'
+import { box, extrudeCurve, loftCurves, sphere } from './brep'
 import { checkShape, shapeArea, shapeBounds, shapeVolume } from './measure'
+import { pipe } from './advancedSurfaces'
 import { ellipse } from '../core/curveTools'
 
 beforeAll(async () => {
@@ -39,8 +40,15 @@ describe('measuring shapes', () => {
       { type: 'circle', center: v(0, 0, 0), xaxis: v(1, 0), yaxis: v(0, 1), radius: 2 },
       ellipse(v(1, 0, 3), v(1, 0), v(0, 1), 3, 1),
     ])
-    const capped = joinShapes([loft, planarFace({ type: 'circle', center: v(0, 0, 0), xaxis: v(1, 0), yaxis: v(0, 1), radius: 2 })!, planarFace(ellipse(v(1, 0, 3), v(1, 0), v(0, 1), 3, 1))!])
-    expect(shapeVolume(capped).value).toBeCloseTo((3 / 6) * (Math.PI * 4 + 4 * Math.PI * 2.5 * 1.5 + Math.PI * 3), 2)
+    // Lofting closed curves already caps the ends.
+    expect(shapeVolume(loft).value).toBeCloseTo((3 / 6) * (Math.PI * 4 + 4 * Math.PI * 2.5 * 1.5 + Math.PI * 3), 2)
+  })
+
+  it('measures high-degree B-spline solids closely', () => {
+    // A tapered pipe: a frustum with a high-degree B-spline side.
+    const frustum = pipe({ type: 'polyline', points: [v(0, 0), v(0, 0, 10)], closed: false }, 2, 1, true)
+    expect(Math.abs(shapeVolume(frustum).value / ((Math.PI * 10 * (4 + 2 + 1)) / 3) - 1)).toBeLessThan(5e-5)
+    expect(Math.abs(shapeArea(frustum).value / (Math.PI * 3 * Math.sqrt(101) + Math.PI * 5) - 1)).toBeLessThan(5e-5)
   })
 
   it('finds tight bounding boxes, also in a turned plane', () => {

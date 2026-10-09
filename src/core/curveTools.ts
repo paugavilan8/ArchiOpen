@@ -1,7 +1,7 @@
 import { Box3, Vector3 } from 'three'
 import { approximate } from '../math/nurbs'
 import { closestPoint, length } from './curves'
-import { AnyCurve, ArcGeometry, CurveGeometry, domain, isClosed, pointAt, PolylineGeometry, SegmentGeometry, tangentAt, tessellate } from './geometry'
+import { AnyCurve, ArcGeometry, CurveGeometry, domain, isClosed, pointAt, PolylineGeometry, samples, SegmentGeometry, tangentAt, tessellate } from './geometry'
 import { intersect } from './intersect'
 import { interpolate } from '../math/nurbs'
 
@@ -217,4 +217,30 @@ export function extend(g: AnyCurve, atStart: boolean, boundaries: AnyCurve[]): A
   const line: PolylineGeometry = { type: 'polyline', points: atStart ? [tip, end.point] : [end.point, tip], closed: false }
   const segments: SegmentGeometry[] = g.type === 'polycurve' ? g.segments : [g as SegmentGeometry]
   return { type: 'polycurve', segments: atStart ? [line, ...segments] : [...segments, line] }
+}
+
+/**
+ * `count` points spread evenly by length along a curve (ends included), with the curve's unit
+ * tangent at each.
+ */
+export function alongCurve(g: AnyCurve, count: number): { points: Vector3[]; tangents: Vector3[]; params: number[] } {
+  const { points: pts, params: ts } = samples(g)
+  const cumulative = [0]
+  for (let i = 1; i < pts.length; i++) cumulative.push(cumulative[i - 1] + pts[i].distanceTo(pts[i - 1]))
+  const total = cumulative[cumulative.length - 1]
+  const points: Vector3[] = []
+  const tangents: Vector3[] = []
+  const params: number[] = []
+  let k = 1
+  for (let i = 0; i < count; i++) {
+    const s = (total * i) / (count - 1)
+    while (k < cumulative.length - 1 && cumulative[k] < s) k++
+    const span = cumulative[k] - cumulative[k - 1]
+    const f = span > 0 ? (s - cumulative[k - 1]) / span : 0
+    const t = ts[k - 1] + (ts[k] - ts[k - 1]) * Math.min(1, Math.max(0, f))
+    params.push(t)
+    points.push(pointAt(g, t))
+    tangents.push(tangentAt(g, t))
+  }
+  return { points, tangents, params }
 }
