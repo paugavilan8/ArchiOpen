@@ -1,4 +1,4 @@
-import type { Vector3 } from 'three'
+import { Vector3 } from 'three'
 import { closestPoint, explode as explodeCurve, join as joinCurves, split as splitCurve } from '../core/curves'
 import { filletCorners as roundCorners, filletLines } from '../core/fillet'
 import { AnyCurve, Geometry, isCurve, PolylineGeometry, tessellate, wireframe } from '../core/geometry'
@@ -44,9 +44,18 @@ const trim: Command = {
     for (;;) {
       const pick = await input.getPick('Select object to trim. Press Enter when done')
       if (pick.kind !== 'pick') return
+      if (doc.objects.get(pick.id)?.geometry.type === 'brep') {
+        // Surfaces and solids lose the piece that was clicked; curves cut them as seen in the view.
+        const direction = pick.viewport.camera.getWorldDirection(new Vector3())
+        const kept = await brepHooks.trim(ctx, pick.id, pick.point, [...cutters].filter((id) => id !== pick.id), direction)
+        if (kept === null) continue
+        if (cutters.delete(pick.id)) for (const id of kept) cutters.add(id)
+        doc.select(cutters)
+        continue
+      }
       const target = curveOf(ctx, pick.id)
       if (!target) {
-        log('Trim works on curves for now')
+        log('Trim works on curves, surfaces and solids')
         continue
       }
       const params = cutParams(ctx, target, pick.id, cutters)
@@ -81,7 +90,10 @@ const split: Command = {
     const targets = await input.getObjects('Select objects to split')
     doc.clearSelection()
     const cutters = await input.getObjects('Select cutting objects')
-    let count = 0
+    const breps = targets.filter((id) => doc.objects.get(id)?.geometry.type === 'brep')
+    // Curves cut surfaces as seen in the active view.
+    const direction = ctx.display.active.camera.getWorldDirection(new Vector3())
+    let count = breps.length > 0 ? await brepHooks.split(ctx, breps, cutters, direction) : 0
     for (const id of targets) {
       const target = curveOf(ctx, id)
       if (!target) continue
@@ -101,6 +113,10 @@ const split: Command = {
 export const brepHooks = {
   join: async (_ctx: CommandContext, _ids: number[]): Promise<string | null> => null,
   explode: async (_ctx: CommandContext, _ids: number[]): Promise<number> => 0,
+  /** Trims a surface or solid at a picked point; resolves to the ids of what is left, or null. */
+  trim: async (_ctx: CommandContext, _id: number, _at: Vector3, _cutters: number[], _direction: Vector3): Promise<number[] | null> => null,
+  /** Splits surfaces and solids; resolves to how many were split. */
+  split: async (_ctx: CommandContext, _ids: number[], _cutters: number[], _direction: Vector3): Promise<number> => 0,
 }
 
 const join: Command = {

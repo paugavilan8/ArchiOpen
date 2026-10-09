@@ -46,7 +46,7 @@ export async function kernel(ctx: CommandContext): Promise<void> {
 }
 
 /** Runs a kernel operation and adds the result, turning kernel failures into a readable error. */
-function addShape(ctx: CommandContext, make: () => AnyShape, what: string, layerId?: number): number {
+export function addShape(ctx: CommandContext, make: () => AnyShape, what: string, layerId?: number): number {
   let shape: AnyShape
   try {
     shape = make()
@@ -57,11 +57,11 @@ function addShape(ctx: CommandContext, make: () => AnyShape, what: string, layer
   return ctx.doc.add(toBrep(shape), layerId).id
 }
 
-const curveOf = (ctx: CommandContext, id: number): AnyCurve | null => {
+export const curveOf = (ctx: CommandContext, id: number): AnyCurve | null => {
   const g = ctx.doc.objects.get(id)?.geometry
   return g && isCurve(g) ? g : null
 }
-const brepOf = (ctx: CommandContext, id: number): BrepGeometry | null => {
+export const brepOf = (ctx: CommandContext, id: number): BrepGeometry | null => {
   const g = ctx.doc.objects.get(id)?.geometry
   return g?.type === 'brep' ? g : null
 }
@@ -313,7 +313,7 @@ function booleanCommand(name: string, kind: BooleanKind): Command {
 }
 
 /** Index of the brep edge nearest to a point (the edges are in the kernel's order). */
-function nearestEdge(g: BrepGeometry, p: Vector3): number {
+export function nearestEdge(g: BrepGeometry, p: Vector3): number {
   let best = Infinity
   let index = -1
   wireframe(g).forEach((pts, i) => {
@@ -391,7 +391,7 @@ const sweep1: Command = {
 }
 
 /** Triangles of one face, as small closed outlines for highlighting it. */
-function faceOutline(g: BrepGeometry, face: number): Vector3[][] {
+export function faceOutline(g: BrepGeometry, face: number): Vector3[][] {
   const range = g.display.faceTriangles?.[face]
   if (!range) return []
   const { vertices: v, triangles: t } = g.display

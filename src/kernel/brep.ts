@@ -231,6 +231,15 @@ export function explodeShape(shape: AnyShape): AnyShape[] {
   return shape.faces
 }
 
+/** How many edges bound only one face: the open borders of a surface or polysurface. */
+export function openEdgeCount(shape: AnyShape): number {
+  const count = new Map<number, number>()
+  for (const face of shape.faces) for (const edge of face.edges) count.set(edge.hashCode, (count.get(edge.hashCode) ?? 0) + 1)
+  let open = 0
+  for (const n of count.values()) if (n === 1) open++
+  return open
+}
+
 /** Sews surfaces and polysurfaces together; a closed result becomes a solid. */
 export function joinShapes(shapes: AnyShape[], tolerance = 1e-4): AnyShape {
   const k = oc()
@@ -239,7 +248,8 @@ export function joinShapes(shapes: AnyShape[], tolerance = 1e-4): AnyShape {
   sewing.Perform()
   const sewn = R.cast(sewing.SewedShape())
   sewing.delete()
-  if (sewn instanceof R.Shell) {
+  // Only a closed shell makes a solid (OCCT would also accept an open one).
+  if (sewn instanceof R.Shell && openEdgeCount(sewn) === 0) {
     try {
       return R.makeSolid([sewn])
     } catch {

@@ -582,8 +582,11 @@ export class Interaction {
         }
       }
     }
-    // In shaded views, clicking on a surface picks it too.
-    return result ?? this.display.pickShaded(vp, sx, sy, (id) => this.doc.isSelectable(this.doc.objects.get(id)!))
+    // In shaded views, clicking on a surface picks it too. A click near an edge of a shaded surface
+    // takes the point on the surface itself, so commands that pick faces get the face under the cursor.
+    const shaded = this.display.pickShaded(vp, sx, sy, (id) => this.doc.isSelectable(this.doc.objects.get(id)!))
+    if (result && shaded && shaded.id === result.id) return shaded
+    return result ?? shaded
   }
 
   private pickWindow(vp: Viewport, x0: number, y0: number, x1: number, y1: number, crossing: boolean): number[] {

@@ -38,6 +38,17 @@ se adjuntan a un borrador de *release*.
   plantas por niveles). `Explode` separa una polisuperficie en caras y `Join` las une de nuevo. Se ven sombreados en Perspective
   (cambia Wireframe/Shaded desde el menú de cada vista) y se mueven, giran, escalan y copian como
   cualquier objeto. Alias: `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`, `SW`.
+- Edición de superficies:
+  - `Split` y `Trim` también parten y recortan superficies, polisuperficies y sólidos, con curvas
+    (que cortan tal como se ven en la vista: una curva dibujada en planta corta todo lo que tiene
+    debajo) o con otras superficies y sólidos. En `Trim` se hace clic en la parte que sobra (mejor
+    en una vista sombreada). Los sólidos se parten en sólidos.
+  - `Cap` tapa los agujeros planos de una polisuperficie abierta y, si queda cerrada, la convierte
+    en sólido; `ExtrudeSrf` extruye una superficie en un sólido; `OffsetSrf` desfasa superficies a
+    una distancia (opción `Solid` para darles espesor); `ExtractSrf` separa caras elegidas con clic.
+  - Curvas sobre superficies: `Project` (a lo largo de la normal del plano de construcción, sobre
+    todas las caras donde caen), `Pull` (al punto más cercano), `Intersect` (curvas donde se cortan
+    superficies y sólidos), `DupBorder` (bordes abiertos) y `DupEdge` (aristas elegidas).
 - Planos 2D: `Make2D` dibuja la selección vista desde una dirección, con eliminación de líneas
   ocultas, como curvas planas en el plano XY (alzados, plantas y axonometrías). Opciones: `View`
   (la vista activa, `Top`, `Front`, `Right`, `Back`, `Left` o `FourView`, que coloca alzado, planta,
