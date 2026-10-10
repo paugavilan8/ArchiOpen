@@ -3,12 +3,22 @@ import type { Document } from '../core/document'
 import { Geometry, isCurve, tessellate } from '../core/geometry'
 import { Detail, detailObjects, Layout, Point, paperFactor, sheetFrame, sheetSize, viewAxes, wireframeDrawing } from '../core/layout'
 import { dashesOf, DEFAULT_PRINT_WIDTH } from '../core/linetypes'
+import { type ClipPlane, drawingClipPlanes } from '../core/clipPlanes'
 import { kernelJob } from '../kernel/client'
 import { shapeRef } from '../kernel/wire'
 import type { Sheet, SheetItem } from './pdf'
 
-/** Lines on the sheet of details drawn with hidden lines removed, by detail id. */
-export type HiddenDrawings = Map<number, Point[][]>
+/** A detail drawn with hidden lines removed: its lines on the sheet, and the cut lines of its clipping planes. */
+export interface DetailLines {
+  lines: Point[][]
+  section: Point[][]
+}
+
+/** Hidden line drawings of details, by detail id. */
+export type HiddenDrawings = Map<number, DetailLines>
+
+/** Pen width of cut lines on the sheet, heavier than the rest as plans and sections are drawn. */
+export const SECTION_WIDTH = 0.5
 
 /** What a hidden line drawing is made of: the surfaces, solids, meshes and curves the details show. */
 function drawnGeometry(doc: Document): Geometry[] {
@@ -23,23 +33,28 @@ function drawnGeometry(doc: Document): Geometry[] {
  * So a drawing is made again only when what it shows changes (not for a new layer color, a text, or
  * an object out of sight), and moving, scaling or resizing a detail only places it again.
  */
-const drawings = new Map<string, { geometry: Geometry[]; lines: Vector3[][] }>()
+const drawings = new Map<string, { geometry: Geometry[]; lines: Vector3[][]; section: Vector3[][] }>()
 
-const viewKey = (detail: Detail) => {
+/** The clipping planes that cut a detail. */
+const detailPlanes = (doc: Document, detail: Detail): ClipPlane[] => (detail.clipping ? drawingClipPlanes(doc) : [])
+
+/** A drawing depends on the view direction and on the planes that cut it. */
+const viewKey = (doc: Document, detail: Detail) => {
   const { right, back } = viewAxes(detail.view)
-  return JSON.stringify([right.toArray(), back.toArray()])
+  const planes = detailPlanes(doc, detail).map((p) => [...p.normal.toArray(), p.constant])
+  return JSON.stringify([right.toArray(), back.toArray(), planes])
 }
 
 const sameGeometry = (a: Geometry[], b: Geometry[]) => a.length === b.length && a.every((g, i) => g === b[i])
 
 /** The drawing for a view if it is still that of the model's geometry. */
-function cachedDrawing(detail: Detail, geometry: Geometry[]): Vector3[][] | null {
-  const hit = drawings.get(viewKey(detail))
-  return hit && sameGeometry(hit.geometry, geometry) ? hit.lines : null
+function cachedDrawing(doc: Document, detail: Detail, geometry: Geometry[]): { lines: Vector3[][]; section: Vector3[][] } | null {
+  const hit = drawings.get(viewKey(doc, detail))
+  return hit && sameGeometry(hit.geometry, geometry) ? hit : null
 }
 
 /** A view-plane drawing placed on the sheet through the detail. */
-function placed(doc: Document, detail: Detail, lines: Vector3[][]): Point[][] {
+function placed(doc: Document, detail: Detail, drawing: { lines: Vector3[][]; section: Vector3[][] }): DetailLines {
   const { right, up } = viewAxes(detail.view)
   // make2D draws in the view plane through the world origin; the detail centers its target.
   const target = new Vector3(...detail.target)
@@ -47,36 +62,39 @@ function placed(doc: Document, detail: Detail, lines: Vector3[][]): Point[][] {
   const [x, y, w, h] = detail.rect
   const ox = x + w / 2 - target.dot(right) * k
   const oy = y + h / 2 - target.dot(up) * k
-  return lines.map((line) => line.map((p): Point => [ox + p.x * k, oy + p.y * k]))
+  const place = (lines: Vector3[][]) => lines.map((line) => line.map((p): Point => [ox + p.x * k, oy + p.y * k]))
+  return { lines: place(drawing.lines), section: place(drawing.section) }
 }
 
 /**
  * The visible lines of a detail's surfaces, solids and curves, on the sheet. Needs the geometry
  * kernel. Texts, dimensions and hatches are not included: they are drawn on top as they are.
  */
-export async function hiddenLineDrawing(doc: Document, detail: Detail): Promise<Point[][]> {
+export async function hiddenLineDrawing(doc: Document, detail: Detail): Promise<DetailLines> {
   // The model may change while the kernel works: the drawing is of the geometry as it was asked for.
   const geometry = drawnGeometry(doc)
-  const cached = cachedDrawing(detail, geometry)
+  const cached = cachedDrawing(doc, detail, geometry)
   if (cached) return placed(doc, detail, cached)
+  const key = viewKey(doc, detail)
   const { right, back } = viewAxes(detail.view)
   const surfaces = geometry.filter((g) => g.type === 'brep')
   const curves = geometry.filter(isCurve)
   const meshes = geometry.filter((g) => g.type === 'mesh')
-  let lines: Vector3[][] = []
+  let drawing = { lines: [] as Vector3[][], section: [] as Vector3[][] }
   if (geometry.length > 0) {
-    const { visible } = await kernelJob('make2DWithMeshes', surfaces.map(shapeRef), surfaces, curves, meshes, { direction: back, xaxis: right }, false)
-    lines = visible.map((c) => tessellate(c))
+    const planes = detailPlanes(doc, detail)
+    const { visible, section } = await kernelJob('make2DWithMeshes', surfaces.map(shapeRef), surfaces, curves, meshes, { direction: back, xaxis: right }, false, planes)
+    drawing = { lines: visible.map((c) => tessellate(c)), section: (section ?? []).map((c) => tessellate(c)) }
   }
   if (drawings.size > 64) drawings.clear()
-  drawings.set(viewKey(detail), { geometry, lines })
-  return placed(doc, detail, lines)
+  drawings.set(key, { geometry, ...drawing })
+  return placed(doc, detail, drawing)
 }
 
 /** The hidden line drawing of a detail if no kernel work is needed for it, else null. */
-export function cachedHiddenLines(doc: Document, detail: Detail): Point[][] | null {
-  const lines = cachedDrawing(detail, drawnGeometry(doc))
-  return lines ? placed(doc, detail, lines) : null
+export function cachedHiddenLines(doc: Document, detail: Detail): DetailLines | null {
+  const drawing = cachedDrawing(doc, detail, drawnGeometry(doc))
+  return drawing ? placed(doc, detail, drawing) : null
 }
 
 /** The hidden line drawing of a detail, from the kernel unless it is still known. */
@@ -96,7 +114,8 @@ export function layoutSheet(doc: Document, layout: Layout, options: { black: boo
     const clip = detail.rect
     const hiddenLines = usesHiddenLines(detail) ? hidden.get(detail.id) : undefined
     if (hiddenLines) {
-      items.push({ lines: hiddenLines, fills: [], color: '#000000', width: 0.25, dashes: [], clip })
+      items.push({ lines: hiddenLines.lines, fills: [], color: '#000000', width: 0.25, dashes: [], clip })
+      if (hiddenLines.section.length > 0) items.push({ lines: hiddenLines.section, fills: [], color: '#000000', width: SECTION_WIDTH, dashes: [], clip })
       // Texts, dimensions and hatches go on top as they are; everything else came through hidden lines.
       const flat = wireframeDrawing(doc, detail, (g) => g.type === 'annotation' || g.type === 'hatch')
       for (const layer of doc.layers) {

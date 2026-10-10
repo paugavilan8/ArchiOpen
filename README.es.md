@@ -107,7 +107,11 @@ Despliega cada apartado para ver los detalles.
   Los sólidos cortados se rellenan del color de su material. El plano se mueve, gira y copia como
   cualquier objeto, y el corte se actualiza en directo. En el panel de propiedades se elige en qué
   vistas corta, y `EnableClippingPlanes` / `DisableClippingPlanes` activan o quitan todos los cortes
-  de la vista activa. Lo cortado no se puede seleccionar ni sirve de referencia.
+  de la vista activa. Lo cortado no se puede seleccionar ni sirve de referencia. Los planos de
+  corte también cortan los dibujos: `Make2D` (los planos activos en la vista activa, opción
+  `Clipping`), los detalles de las láminas (opción *Clipping* en el panel del detalle) y las vistas
+  impresas. Las líneas de corte van a su propia capa, *Make2D Section*, y se imprimen con una
+  plumilla más gruesa.
 - Selección por clic, ventana (de izquierda a derecha) y captura (de derecha a izquierda), con un
   índice espacial que la mantiene inmediata en modelos con miles de objetos o mallas muy densas.
 - Gumball sobre la selección: flechas para mover, arcos para girar (Mayús: pasos de 15°), cajas para
@@ -246,7 +250,8 @@ Despliega cada apartado para ver los detalles.
 
 - `Make2D` proyecta la selección con eliminación de líneas ocultas en curvas planas: plantas,
   alzados y axonometrías, o las cuatro vistas a la vez (`FourView`), con las líneas ocultas si se
-  quiere.
+  quiere. Con planos de corte dibuja plantas y secciones: los sólidos se cortan y el contorno del
+  corte va a la capa *Make2D Section*.
 - Textos y cotas con una tipografía técnica de un solo trazo: `Text`, `Dim`, `DimAligned`,
   `DimRadius`, `DimDiameter`, `DimAngle` y `Leader`, con flechas o trazos oblicuos de arquitectura.
   Las cotas se actualizan al cambiar su geometría, y su texto, altura y decimales se editan en el
@@ -370,7 +375,7 @@ flowchart LR
 
 - [x] Referencias `Int`, `Perp`, `Tan` y `Knot`
 - [x] Planos de corte en directo con secciones rellenas
-- [ ] Planos de corte en láminas, `Make2D` y PDF
+- [x] Planos de corte en láminas, `Make2D` y PDF
 - [x] `Orient`, `Orient3Pt`, `Align` y `Distribute`
 - [x] Bloques y textos de `.3dm`; bloques exportados como bloques
 - [ ] Cotas y SubD de `.3dm`

@@ -1,9 +1,10 @@
 import { Box3, Vector3 } from 'three'
 import * as R from 'replicad'
 import { join } from '../core/curves'
+import { type ClipPlane, clipCurve, clipMesh, isKept } from '../core/clipPlanes'
 import { AnyCurve, BrepGeometry, MeshGeometry, tessellate } from '../core/geometry'
 import { drawMeshes } from '../core/meshDrawing'
-import { curveToEdges } from './brep'
+import { curveToEdges, sectionCurves } from './brep'
 import { edgeToCurve } from './edges'
 
 type TopoShape = ReturnType<ReturnType<typeof R.getOC>['BRepToolsWrapper']['Read']>
@@ -17,23 +18,143 @@ export interface DrawingView {
 export interface Drawing2D {
   visible: AnyCurve[]
   hidden: AnyCurve[]
+  /** Visible lines where clipping planes cut through surfaces and solids (drawn heavier). */
+  section?: AnyCurve[]
 }
 
 /**
  * Make2D with meshes too: surfaces, solids and curves through the kernel's hidden line removal, and
  * meshes by their silhouettes, creases and borders, hidden by the meshes and by the surfaces.
  * (Surfaces' own lines are not hidden by meshes.)
+ *
+ * With clipping planes, what they cut away is left out first: solids are cut (and closed along the
+ * cut, so its outline is drawn), curves and meshes are trimmed. The visible lines along a cut are
+ * returned apart, as `section`.
  */
-export function make2DWithMeshes(shapes: R.AnyShape[], surfaces: BrepGeometry[], curves: AnyCurve[], meshes: MeshGeometry[], view: DrawingView, withHidden: boolean): Drawing2D {
+export function make2DWithMeshes(
+  shapes: R.AnyShape[],
+  surfaces: BrepGeometry[],
+  curves: AnyCurve[],
+  meshes: MeshGeometry[],
+  view: DrawingView,
+  withHidden: boolean,
+  clip: ClipPlane[] = [],
+): Drawing2D {
+  let cuts: AnyCurve[] = []
+  if (clip.length > 0) {
+    // Where each plane cuts, as far as the other planes keep it.
+    cuts = shapes.flatMap((shape) => clip.flatMap((plane, i) => sectionsOf(shape, plane).flatMap((c) => clipCurve(c, clip.filter((_, k) => k !== i)))))
+    shapes = shapes.flatMap((shape) => clipShape(shape, clip) ?? [])
+    curves = curves.flatMap((c) => clipCurve(c, clip))
+    meshes = meshes.flatMap((m) => clipMesh(m, clip) ?? [])
+  }
   const drawing = shapes.length > 0 || curves.length > 0 ? make2D(shapes, curves, view, withHidden) : { visible: [], hidden: [] }
-  if (meshes.length === 0) return drawing
-  const occluders = surfaces.map((g) => {
-    const { vertices: v, triangles: t } = g.display
-    return t.flatMap((i) => [v[3 * i], v[3 * i + 1], v[3 * i + 2]])
-  })
-  const lines = drawMeshes(meshes, view, occluders, withHidden)
+  if (meshes.length > 0) {
+    // Surfaces hide meshes, as far as the planes keep them.
+    const occluderMeshes = surfaces.flatMap((g) => clipMesh({ type: 'mesh', vertices: g.display.vertices, faces: trianglesAsFaces(g.display.triangles) }, clip) ?? [])
+    const occluders = occluderMeshes.map((g) => g.faces.flatMap((i, n) => (n % 4 === 3 ? [] : [g.vertices[3 * i], g.vertices[3 * i + 1], g.vertices[3 * i + 2]])))
+    const lines = drawMeshes(meshes, view, occluders, withHidden)
+    const polyline = (points: Vector3[]): AnyCurve => ({ type: 'polyline', points, closed: false })
+    drawing.visible.push(...lines.visible.map(polyline))
+    drawing.hidden.push(...lines.hidden.map(polyline))
+  }
+  if (cuts.length === 0) return drawing
+  // The cut outlines, seen from the view: visible lines lying on them are section lines.
+  const section = separateSections(drawing.visible, cuts.map((c) => tessellate(c).map((p) => toView(p, view))))
+  return { visible: section.rest, hidden: drawing.hidden, section: section.on }
+}
+
+/** Display triangles as mesh faces (a triangle repeats its last corner). */
+const trianglesAsFaces = (t: number[]) => t.flatMap((_, i) => (i % 3 === 2 ? [t[i - 2], t[i - 1], t[i], t[i]] : []))
+
+/** A point in the drawing's plane: X to the right of the view, Y up, as make2D draws. */
+function toView(p: Vector3, view: DrawingView): Vector3 {
+  const d = view.direction.clone().normalize()
+  const x = view.xaxis.clone().addScaledVector(d, -view.xaxis.dot(d)).normalize()
+  const y = d.clone().cross(x)
+  return new Vector3(p.dot(x), p.dot(y), 0)
+}
+
+/** Where a plane cuts a shape (nothing if the cut fails). */
+function sectionsOf(shape: R.AnyShape, plane: ClipPlane): AnyCurve[] {
+  try {
+    return sectionCurves(shape, plane.origin, plane.normal)
+  } catch {
+    return []
+  }
+}
+
+/** The corners of a shape's bounding box. */
+function boxCorners(shape: R.AnyShape): Vector3[] {
+  const [min, max] = shape.boundingBox.bounds
+  const corners: Vector3[] = []
+  for (let i = 0; i < 8; i++) corners.push(new Vector3(i & 1 ? max[0] : min[0], i & 2 ? max[1] : min[1], i & 4 ? max[2] : min[2]))
+  return corners
+}
+
+/**
+ * What the planes keep of a shape: cut with the half-space each plane removes, so a solid stays a
+ * solid, closed along the cut. Null if nothing is left. A plane that misses the shape is skipped;
+ * if a cut fails, the shape is kept whole rather than lost.
+ */
+function clipShape(shape: R.AnyShape, planes: ClipPlane[]): R.AnyShape | null {
+  const k = R.getOC()
+  let current = shape
+  for (const plane of planes) {
+    const corners = boxCorners(current)
+    const keptCorners = corners.filter((p) => isKept([plane], p)).length
+    if (keptCorners === corners.length) continue
+    if (keptCorners === 0) return null
+    const { origin: o, normal: n } = plane
+    try {
+      const pln = new k.gp_Pln(new k.gp_Pnt(o.x, o.y, o.z), new k.gp_Dir(n.x, n.y, n.z))
+      const face = new k.BRepBuilderAPI_MakeFace(pln).Face()
+      // The half-space on the side the plane removes.
+      const halfSpace = new k.BRepPrimAPI_MakeHalfSpace(face, new k.gp_Pnt(o.x - n.x, o.y - n.y, o.z - n.z)).Solid()
+      const cut = new k.BRepAlgoAPI_Cut(current.wrapped, halfSpace)
+      cut.Build()
+      if (cut.HasErrors()) continue
+      const result = R.cast(cut.Shape())
+      if (result.faces.length === 0 && result.edges.length === 0) return null
+      current = result
+    } catch {
+      // Kept whole.
+    }
+  }
+  return current
+}
+
+/**
+ * Splits drawn lines into those lying on the cut outlines and the rest. A line partly on an
+ * outline (make2D joins the lines it draws) is split into runs of segments on and off it.
+ */
+function separateSections(lines: AnyCurve[], cuts: Vector3[][]): { on: AnyCurve[]; rest: AnyCurve[] } {
+  const all = [...lines.flatMap(tessellate), ...cuts.flat()]
+  if (all.length === 0) return { on: [], rest: lines }
+  const box = new Box3().setFromPoints(all)
+  const size = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, 1e-9)
+  const tolerance = size * 1e-4
+  const grid = new SegmentGrid(box, size / 64)
+  for (const c of cuts) grid.add(c)
+  const on: AnyCurve[] = []
+  const rest: AnyCurve[] = []
   const polyline = (points: Vector3[]): AnyCurve => ({ type: 'polyline', points, closed: false })
-  return { visible: [...drawing.visible, ...lines.visible.map(polyline)], hidden: [...drawing.hidden, ...lines.hidden.map(polyline)] }
+  for (const line of lines) {
+    const points = tessellate(line)
+    const onCut = points.slice(1).map((p, i) => grid.near(p, tolerance) && grid.near(points[i], tolerance) && grid.near(p.clone().lerp(points[i], 0.5), tolerance))
+    if (onCut.every(Boolean)) on.push(line)
+    else if (!onCut.some(Boolean)) rest.push(line)
+    else {
+      // Runs of segments on one side or the other.
+      let start = 0
+      for (let i = 1; i <= onCut.length; i++) {
+        if (i < onCut.length && onCut[i] === onCut[start]) continue
+        ;(onCut[start] ? on : rest).push(polyline(points.slice(start, i + 1)))
+        start = i
+      }
+    }
+  }
+  return { on, rest }
 }
 
 const edgesOf = (shape: TopoShape): R.Edge[] => (shape.IsNull() ? [] : R.cast(shape).edges)
