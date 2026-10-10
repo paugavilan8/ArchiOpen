@@ -1,6 +1,7 @@
 import { Matrix3, Matrix4, Vector3 } from 'three'
 import { clampedKnots, interpolate, reverseBSpline, splitBSpline } from '../math/nurbs'
 import {
+  type ClippingGeometry,
   AnnotationGeometry,
   AnyCurve,
   HatchGeometry,
@@ -68,9 +69,12 @@ export function transform<G extends Geometry>(
           ? MeshGeometry
           : G extends PointGeometry
             ? PointGeometry
-            : AnyCurve
+            : G extends ClippingGeometry
+              ? ClippingGeometry
+              : AnyCurve
 export function transform(g: Geometry, m: Matrix4): Geometry {
   if (g.type === 'brep') return transformBrep(g, m)
+  if (g.type === 'clipping') return transformClipping(g, m)
   if (g.type === 'mesh') return transformMesh(g, m)
   if (g.type === 'point') return { ...g, point: g.point.clone().applyMatrix4(m) }
   const linear = new Matrix3().setFromMatrix4(m)
@@ -107,6 +111,24 @@ export function transform(g: Geometry, m: Matrix4): Geometry {
     case 'polycurve':
       return { type: 'polycurve', segments: g.segments.map((s) => transform(s, m) as SegmentGeometry) }
   }
+}
+
+/**
+ * Moves a clipping plane's rectangle. It stays a rectangle: its sides take the length the transform
+ * gives them, and its plane (and so the side it keeps) turns with it, also through a mirror.
+ */
+function transformClipping(g: ClippingGeometry, m: Matrix4): ClippingGeometry {
+  const linear = new Matrix3().setFromMatrix4(m)
+  const x = g.xaxis.clone().applyMatrix3(linear)
+  const y = g.yaxis.clone().applyMatrix3(linear)
+  const width = g.width * x.length()
+  const height = g.height * y.length()
+  x.normalize()
+  y.addScaledVector(x, -y.dot(x)).normalize()
+  // A mirror turns the sides around: the kept side is mirrored with the rest by flipping the normal
+  // back (the rectangle, centered, stays where it is).
+  if (linear.determinant() < 0) y.negate()
+  return { ...g, center: g.center.clone().applyMatrix4(m), xaxis: x, yaxis: y, width, height }
 }
 
 /**

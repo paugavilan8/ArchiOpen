@@ -70,7 +70,7 @@ function inFileUnits(g: Geometry, toFile: Matrix4, scale: number): R.AnyShape {
   }
   // Hatches go as their boundaries.
   if (scaled.type === 'hatch') return R.makeCompound(scaled.loops.map(curveToWire))
-  if (scaled.type === 'instance') return R.makeCompound([])
+  if (scaled.type === 'instance' || scaled.type === 'clipping') return R.makeCompound([])
   // Meshes go as faces of flat polygons, sewn together.
   if (scaled.type === 'mesh') return meshToShape(scaled)
   if (scaled.type === 'point') return R.makeVertex([scaled.point.x, scaled.point.y, scaled.point.z])

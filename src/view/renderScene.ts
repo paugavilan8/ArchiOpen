@@ -24,7 +24,11 @@ export class RenderScene {
   private readonly textures: TextureLibrary
 
   /** `onTextureLoad` is called when a picture has loaded, to draw again. */
-  constructor(onTextureLoad: () => void = () => {}) {
+  /** `clippingPlanes` is the list of planes the model's materials are cut by (see clipping.ts). */
+  constructor(
+    onTextureLoad: () => void = () => {},
+    private readonly clippingPlanes: THREE.Plane[] = [],
+  ) {
     this.textures = new TextureLibrary(onTextureLoad)
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
@@ -103,6 +107,8 @@ export class RenderScene {
         polygonOffset: true,
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
+        clippingPlanes: this.clippingPlanes,
+        clipShadows: true,
       })
       if (t) {
         material.map = this.textures.get(t)

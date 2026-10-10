@@ -143,6 +143,23 @@ export interface PointGeometry {
   point: Vector3
 }
 
+/**
+ * A clipping plane: a rectangle (centered on `center`, `width` along `xaxis` and `height` along
+ * `yaxis`, unit vectors) whose plane cuts the model in the views it is on. What lies on the side of
+ * its normal (`xaxis` × `yaxis`, the arrow drawn on it) stays visible; the rest is cut away. The
+ * rectangle only shows where the plane is: the plane cuts without limit.
+ */
+export interface ClippingGeometry {
+  type: 'clipping'
+  center: Vector3
+  xaxis: Vector3
+  yaxis: Vector3
+  width: number
+  height: number
+  /** The viewports it cuts, by name ('Top', 'Perspective'…). */
+  views: string[]
+}
+
 export type AnyCurve = PolylineGeometry | CircleGeometry | ArcGeometry | CurveGeometry | PolycurveGeometry
 
 // Geometry values are immutable: edits produce a new value, which keeps the caches below valid.
@@ -165,10 +182,10 @@ export interface InstanceGeometry {
   matrix: number[]
 }
 
-export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry | InstanceGeometry | MeshGeometry | PointGeometry
+export type Geometry = AnyCurve | BrepGeometry | AnnotationGeometry | HatchGeometry | InstanceGeometry | MeshGeometry | PointGeometry | ClippingGeometry
 
 export const isCurve = (g: Geometry): g is AnyCurve =>
-  g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'instance' && g.type !== 'mesh' && g.type !== 'point'
+  g.type !== 'brep' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'instance' && g.type !== 'mesh' && g.type !== 'point' && g.type !== 'clipping'
 
 export interface SnapPoints {
   end: Vector3[]
@@ -400,6 +417,8 @@ export function wireframe(g: Geometry): Vector3[][] {
               ? meshEdgeLines(g)
               : g.type === 'point'
                 ? [[g.point]]
+              : g.type === 'clipping'
+                ? clippingLines(g)
               : g.display.edges.map((flat) => {
           const pts: Vector3[] = []
           for (let i = 0; i < flat.length; i += 3) pts.push(new Vector3(flat[i], flat[i + 1], flat[i + 2]))
@@ -408,6 +427,31 @@ export function wireframe(g: Geometry): Vector3[][] {
     wireframeCache.set(g, lines)
   }
   return lines
+}
+
+/** The normal of a clipping plane: the side it keeps. */
+export const clippingNormal = (g: ClippingGeometry): Vector3 => g.xaxis.clone().cross(g.yaxis).normalize()
+
+/** The corners of a clipping plane's rectangle, in order. */
+export function clippingCorners(g: ClippingGeometry): Vector3[] {
+  const x = g.xaxis.clone().multiplyScalar(g.width / 2)
+  const y = g.yaxis.clone().multiplyScalar(g.height / 2)
+  return [g.center.clone().sub(x).sub(y), g.center.clone().add(x).sub(y), g.center.clone().add(x).add(y), g.center.clone().sub(x).add(y)]
+}
+
+/** A clipping plane's rectangle, and an arrow from its center towards the side it keeps. */
+function clippingLines(g: ClippingGeometry): Vector3[][] {
+  const corners = clippingCorners(g)
+  const size = Math.min(g.width, g.height) * 0.1
+  const tip = g.center.clone().addScaledVector(clippingNormal(g), size)
+  const head = size * 0.25
+  const back = tip.clone().addScaledVector(clippingNormal(g), -head)
+  return [
+    [...corners, corners[0]],
+    [g.center, tip],
+    [back.clone().addScaledVector(g.xaxis, head * 0.5), tip, back.clone().addScaledVector(g.xaxis, -head * 0.5)],
+    [back.clone().addScaledVector(g.yaxis, head * 0.5), tip, back.clone().addScaledVector(g.yaxis, -head * 0.5)],
+  ]
 }
 
 /** Pattern lines of a hatch; a solid hatch (or one too dense to draw) shows its boundary instead. */
@@ -472,6 +516,10 @@ function buildSnapPoints(g: Geometry): SnapPoints {
     case 'point':
       snaps.end = [g.point]
       break
+    case 'clipping':
+      snaps.end = clippingCorners(g)
+      snaps.cen = [g.center]
+      break
     case 'mesh':
       // Vertices snap as ends, unless there are so many that snapping would crawl.
       if (g.vertices.length / 3 <= SNAP_VERTEX_LIMIT) snaps.end = meshVertexPoints(g)
@@ -512,6 +560,7 @@ export function typeName(g: Geometry): string {
   if (g.type === 'hatch') return 'hatch'
   if (g.type === 'mesh') return 'mesh'
   if (g.type === 'point') return 'point'
+  if (g.type === 'clipping') return 'clipping plane'
   if (g.type === 'instance') return 'block'
   if (g.type === 'annotation') return g.kind === 'text' || g.kind === 'leader' ? g.kind : 'dimension'
   return g.type
@@ -574,6 +623,8 @@ export function geometryToJSON(g: Geometry): unknown {
       return { type: g.type, vertices: g.vertices, faces: g.faces }
     case 'point':
       return { type: g.type, point: toTriple(g.point) }
+    case 'clipping':
+      return { type: g.type, center: toTriple(g.center), xaxis: toTriple(g.xaxis), yaxis: toTriple(g.yaxis), width: g.width, height: g.height, views: g.views }
   }
 }
 
@@ -638,6 +689,16 @@ export function geometryFromJSON(j: any, blocks?: BlockLookup): Geometry {
       return { type: 'mesh', vertices: j.vertices, faces: j.faces }
     case 'point':
       return { type: 'point', point: fromTriple(j.point) }
+    case 'clipping':
+      return {
+        type: 'clipping',
+        center: fromTriple(j.center),
+        xaxis: fromTriple(j.xaxis),
+        yaxis: fromTriple(j.yaxis),
+        width: j.width,
+        height: j.height,
+        views: Array.isArray(j.views) ? j.views : ['Top', 'Front', 'Right', 'Perspective'],
+      }
     default:
       throw new Error(`Unknown geometry type: ${j.type}`)
   }

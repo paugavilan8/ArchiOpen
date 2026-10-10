@@ -5,7 +5,7 @@ import { length } from '../core/curves'
 import { measure } from '../core/annotation'
 import { PATTERN_NAMES } from '../core/hatch'
 import { faceCount, isClosedMesh, meshArea, meshVolume, vertexCount } from '../core/mesh'
-import { AnnotationGeometry, endPoint, HatchGeometry, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
+import { AnnotationGeometry, ClippingGeometry, endPoint, HatchGeometry, Geometry, isClosed, startPoint, tessellate, typeName } from '../core/geometry'
 
 type Row = [label: string, value: string]
 
@@ -64,6 +64,11 @@ export function geometryRows(g: Geometry): Row[] {
       return [['Loops', String(g.loops.length)]]
     case 'point':
       return [['Location', point(g.point)]]
+    case 'clipping':
+      return [
+        ['Center', point(g.center)],
+        ['Size', `${fmt(g.width)} × ${fmt(g.height)}`],
+      ]
     case 'mesh': {
       const closed = isClosedMesh(g)
       const triangles = g.faces.filter((_, i) => i % 4 === 3 && g.faces[i] === g.faces[i - 1]).length
@@ -152,6 +157,7 @@ export class PropertiesPanel {
         sections.push(this.section('Geometry', geometryRows(g)))
         if (g.type === 'annotation') sections.push(this.annotationSection(selected[0].id, g))
         if (g.type === 'hatch') sections.push(this.hatchSection(selected[0].id, g))
+        if (g.type === 'clipping') sections.push(this.clippingSection(selected[0].id, g))
       }
     }
     this.body.replaceChildren(...sections)
@@ -207,6 +213,31 @@ export class PropertiesPanel {
     }
     field('Scale', number(g.scale, (v) => v > 0 && update({ scale: v })))
     field('Rotation', number((g.rotation * 180) / Math.PI, (v) => update({ rotation: (v * Math.PI) / 180 })))
+    return section
+  }
+
+  /** The views a clipping plane cuts, one check box each. */
+  private clippingSection(id: number, g: ClippingGeometry): HTMLElement {
+    const section = this.section('Clipping', [])
+    const list = section.querySelector('dl')!
+    for (const view of ['Top', 'Front', 'Right', 'Perspective']) {
+      const dt = document.createElement('dt')
+      dt.textContent = view
+      const dd = document.createElement('dd')
+      const box = document.createElement('input')
+      box.type = 'checkbox'
+      box.checked = g.views.includes(view)
+      box.dataset.view = view
+      box.title = `Cut the ${view} view`
+      box.addEventListener('change', () => {
+        if (this.runner.busy) return
+        this.doc.begin()
+        this.doc.setGeometry(id, { ...g, views: box.checked ? [...g.views, view] : g.views.filter((v) => v !== view) })
+        this.doc.commit()
+      })
+      dd.appendChild(box)
+      list.append(dt, dd)
+    }
     return section
   }
 

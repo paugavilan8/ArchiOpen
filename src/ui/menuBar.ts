@@ -106,6 +106,10 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Construction Plane to World', 'CPlane World'),
         item('Named Construction Planes…', 'NamedCPlane'),
         item('Named Views…', 'NamedView'),
+        'separator',
+        item('Clipping Plane', 'ClippingPlane'),
+        item('Clipping Planes On in This View', 'EnableClippingPlanes'),
+        item('Clipping Planes Off in This View', 'DisableClippingPlanes'),
       ],
     ],
     [
