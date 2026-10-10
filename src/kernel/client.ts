@@ -45,6 +45,14 @@ interface Pending {
 }
 
 let worker: Worker | null = null
+/** A fresh worker getting ready to take over from one that holds too much memory. */
+let spare: Worker | null = null
+let spareReady = false
+/** The worker's WebAssembly memory after its last job. */
+let workerMemory = 0
+/** Above this, an idle worker is swapped for a fresh one, which gives its memory back. */
+let memoryLimit = 1024 ** 3
+let restarts = 0
 let starting: Promise<void> | null = null
 let ready = false
 let nextId = 1
@@ -69,15 +77,73 @@ function settle(answer: JobAnswer): void {
   const job = pending.get(answer.id)
   if (!job) return
   pending.delete(answer.id)
+  if (answer.memory !== undefined) workerMemory = answer.memory
   if ('result' in answer) job.resolve(decode(answer.result))
   else job.reject(answer.own ? new Error(answer.error) : new KernelFailure(answer.error))
   setBusy()
+  recycleWhenIdle()
+}
+
+/**
+ * WebAssembly memory only grows: a worker that once needed a lot (a big import, say) keeps it. When
+ * it holds more than the limit, a fresh worker loads in the background and takes over once the
+ * kernel is idle, so jobs never wait for it.
+ */
+function recycleWhenIdle(): void {
+  if (!worker || pending.size > 0) return
+  if (spare) {
+    if (!spareReady) return
+    worker.terminate()
+    worker = spare
+    spare = null
+    spareReady = false
+    workerMemory = 0
+    restarts++
+    return
+  }
+  if (workerMemory <= memoryLimit) return
+  spare = spawn(
+    () => {
+      spareReady = true
+      recycleWhenIdle()
+    },
+    () => {
+      spare?.terminate()
+      spare = null
+      spareReady = false
+    },
+  )
+}
+
+/** Sets the memory above which the kernel's worker is renewed (for tests and diagnostics). */
+export function setKernelMemoryLimit(bytes: number): void {
+  memoryLimit = bytes
+}
+
+/** The kernel worker's memory after its last job, and how many times a fresh worker took over. */
+export const kernelMemory = () => ({ bytes: workerMemory, restarts })
+
+/** A kernel worker; its answers settle jobs, whichever worker it is. */
+function spawn(onReady: () => void, onFailed: (error: Error) => void): Worker {
+  const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
+  w.onmessage = (event: MessageEvent) => {
+    const data = event.data as JobAnswer | { ready: true } | { failed: string }
+    if ('ready' in data) onReady()
+    else if ('failed' in data) onFailed(new Error(`The geometry kernel did not load: ${data.failed}`))
+    else settle(data)
+  }
+  w.onerror = (event) => onFailed(new Error(`The geometry kernel stopped: ${event.message || 'unknown error'}`))
+  return w
 }
 
 /** Stops the worker; what it was doing fails with `reason`, and the next job starts a new one. */
 function stop(reason: unknown): void {
   worker?.terminate()
   worker = null
+  spare?.terminate()
+  spare = null
+  spareReady = false
+  workerMemory = 0
   starting = null
   ready = false
   const jobs = [...pending.values()]
@@ -98,23 +164,16 @@ export function loadKernel(): Promise<void> {
         }, reject)
       return
     }
-    const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
-    worker = w
-    w.onmessage = (event: MessageEvent) => {
-      const data = event.data as JobAnswer | { ready: true } | { failed: string }
-      if ('ready' in data) {
+    worker = spawn(
+      () => {
         ready = true
         resolve()
-      } else if ('failed' in data) {
-        stop(new Error(`The geometry kernel did not load: ${data.failed}`))
-        reject(new Error(`The geometry kernel did not load: ${data.failed}`))
-      } else settle(data)
-    }
-    w.onerror = (event) => {
-      const error = new Error(`The geometry kernel stopped: ${event.message || 'unknown error'}`)
-      stop(error)
-      reject(error)
-    }
+      },
+      (error) => {
+        stop(error)
+        reject(error)
+      },
+    )
   })
   // Let a failed start be tried again next time.
   starting.catch(() => (starting = null))

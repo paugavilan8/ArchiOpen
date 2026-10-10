@@ -42,6 +42,7 @@ import {
   splitShape,
 } from './surfaceEdit'
 import { exactRhinoBrep } from './toRhino'
+import { inArena } from './arena'
 import { decode, encode, isShapeRef } from './wire'
 
 /**
@@ -129,10 +130,13 @@ const isShape = (value: unknown): value is AnyShape =>
   typeof value === 'object' && value !== null && 'wrapped' in value && typeof (value as { mesh?: unknown }).mesh === 'function'
 
 /** Runs a job on arguments as they came from the app; the result is ready to go back. */
-export async function runJob(name: string, args: unknown[]): Promise<unknown> {
+export function runJob(name: string, args: unknown[]): Promise<unknown> {
   const job = (api as Record<string, (...a: unknown[]) => unknown>)[name]
-  if (!job) throw new Error(`Unknown kernel job: ${name}`)
-  const input = args.map((a) => decode(a, (v) => (isShapeRef(v) ? shapeOf({ ...v.$shape } as BrepGeometry) : v)))
-  const result = await job(...input)
-  return encode(result, (v) => (isShape(v) ? toBrep(v) : v))
+  if (!job) return Promise.reject(new Error(`Unknown kernel job: ${name}`))
+  // Everything the job makes in the kernel is freed once its result is plain data.
+  return inArena(async () => {
+    const input = args.map((a) => decode(a, (v) => (isShapeRef(v) ? shapeOf({ ...v.$shape } as BrepGeometry) : v)))
+    const result = await job(...input)
+    return encode(result, (v) => (isShape(v) ? toBrep(v) : v))
+  })
 }

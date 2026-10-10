@@ -39,6 +39,10 @@ se adjuntan a un borrador de *release*.
   [replicad](https://replicad.xyz), cargado la primera vez que se usa). El núcleo trabaja en
   segundo plano (en un Web Worker): mientras calcula una booleana, un empalme o un Make2D la
   ventana sigue respondiendo, la barra de estado muestra «Computing…» y `Esc` lo detiene.
+  Cada operación libera al terminar los objetos de Open CASCADE que ha creado, y las booleanas y
+  secciones se vacían antes de borrarse (si no, Open CASCADE perdía unos 160 KB en cada una). Como
+  la memoria de WebAssembly nunca encoge, si el núcleo llega a ocupar más de 1 GB (tras importar un
+  STEP enorme, por ejemplo) se carga uno nuevo en segundo plano y lo sustituye cuando está libre.
   `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (con opción `Solid` para tapar curvas cerradas
   planas), `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`,
   `BooleanIntersection`, `FilletEdge` (elige aristas con clic), `Sweep1` (perfil a lo largo de

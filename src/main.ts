@@ -19,7 +19,7 @@ import { buildMenuBar } from './ui/menuBar'
 import { PropertiesPanel } from './ui/propertiesPanel'
 import { buildTabs } from './ui/sidePanel'
 import { StatusBar } from './ui/statusBar'
-import { cancelKernel, kernelBusy, onKernelBusy } from './kernel/client'
+import { cancelKernel, kernelBusy, kernelMemory, onKernelBusy, setKernelMemoryLimit } from './kernel/client'
 import { buildToolbars } from './ui/toolbar'
 import { installTooltips } from './ui/tooltip'
 import { installViewportMenus } from './ui/viewportMenus'
@@ -213,4 +213,4 @@ commandLine.log('ArchiOpen 0.1. Type a command name, or pick one from the menus 
 commandLine.focus()
 updateTitle()
 
-if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings, files, history } })
+if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings, files, history, kernel: { kernelMemory, setKernelMemoryLimit } } })

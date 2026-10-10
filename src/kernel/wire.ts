@@ -65,7 +65,8 @@ export interface JobRequest {
   args: unknown[]
 }
 
-export type JobAnswer = { id: number; result: unknown } | { id: number; error: string; own: boolean }
+/** The answer to a job; `memory` is the worker's WebAssembly memory after it, in bytes. */
+export type JobAnswer = { id: number; result: unknown; memory?: number } | { id: number; error: string; own: boolean; memory?: number }
 
 /** How a job failed: an Error of our own (`own`), or an exception from inside the kernel. */
 export function failureOf(id: number, error: unknown): JobAnswer {

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { runJob } from './api'
-import { loadOC } from './loadKernel'
+import { kernelMemoryBytes, loadOC } from './loadKernel'
 import { failureOf, type JobAnswer, type JobRequest } from './wire'
 
 /**
@@ -30,7 +30,7 @@ scope.onmessage = async (event: MessageEvent<JobRequest>) => {
   let answer: JobAnswer
   try {
     await ready
-    answer = { id, result: await runJob(name, args) }
+    answer = { id, result: await runJob(name, args), memory: kernelMemoryBytes() }
   } catch (error) {
     // Our own errors say what is wrong with the input; the kernel's are exceptions of its own.
     answer = failureOf(id, error)
