@@ -162,7 +162,7 @@ Haz clic en cada apartado para desplegarlo.
 - Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
   número antes de hacer clic.
 - Referencias a objetos (barra de estado; F3 las activa o desactiva todas):
-  - `End`, `Mid`, `Cen`, `Quad` y `Near`, como siempre;
+  - `End`, `Mid`, `Cen`, `Quad` y `Near`, las de siempre;
   - `Knot`: los nudos de las curvas NURBS (donde se juntan sus tramos);
   - `Int`: el cruce de dos curvas, aristas o líneas de una malla. Si se cortan de verdad el punto
     es exacto (no el de las líneas con que se dibujan); si solo se cruzan en la vista (una pasa por
