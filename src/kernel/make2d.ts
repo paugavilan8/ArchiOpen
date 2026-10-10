@@ -1,7 +1,7 @@
 import { Box3, Vector3 } from 'three'
 import * as R from 'replicad'
 import { join } from '../core/curves'
-import { type ClipPlane, clipCurve, clipMesh, isKept } from '../core/clipPlanes'
+import { type ClipPlane, clipCurve, clipMesh, clipPolygon, isKept } from '../core/clipPlanes'
 import { AnyCurve, BrepGeometry, MeshGeometry, tessellate } from '../core/geometry'
 import { drawMeshes } from '../core/meshDrawing'
 import { curveToEdges, sectionCurves } from './brep'
@@ -20,6 +20,12 @@ export interface Drawing2D {
   hidden: AnyCurve[]
   /** Visible lines where clipping planes cut through surfaces and solids (drawn heavier). */
   section?: AnyCurve[]
+  /**
+   * The cut faces of solids, to fill: for each solid and plane, its outline loops (loops inside
+   * others are holes), in the drawing's plane. Only for planes the view looks straight at from the
+   * side they cut away (plans and sections), where the cut faces are in front of everything.
+   */
+  fills?: Vector3[][][]
 }
 
 /**
@@ -41,7 +47,23 @@ export function make2DWithMeshes(
   clip: ClipPlane[] = [],
 ): Drawing2D {
   let cuts: AnyCurve[] = []
+  const fills: Vector3[][][] = []
   if (clip.length > 0) {
+    const toward = view.direction.clone().normalize()
+    shapes.forEach((shape, s) => {
+      if (surfaces[s]?.kind !== 'solid') return
+      clip.forEach((plane, i) => {
+        if (plane.normal.dot(toward) > -0.999) return
+        const loops = sectionsOf(shape, plane)
+          .map((c) => tessellate(c))
+          // Closed outlines only, as far as the other planes keep them.
+          .filter((pts) => pts.length > 3 && pts[0].distanceTo(pts[pts.length - 1]) < 1e-6 * Math.max(1, pts[0].length()))
+          .map((pts) => clipPolygon(pts.slice(0, -1), clip.filter((_, k) => k !== i)))
+          .filter((pts) => pts.length >= 3)
+          .map((pts) => pts.map((p) => toView(p, view)))
+        if (loops.length > 0) fills.push(loops)
+      })
+    })
     // Where each plane cuts, as far as the other planes keep it.
     cuts = shapes.flatMap((shape) => clip.flatMap((plane, i) => sectionsOf(shape, plane).flatMap((c) => clipCurve(c, clip.filter((_, k) => k !== i)))))
     shapes = shapes.flatMap((shape) => clipShape(shape, clip) ?? [])
@@ -58,10 +80,10 @@ export function make2DWithMeshes(
     drawing.visible.push(...lines.visible.map(polyline))
     drawing.hidden.push(...lines.hidden.map(polyline))
   }
-  if (cuts.length === 0) return drawing
+  if (cuts.length === 0) return fills.length > 0 ? { ...drawing, fills } : drawing
   // The cut outlines, seen from the view: visible lines lying on them are section lines.
   const section = separateSections(drawing.visible, cuts.map((c) => tessellate(c).map((p) => toView(p, view))))
-  return { visible: section.rest, hidden: drawing.hidden, section: section.on }
+  return { visible: section.rest, hidden: drawing.hidden, section: section.on, ...(fills.length > 0 ? { fills } : {}) }
 }
 
 /** Display triangles as mesh faces (a triangle repeats its last corner). */

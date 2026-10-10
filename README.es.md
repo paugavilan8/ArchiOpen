@@ -111,7 +111,8 @@ Despliega cada apartado para ver los detalles.
   corte también cortan los dibujos: `Make2D` (los planos activos en la vista activa, opción
   `Clipping`), los detalles de las láminas (opción *Clipping* en el panel del detalle) y las vistas
   impresas. Las líneas de corte van a su propia capa, *Make2D Section*, y se imprimen con una
-  plumilla más gruesa.
+  plumilla más gruesa; en plantas y secciones, las caras cortadas de los sólidos se rellenan
+  (*Make2D Section Fill*, opción `SectionFill`).
 - Selección por clic, ventana (de izquierda a derecha) y captura (de derecha a izquierda), con un
   índice espacial que la mantiene inmediata en modelos con miles de objetos o mallas muy densas.
 - Gumball sobre la selección: flechas para mover, arcos para girar (Mayús: pasos de 15°), cajas para

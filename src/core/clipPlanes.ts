@@ -130,19 +130,7 @@ export function clipMesh(g: MeshGeometry, planes: readonly ClipPlane[]): MeshGeo
   }
   for (let f = 0; f < g.faces.length; f += 4) {
     const ids = g.faces.slice(f, f + 4)
-    let polygon = (ids[2] === ids[3] ? ids.slice(0, 3) : ids).map(point)
-    for (const plane of planes) {
-      if (polygon.length === 0) break
-      const out: Vector3[] = []
-      polygon.forEach((p, i) => {
-        const q = polygon[(i + 1) % polygon.length]
-        const dp = planeDistance(plane, p)
-        const dq = planeDistance(plane, q)
-        if (kept(plane, p)) out.push(p)
-        if (kept(plane, p) !== kept(plane, q) && dp !== dq) out.push(p.clone().lerp(q, dp / (dp - dq)))
-      })
-      polygon = out
-    }
+    const polygon = clipPolygon((ids[2] === ids[3] ? ids.slice(0, 3) : ids).map(point), planes)
     if (polygon.length < 3) continue
     // Fan triangles (and quads where the face stays whole).
     const index = polygon.map(add)
@@ -150,4 +138,21 @@ export function clipMesh(g: MeshGeometry, planes: readonly ClipPlane[]): MeshGeo
     else for (let k = 1; k + 1 < index.length; k++) faces.push(index[0], index[k], index[k + 1], index[k + 1])
   }
   return faces.length > 0 ? { type: 'mesh', vertices, faces } : null
+}
+
+/** What the planes keep of a closed planar polygon (given without repeating its first point). */
+export function clipPolygon(polygon: Vector3[], planes: readonly ClipPlane[]): Vector3[] {
+  for (const plane of planes) {
+    if (polygon.length === 0) break
+    const out: Vector3[] = []
+    polygon.forEach((p, i) => {
+      const q = polygon[(i + 1) % polygon.length]
+      const dp = planeDistance(plane, p)
+      const dq = planeDistance(plane, q)
+      if (kept(plane, p)) out.push(p)
+      if (kept(plane, p) !== kept(plane, q) && dp !== dq) out.push(p.clone().lerp(q, dp / (dp - dq)))
+    })
+    polygon = out
+  }
+  return polygon
 }
