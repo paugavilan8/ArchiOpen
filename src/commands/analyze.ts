@@ -6,12 +6,12 @@ import type { CadObject } from '../core/document'
 import { AnyCurve, Geometry, isCurve, tangentAt, typeName } from '../core/geometry'
 import { faceCount, isClosedMesh, meshPieces, nakedEdges, vertexCount } from '../core/mesh'
 import { unitAbbreviation } from '../core/units'
-import { box as boxShape, shapeOf, toBrep } from '../kernel/brep'
-import { checkShape, shapeArea, shapeBounds, shapeVolume } from '../kernel/measure'
+import { kernelJob } from '../kernel/client'
+import { shapeRef } from '../kernel/wire'
 import { geometryRows } from '../ui/propertiesPanel'
 import { isOption, plural } from './helpers'
 import type { Command, CommandContext } from './runner'
-import { kernel } from './solids'
+import { kernel, readable } from './solids'
 
 /** Measuring and checking: distances, lengths, angles, areas, volumes, bounding boxes. */
 
@@ -129,7 +129,7 @@ async function areaOf(ctx: CommandContext, g: Geometry): Promise<AreaResult | st
   if (g.type === 'mesh') return meshAreaCentroid(g)
   if (g.type === 'brep') {
     await kernel(ctx)
-    const m = shapeArea(shapeOf(g))
+    const m = await readable(kernelJob('shapeArea', shapeRef(g)), 'measure the area')
     return { area: m.value, centroid: m.centroid }
   }
   return 'no area'
@@ -179,7 +179,7 @@ const volume: Command = {
         measured.push({ value: r.volume, centroid: r.centroid })
       } else if (g.type === 'brep' && g.kind === 'solid') {
         await kernel(ctx)
-        measured.push(shapeVolume(shapeOf(g)))
+        measured.push(await readable(kernelJob('shapeVolume', shapeRef(g)), 'measure the volume'))
       } else open++
     }
     if (measured.length === 0) throw new Error('Select closed solids or closed meshes (open ones have no volume)')
@@ -205,7 +205,7 @@ const boundingBoxCommand: Command = {
     const box = boundingBox(geometries.filter((g) => g.type !== 'brep'), plane)
     const breps = geometries.filter((g) => g.type === 'brep')
     if (breps.length > 0) await kernel(ctx)
-    for (const g of breps) box.union(shapeBounds(shapeOf(g), plane))
+    for (const g of breps) box.union(await readable(kernelJob('shapeBounds', shapeRef(g), plane), 'bound the object'))
     if (box.isEmpty()) throw new Error('Nothing to box')
     const size = box.getSize(new Vector3())
     const at = (x: number, y: number, z: number) =>
@@ -227,7 +227,8 @@ const boundingBoxCommand: Command = {
       id = doc.add({ type: 'polyline', points: corners, closed: true }).id
     } else {
       await kernel(ctx)
-      id = doc.add(toBrep(boxShape(corner, plane.xaxis.clone().multiplyScalar(size.x), plane.yaxis.clone().multiplyScalar(size.y), plane.normal.clone().multiplyScalar(size.z)))).id
+      const solid = kernelJob('box', corner, plane.xaxis.clone().multiplyScalar(size.x), plane.yaxis.clone().multiplyScalar(size.y), plane.normal.clone().multiplyScalar(size.z))
+      id = doc.add(await readable(solid, 'make the box')).id
     }
     doc.select([id])
     log(`Bounding box ${num(size.x)} × ${num(size.y)} × ${num(size.z)} ${u}, from ${pointText(corner)}`)
@@ -277,7 +278,7 @@ async function problemsOf(ctx: CommandContext, o: CadObject): Promise<string[]> 
     if (faceCount(g) === 0) problems.push('no faces')
   } else if (g.type === 'brep') {
     await kernel(ctx)
-    const check = checkShape(shapeOf(g))
+    const check = await readable(kernelJob('checkShape', shapeRef(g)), 'check the object')
     if (!check.valid) problems.push('the kernel finds it invalid')
     if (check.nonManifoldEdges) problems.push(`${plural('edge', check.nonManifoldEdges)} shared by more than two faces`)
   }
@@ -292,7 +293,7 @@ async function notesOf(ctx: CommandContext, o: CadObject): Promise<string> {
     return `${vertexCount(g)} vertices, ${faceCount(g)} faces, ${open ? `open (${plural('naked edge', open)})` : 'closed'}, ${plural('piece', meshPieces(g).length)}`
   }
   if (g.type === 'brep') {
-    const check = checkShape(shapeOf(g))
+    const check = await readable(kernelJob('checkShape', shapeRef(g)), 'check the object')
     return `${plural('face', check.faces)}, ${plural('edge', check.edges)}, ${check.nakedEdges ? `open (${plural('naked edge', check.nakedEdges)})` : 'closed'}`
   }
   return ''

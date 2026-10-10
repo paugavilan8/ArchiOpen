@@ -19,6 +19,7 @@ import { buildMenuBar } from './ui/menuBar'
 import { PropertiesPanel } from './ui/propertiesPanel'
 import { buildTabs } from './ui/sidePanel'
 import { StatusBar } from './ui/statusBar'
+import { cancelKernel, kernelBusy, onKernelBusy } from './kernel/client'
 import { buildToolbars } from './ui/toolbar'
 import { installTooltips } from './ui/tooltip'
 import { installViewportMenus } from './ui/viewportMenus'
@@ -39,6 +40,7 @@ registerCommands(runner)
 
 const commandLine = new CommandLine(runner, input)
 const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, settings)
+onKernelBusy((busy) => statusBar.setKernelBusy(busy))
 const [propertiesPane, layersPane, materialsPane, blocksPane, viewsPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Materials', 'Blocks', 'Views'])
 new PropertiesPanel(propertiesPane, doc, runner)
 new LayersPanel(layersPane, doc, ctx.log)
@@ -156,6 +158,8 @@ document.addEventListener('keydown', (e) => {
 
   if (e.key === 'Escape') {
     commandLine.clear()
+    // A long kernel job stops too (the kernel starts again for the next one).
+    if (kernelBusy()) cancelKernel()
     if (runner.busy) runner.cancel()
     else if (doc.selectedPointCount > 0) doc.clearPointSelection()
     else doc.clearSelection()

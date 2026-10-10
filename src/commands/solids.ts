@@ -1,31 +1,12 @@
 import { Vector3 } from 'three'
-import type { AnyShape } from 'replicad'
 import { AnyCurve, BrepGeometry, isCurve, tessellate, wireframe } from '../core/geometry'
 import { CancelError } from '../input/interaction'
-import {
-  boolean,
-  BooleanKind,
-  box,
-  cylinder,
-  explodeShape,
-  extrudeCurve,
-  filletEdges,
-  joinShapes,
-  loftCurves,
-  nearestFace,
-  planarFace,
-  revolveCurve,
-  sectionCurves,
-  shapeOf,
-  shellSolid,
-  sphere,
-  sweep,
-  toBrep,
-} from '../kernel/brep'
+import type { BooleanKind } from '../kernel/brep'
+import { nearestFace } from '../core/brepFaces'
+import { kernelJob, kernelReady, loadKernel } from '../kernel/client'
+import { shapeRef } from '../kernel/wire'
 import { brepHooks } from './curveEdit'
 import { sectionMesh } from '../core/mesh'
-import { triple } from '../kernel/rebuild'
-import { kernelReady, loadKernel } from '../kernel/loadKernel'
 import { isOption, plural, valueOption, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
 
@@ -47,17 +28,27 @@ export async function kernel(ctx: CommandContext): Promise<void> {
   await loadKernel()
 }
 
-/** Runs a kernel operation and adds the result, turning kernel failures into a readable error. */
-export function addShape(ctx: CommandContext, make: () => AnyShape, what: string, layerId?: number): number {
-  let shape: AnyShape
-  try {
-    shape = make()
-  } catch (error) {
-    console.error(error)
-    throw new Error(`Could not ${what}. Check that the input is valid (closed, planar, not self-intersecting)`)
-  }
-  return ctx.doc.add(toBrep(shape), layerId).id
+/** Waits for a kernel job and adds what it made, turning kernel failures into a readable error. */
+export async function addShape(ctx: CommandContext, job: Promise<BrepGeometry>, what: string, layerId?: number): Promise<number> {
+  return ctx.doc.add(await readable(job, `${what}. Check that the input is valid (closed, planar, not self-intersecting)`), layerId).id
 }
+
+/** The result of a kernel job; its failures (but not a cancel) become `Could not <what>`. */
+export async function readable<T>(job: Promise<T>, what: string): Promise<T> {
+  try {
+    return await job
+  } catch (error) {
+    if (error instanceof CancelError) throw error
+    console.error(error)
+    throw new Error(`Could not ${what}`)
+  }
+}
+
+/** A point or vector as three numbers, as history records keep them. */
+const triple = (v: Vector3): [number, number, number] => [v.x, v.y, v.z]
+
+/** A brep's exact shape, to hand to a kernel job. */
+export const shapeOfId = (ctx: CommandContext, id: number) => shapeRef(brepOf(ctx, id)!)
 
 export const curveOf = (ctx: CommandContext, id: number): AnyCurve | null => {
   const g = ctx.doc.objects.get(id)?.geometry
@@ -124,7 +115,7 @@ const boxCommand: Command = {
     if (Math.abs(h) < 1e-9) throw new Error('The height must not be zero')
     memory.height = Math.abs(h)
     await kernel(ctx)
-    addShape(ctx, () => box(a, u, v, normal.clone().multiplyScalar(h)), 'make the box')
+    await addShape(ctx, kernelJob('box', a, u, v, normal.clone().multiplyScalar(h)), 'make the box')
   },
 }
 
@@ -168,7 +159,7 @@ const cylinderCommand: Command = {
     memory.height = Math.abs(h)
     await kernel(ctx)
     // A negative height grows the cylinder downwards.
-    addShape(ctx, () => cylinder(c, r, Math.abs(h), h > 0 ? normal : normal.clone().negate()), 'make the cylinder')
+    await addShape(ctx, kernelJob('cylinder', c, r, Math.abs(h), h > 0 ? normal : normal.clone().negate()), 'make the cylinder')
   },
 }
 
@@ -180,7 +171,7 @@ const sphereCommand: Command = {
     const { xaxis, yaxis } = center.viewport.cplane
     const r = await getRadius(ctx, center.point, xaxis, yaxis)
     await kernel(ctx)
-    addShape(ctx, () => sphere(center.point, r), 'make the sphere')
+    await addShape(ctx, kernelJob('sphere', center.point, r), 'make the sphere')
   },
 }
 
@@ -216,11 +207,12 @@ const extrudeCrv: Command = {
       memory.extrudeDistance = Math.abs(distance)
       await kernel(ctx)
       const direction = n.clone().multiplyScalar(distance)
-      const created = ids.map((id) => {
-        const made = addShape(ctx, () => extrudeCurve(curveOf(ctx, id)!, direction, memory.extrudeSolid), 'extrude the curve', doc.objects.get(id)!.layerId)
+      const created: number[] = []
+      for (const id of ids) {
+        const made = await addShape(ctx, kernelJob('extrudeCurve', curveOf(ctx, id)!, direction, memory.extrudeSolid), 'extrude the curve', doc.objects.get(id)!.layerId)
         ctx.history?.record(made, 'ExtrudeCrv', [id], { direction: triple(direction), cap: memory.extrudeSolid })
-        return made
-      })
+        created.push(made)
+      }
       doc.select(created)
       log(`${plural('object', created.length)} created`)
       return
@@ -246,11 +238,12 @@ const revolve: Command = {
     await kernel(ctx)
     axis.normalize()
     const radians = (angle * Math.PI) / 180
-    const created = ids.map((id) => {
-      const made = addShape(ctx, () => revolveCurve(curveOf(ctx, id)!, start.point, axis, radians), 'revolve the curve', doc.objects.get(id)!.layerId)
+    const created: number[] = []
+    for (const id of ids) {
+      const made = await addShape(ctx, kernelJob('revolveCurve', curveOf(ctx, id)!, start.point, axis, radians), 'revolve the curve', doc.objects.get(id)!.layerId)
       ctx.history?.record(made, 'Revolve', [id], { origin: triple(start.point), axis: triple(axis), angle: radians })
-      return made
-    })
+      created.push(made)
+    }
     doc.select(created)
     log(`${plural('object', created.length)} created`)
   },
@@ -264,7 +257,7 @@ const loft: Command = {
     const ids = (await input.getObjects('Select curves to loft, in order')).filter((id) => curveOf(ctx, id))
     if (ids.length < 2) throw new Error('Select at least two curves')
     await kernel(ctx)
-    const id = addShape(ctx, () => loftCurves(ids.map((i) => curveOf(ctx, i)!)), 'loft the curves', doc.objects.get(ids[0])!.layerId)
+    const id = await addShape(ctx, kernelJob('loftCurves', ids.map((i) => curveOf(ctx, i)!)), 'loft the curves', doc.objects.get(ids[0])!.layerId)
     ctx.history?.record(id, 'Loft', ids)
     doc.select([id])
   },
@@ -278,9 +271,9 @@ const planarSrf: Command = {
     await kernel(ctx)
     const created: number[] = []
     for (const id of ids) {
-      const face = planarFace(curveOf(ctx, id)!)
+      const face = await readable(kernelJob('planarFace', curveOf(ctx, id)!), 'make a surface from that curve')
       if (!face) continue
-      const made = doc.add(toBrep(face), doc.objects.get(id)!.layerId).id
+      const made = doc.add(face, doc.objects.get(id)!.layerId).id
       ctx.history?.record(made, 'PlanarSrf', [id])
       created.push(made)
     }
@@ -289,10 +282,10 @@ const planarSrf: Command = {
   },
 }
 
-/** Solids for booleans: picks breps from a selection and loads their exact shapes. */
-function shapesOf(ctx: CommandContext, ids: number[]): { ids: number[]; shapes: AnyShape[] } {
+/** Solids for booleans: picks breps from a selection, with their exact shapes. */
+function shapesOf(ctx: CommandContext, ids: number[]) {
   const breps = ids.filter((id) => brepOf(ctx, id))
-  return { ids: breps, shapes: breps.map((id) => shapeOf(brepOf(ctx, id)!)) }
+  return { ids: breps, shapes: breps.map((id) => shapeOfId(ctx, id)) }
 }
 
 function booleanCommand(name: string, kind: BooleanKind): Command {
@@ -318,7 +311,8 @@ function booleanCommand(name: string, kind: BooleanKind): Command {
       const layerId = doc.objects.get(a.ids[0])!.layerId
       // Several solids to subtract from are each cut by all the tools.
       const targets = kind === 'difference' ? a.shapes.map((s, i) => ({ shape: s, id: a.ids[i] })) : [{ shape: a.shapes[0], id: a.ids[0] }]
-      const created = targets.map(({ shape }) => addShape(ctx, () => boolean(kind, shape, b.shapes), `compute the boolean ${kind}`, layerId))
+      const created: number[] = []
+      for (const { shape } of targets) created.push(await addShape(ctx, kernelJob('boolean', kind, shape, b.shapes), `compute the boolean ${kind}`, layerId))
       for (const id of [...a.ids, ...b.ids]) doc.remove(id)
       doc.select(created)
     },
@@ -377,7 +371,7 @@ const filletEdge: Command = {
     const g = brepOf(ctx, target)!
     await kernel(ctx)
     const layerId = doc.objects.get(target)!.layerId
-    const id = addShape(ctx, () => filletEdges(shapeOf(g), edges, memory.filletRadius), 'fillet these edges (the radius may be too large)', layerId)
+    const id = await addShape(ctx, kernelJob('filletEdges', shapeRef(g), edges, memory.filletRadius), 'fillet these edges (the radius may be too large)', layerId)
     doc.remove(target)
     doc.select([id])
     log(`${plural('edge', edges.length)} filleted`)
@@ -397,11 +391,12 @@ const sweep1: Command = {
     const ids = (await input.getObjects('Select cross-section curves')).filter((id) => id !== rail.id && curveOf(ctx, id))
     if (ids.length === 0) throw new Error('Select at least one cross-section curve')
     await kernel(ctx)
-    const created = ids.map((id) => {
-      const made = addShape(ctx, () => sweep(curveOf(ctx, id)!, path), 'sweep the curve', doc.objects.get(id)!.layerId)
+    const created: number[] = []
+    for (const id of ids) {
+      const made = await addShape(ctx, kernelJob('sweep', curveOf(ctx, id)!, path), 'sweep the curve', doc.objects.get(id)!.layerId)
       ctx.history?.record(made, 'Sweep1', [id, rail.id])
-      return made
-    })
+      created.push(made)
+    }
     doc.select(created)
     log(`${plural('object', created.length)} created`)
   },
@@ -440,7 +435,7 @@ const shell: Command = {
       }
       target = pick.id
       // Breps saved before faces were tracked get their face data from the kernel.
-      geometry ??= g.display.faceTriangles ? g : toBrep(shapeOf(g))
+      geometry ??= g.display.faceTriangles ? g : await readable(kernelJob('faces', shapeRef(g)), 'find the faces of that solid')
       const face = nearestFace(geometry, pick.point)
       if (face >= 0 && !faces.includes(face)) faces.push(face)
       display.setPreview(faces.flatMap((f) => faceOutline(geometry!, f)), true)
@@ -452,7 +447,7 @@ const shell: Command = {
     memory.shellThickness = thickness
     const solid = geometry
     const layerId = doc.objects.get(target)!.layerId
-    const id = addShape(ctx, () => shellSolid(shapeOf(solid), faces, thickness), 'shell the solid (the thickness may be too large)', layerId)
+    const id = await addShape(ctx, kernelJob('shellSolid', shapeRef(solid), faces, thickness), 'shell the solid (the thickness may be too large)', layerId)
     doc.remove(target)
     doc.select([id])
   },
@@ -461,7 +456,7 @@ const shell: Command = {
 /** Adds section curves through the selected surfaces and solids for each plane. */
 const sectionable = (ctx: CommandContext, id: number) => !!brepOf(ctx, id) || ctx.doc.objects.get(id)?.geometry.type === 'mesh'
 
-function addSections(ctx: CommandContext, ids: number[], planes: { origin: Vector3; normal: Vector3 }[]): number {
+async function addSections(ctx: CommandContext, ids: number[], planes: { origin: Vector3; normal: Vector3 }[]): Promise<number> {
   let count = 0
   for (const id of ids) {
     const mesh = ctx.doc.objects.get(id)?.geometry
@@ -478,9 +473,8 @@ function addSections(ctx: CommandContext, ids: number[], planes: { origin: Vecto
     }
     const g = brepOf(ctx, id)
     if (!g) continue
-    const shape = shapeOf(g)
-    for (const { origin, normal } of planes) {
-      for (const curve of sectionCurves(shape, origin, normal)) {
+    for (const curves of await readable(kernelJob('sections', shapeRef(g), planes), 'cut that object')) {
+      for (const curve of curves) {
         ctx.doc.add(curve)
         count++
       }
@@ -503,7 +497,7 @@ const section: Command = {
     const normal = end.point.clone().sub(start.point).cross(start.viewport.cplane.normal)
     if (normal.length() < 1e-9) throw new Error('The section line has no length')
     await kernel(ctx)
-    const count = addSections(ctx, ids, [{ origin: start.point, normal: normal.normalize() }])
+    const count = await addSections(ctx, ids, [{ origin: start.point, normal: normal.normalize() }])
     log(count === 0 ? 'The plane does not cut the selected objects' : `${plural('section curve', count)} created`)
   },
 }
@@ -542,7 +536,7 @@ const contour: Command = {
       planes.push({ origin: base.point.clone().addScaledVector(direction, k * spacing), normal: direction })
     }
     await kernel(ctx)
-    const count = addSections(ctx, ids, planes)
+    const count = await addSections(ctx, ids, planes)
     doc.clearSelection()
     log(`${plural('contour curve', count)} on ${plural('plane', planes.length)}`)
   },
@@ -552,7 +546,7 @@ brepHooks.join = async (ctx, ids) => {
   if (ids.length < 2) return null
   await kernel(ctx)
   const layerId = ctx.doc.objects.get(ids[0])!.layerId
-  const id = addShape(ctx, () => joinShapes(ids.map((i) => shapeOf(brepOf(ctx, i)!))), 'join the surfaces', layerId)
+  const id = await addShape(ctx, kernelJob('joinShapes', ids.map((i) => shapeOfId(ctx, i))), 'join the surfaces', layerId)
   for (const i of ids) ctx.doc.remove(i)
   ctx.doc.select([id])
   const kind = brepOf(ctx, id)!.kind
@@ -566,8 +560,8 @@ brepHooks.explode = async (ctx, ids) => {
   let count = 0
   for (const id of multi) {
     const layerId = ctx.doc.objects.get(id)!.layerId
-    for (const face of explodeShape(shapeOf(brepOf(ctx, id)!))) {
-      ctx.doc.add(toBrep(face), layerId)
+    for (const face of await readable(kernelJob('explodeShape', shapeOfId(ctx, id)), 'explode that object')) {
+      ctx.doc.add(face, layerId)
       count++
     }
     ctx.doc.remove(id)

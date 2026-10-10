@@ -2,7 +2,7 @@ import type { CadObject } from '../core/document'
 import { millimetersPer } from '../core/units'
 import { DXF, PDF } from '../app/files'
 import { writeDxf } from '../io/dxf'
-import { PAPER_SIZES, writePdf } from '../io/pdf'
+import { PAPER_SIZES, Sheet, writePdf } from '../io/pdf'
 import { plotSheet, PlotOptions } from '../io/plot'
 import { cachedHiddenLines, computeHiddenLines, HiddenDrawings, layoutSheet, usesHiddenLines } from '../io/layoutSheet'
 import { formatValue, isOption } from './helpers'
@@ -81,13 +81,13 @@ async function printLayouts(ctx: CommandContext): Promise<void> {
     await kernel(ctx)
     log('Removing hidden lines…')
   }
-  const sheets = layouts.map((layout) => {
+  const sheets: Sheet[] = []
+  for (const layout of layouts) {
     const sheetNumber = doc.layouts.indexOf(layout) + 1
-    for (const d of layout.details) if (usesHiddenLines(d)) hidden.set(d.id, cachedHiddenLines(doc, d) ?? computeHiddenLines(doc, d))
-    const sheet = layoutSheet(doc, layout, { black: memory.black, sheetNumber, sheetCount: doc.layouts.length }, hidden)
+    for (const d of layout.details) if (usesHiddenLines(d)) hidden.set(d.id, cachedHiddenLines(doc, d) ?? (await computeHiddenLines(doc, d)))
+    sheets.push(layoutSheet(doc, layout, { black: memory.black, sheetNumber, sheetCount: doc.layouts.length }, hidden))
     hidden.clear()
-    return sheet
-  })
+  }
   const fileName = await files.exportFile(PDF, () => writePdf(sheets))
   if (fileName) log(`Saved ${fileName} (${sheets.length} sheet${sheets.length === 1 ? '' : 's'})`)
 }

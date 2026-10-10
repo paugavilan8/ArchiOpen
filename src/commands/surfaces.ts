@@ -1,73 +1,66 @@
 import { Vector3 } from 'three'
-import type { AnyShape } from 'replicad'
-import { BrepGeometry, wireframe } from '../core/geometry'
-import { nearestFace, shapeOf, toBrep } from '../kernel/brep'
-import {
-  borderCurves,
-  capHoles,
-  curveCutter,
-  edgeCurves,
-  extractFaces,
-  extrudeSurface,
-  intersectionCurves,
-  nearestPiece,
-  offsetSurface,
-  projectCurves,
-  pullCurve,
-  splitShape,
-} from '../kernel/surfaceEdit'
+import { nearestFace } from '../core/brepFaces'
+import { AnyCurve, BrepGeometry, wireframe } from '../core/geometry'
+import { CancelError } from '../input/interaction'
+import { kernelJob } from '../kernel/client'
+import { shapeRef, ShapeRef } from '../kernel/wire'
 import { brepHooks } from './curveEdit'
 import { isOption, plural, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
-import { brepOf, curveOf, faceOutline, kernel, nearestEdge } from './solids'
+import { brepOf, curveOf, faceOutline, kernel, nearestEdge, readable, shapeOfId } from './solids'
 
 const memory = { offset: 1, offsetSolid: false, extrude: 10, deleteInput: true }
 
-/** The cutting shapes for a target: curves become surfaces seen along `direction`, surfaces and solids cut as they are. */
-function cuttersFor(ctx: CommandContext, target: AnyShape, ids: number[], direction: Vector3): AnyShape[] {
-  const out: AnyShape[] = []
+/** The cutting objects among `ids`: curves (cut along a direction) and surfaces and solids. */
+function cuttersFor(ctx: CommandContext, ids: number[]): { curves: AnyCurve[]; shapes: ShapeRef[] } {
+  const curves: AnyCurve[] = []
+  const shapes: ShapeRef[] = []
   for (const id of ids) {
     const curve = curveOf(ctx, id)
-    if (curve) out.push(curveCutter(curve, direction, [target]))
+    if (curve) curves.push(curve)
     const brep = brepOf(ctx, id)
-    if (brep) out.push(shapeOf(brep))
+    if (brep) shapes.push(shapeRef(brep))
   }
-  return out
+  return { curves, shapes }
 }
 
-/** Replaces an object with shapes on its layer; returns their ids. */
-function replaceWithShapes(ctx: CommandContext, id: number, shapes: AnyShape[]): number[] {
+/** Replaces an object with pieces on its layer; returns their ids. */
+function replaceWith(ctx: CommandContext, id: number, pieces: BrepGeometry[]): number[] {
   const layerId = ctx.doc.objects.get(id)!.layerId
   ctx.doc.remove(id)
-  return shapes.map((s) => ctx.doc.add(toBrep(s), layerId).id)
+  return pieces.map((g) => ctx.doc.add(g, layerId).id)
+}
+
+/** Lets a cancel through a catch that only reports failures. */
+function passCancel(error: unknown): void {
+  if (error instanceof CancelError) throw error
+  console.error(error)
 }
 
 brepHooks.trim = async (ctx, id, at, cutterIds, direction) => {
   const g = brepOf(ctx, id)!
   await kernel(ctx)
-  const shape = shapeOf(g)
-  const cutters = cuttersFor(ctx, shape, cutterIds, direction)
-  if (cutters.length === 0) {
+  const { curves, shapes } = cuttersFor(ctx, cutterIds)
+  if (curves.length + shapes.length === 0) {
     ctx.log('Select curves, surfaces or solids as cutting objects')
     return null
   }
-  let pieces: AnyShape[]
+  let result
   try {
-    pieces = splitShape(shape, cutters)
+    result = await kernelJob('trim', shapeRef(g), at, curves, shapes, direction)
   } catch (error) {
-    console.error(error)
+    passCancel(error)
     ctx.log('Could not trim that object')
     return null
   }
-  if (pieces.length < 2) {
+  if (!result || result.pieces.length < 2) {
     ctx.log('The cutting objects do not cross that object')
     return null
   }
-  const removed = nearestPiece(pieces, at)
-  return replaceWithShapes(
+  return replaceWith(
     ctx,
     id,
-    pieces.filter((_, i) => i !== removed),
+    result.pieces.filter((_, i) => i !== result.nearest),
   )
 }
 
@@ -75,21 +68,18 @@ brepHooks.split = async (ctx, ids, cutterIds, direction) => {
   await kernel(ctx)
   let count = 0
   for (const id of ids) {
-    const shape = shapeOf(brepOf(ctx, id)!)
-    const cutters = cuttersFor(
+    const { curves, shapes } = cuttersFor(
       ctx,
-      shape,
       cutterIds.filter((c) => c !== id),
-      direction,
     )
-    if (cutters.length === 0) continue
+    if (curves.length + shapes.length === 0) continue
     try {
-      const pieces = splitShape(shape, cutters)
-      if (pieces.length < 2) continue
-      replaceWithShapes(ctx, id, pieces)
+      const pieces = await kernelJob('split', shapeOfId(ctx, id), curves, shapes, direction)
+      if (!pieces || pieces.length < 2) continue
+      replaceWith(ctx, id, pieces)
       count++
     } catch (error) {
-      console.error(error)
+      passCancel(error)
     }
   }
   return count
@@ -106,10 +96,10 @@ const cap: Command = {
     let solids = 0
     const created: number[] = []
     for (const id of ids) {
-      const { shape, capped } = capHoles(shapeOf(brepOf(ctx, id)!))
+      const { shape, capped } = await readable(kernelJob('capHoles', shapeOfId(ctx, id)), 'cap that object')
       if (capped === 0) continue
       holes += capped
-      const [newId] = replaceWithShapes(ctx, id, [shape])
+      const [newId] = replaceWith(ctx, id, [shape])
       if (brepOf(ctx, newId)!.kind === 'solid') solids++
       created.push(newId)
     }
@@ -138,10 +128,10 @@ const offsetSrf: Command = {
     const created: number[] = []
     for (const id of ids) {
       try {
-        const shape = offsetSurface(shapeOf(brepOf(ctx, id)!), memory.offset, memory.offsetSolid)
-        created.push(doc.add(toBrep(shape), doc.objects.get(id)!.layerId).id)
+        const shape = await kernelJob('offsetSurface', shapeOfId(ctx, id), memory.offset, memory.offsetSolid)
+        created.push(doc.add(shape, doc.objects.get(id)!.layerId).id)
       } catch (error) {
-        console.error(error)
+        passCancel(error)
         log('One surface could not be offset (the distance may be too large for its curvature)')
       }
     }
@@ -171,11 +161,11 @@ const extrudeSrf: Command = {
     const created: number[] = []
     for (const id of ids) {
       try {
-        const solid = extrudeSurface(shapeOf(brepOf(ctx, id)!), n.clone().multiplyScalar(memory.extrude))
-        created.push(doc.add(toBrep(solid), doc.objects.get(id)!.layerId).id)
+        const solid = await kernelJob('extrudeSurface', shapeOfId(ctx, id), n.clone().multiplyScalar(memory.extrude))
+        created.push(doc.add(solid, doc.objects.get(id)!.layerId).id)
         if (memory.deleteInput) doc.remove(id)
       } catch (error) {
-        console.error(error)
+        passCancel(error)
         log('One surface could not be extruded')
       }
     }
@@ -205,8 +195,8 @@ const project: Command = {
     await kernel(ctx)
     const created: number[] = []
     for (const target of targets) {
-      const shape = shapeOf(brepOf(ctx, target)!)
-      for (const c of projectCurves(curves.map((id) => curveOf(ctx, id)!), shape, direction)) created.push(doc.add(c).id)
+      const projected = await readable(kernelJob('projectCurves', curves.map((id) => curveOf(ctx, id)!), shapeOfId(ctx, target), direction), 'project the curves')
+      for (const c of projected) created.push(doc.add(c).id)
     }
     doc.select(created)
     log(created.length === 0 ? 'The curves do not land on the surfaces' : `${plural('curve', created.length)} projected`)
@@ -221,9 +211,8 @@ const pull: Command = {
     await kernel(ctx)
     const created: number[] = []
     for (const target of targets) {
-      const shape = shapeOf(brepOf(ctx, target)!)
       for (const id of curves) {
-        const pulled = pullCurve(curveOf(ctx, id)!, shape)
+        const pulled = await readable(kernelJob('pullCurve', curveOf(ctx, id)!, shapeOfId(ctx, target)), 'pull the curve')
         if (pulled) created.push(doc.add(pulled).id)
       }
     }
@@ -239,10 +228,12 @@ const intersect: Command = {
     const ids = (await input.getObjects('Select surfaces and solids to intersect')).filter((id) => brepOf(ctx, id))
     if (ids.length < 2) throw new Error('Select two or more surfaces or solids')
     await kernel(ctx)
-    const shapes = ids.map((id) => shapeOf(brepOf(ctx, id)!))
+    const shapes = ids.map((id) => shapeOfId(ctx, id))
     const created: number[] = []
     for (let i = 0; i < shapes.length; i++) {
-      for (let j = i + 1; j < shapes.length; j++) for (const c of intersectionCurves(shapes[i], shapes[j])) created.push(doc.add(c).id)
+      for (let j = i + 1; j < shapes.length; j++) {
+        for (const c of await readable(kernelJob('intersectionCurves', shapes[i], shapes[j]), 'intersect the objects')) created.push(doc.add(c).id)
+      }
     }
     doc.select(created)
     log(created.length === 0 ? 'The objects do not intersect' : `${plural('intersection curve', created.length)} created`)
@@ -269,7 +260,7 @@ async function pickParts(ctx: CommandContext, kind: 'face' | 'edge', prompt: str
       continue
     }
     target = pick.id
-    geometry ??= kind === 'face' && !g.display.faceTriangles ? toBrep(shapeOf(g)) : g
+    geometry ??= kind === 'face' && !g.display.faceTriangles ? await readable(kernelJob('faces', shapeRef(g)), 'find the faces of that object') : g
     const part = kind === 'face' ? nearestFace(geometry, pick.point) : nearestEdge(geometry, pick.point)
     if (part >= 0 && !parts.includes(part)) parts.push(part)
     display.setPreview(kind === 'face' ? parts.flatMap((f) => faceOutline(geometry!, f)) : parts.map((e) => wireframe(geometry!)[e]), true)
@@ -284,11 +275,11 @@ const extractSrf: Command = {
     const { doc, log } = ctx
     const picked = await pickParts(ctx, 'face', 'Select faces to extract')
     if (!picked) return
-    const { extracted, rest } = extractFaces(shapeOf(picked.geometry), picked.parts)
+    const { extracted, rest } = await readable(kernelJob('extractFaces', shapeRef(picked.geometry), picked.parts), 'extract those faces')
     const layerId = doc.objects.get(picked.id)!.layerId
     doc.remove(picked.id)
-    const ids = extracted.map((s) => doc.add(toBrep(s), layerId).id)
-    for (const s of rest) doc.add(toBrep(s), layerId)
+    const ids = extracted.map((g) => doc.add(g, layerId).id)
+    for (const g of rest) doc.add(g, layerId)
     doc.select(ids)
     log(`${plural('face', ids.length)} extracted`)
   },
@@ -300,7 +291,8 @@ const dupBorder: Command = {
     const { doc, input, log } = ctx
     const ids = (await input.getObjects('Select surfaces')).filter((id) => brepOf(ctx, id))
     await kernel(ctx)
-    const created = ids.flatMap((id) => borderCurves(shapeOf(brepOf(ctx, id)!)).map((c) => doc.add(c).id))
+    const created: number[] = []
+    for (const id of ids) for (const c of await readable(kernelJob('borderCurves', shapeOfId(ctx, id)), 'find the borders')) created.push(doc.add(c).id)
     doc.select(created)
     log(created.length === 0 ? 'Closed solids have no border' : `${plural('border curve', created.length)} created`)
   },
@@ -312,7 +304,8 @@ const dupEdge: Command = {
     const { doc, log } = ctx
     const picked = await pickParts(ctx, 'edge', 'Select edges to duplicate')
     if (!picked) return
-    const created = edgeCurves(shapeOf(picked.geometry), picked.parts).map((c) => doc.add(c).id)
+    const curves = await readable(kernelJob('edgeCurves', shapeRef(picked.geometry), picked.parts), 'duplicate those edges')
+    const created = curves.map((c) => doc.add(c).id)
     doc.select(created)
     log(`${plural('curve', created.length)} created`)
   },

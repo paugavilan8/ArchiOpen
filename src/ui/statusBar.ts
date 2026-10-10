@@ -25,6 +25,8 @@ export class StatusBar {
   private readonly layerName = document.createElement('span')
   private readonly selection = document.createElement('span')
   private readonly units = document.createElement('span')
+  private readonly kernel = document.createElement('span')
+  private kernelTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     bar: HTMLElement,
@@ -51,15 +53,27 @@ export class StatusBar {
     const toggleGroup = this.group('status-toggles')
     for (const [key, text, shortcut] of TOGGLES) toggleGroup.appendChild(this.toggle(key, text, shortcut))
 
+    this.kernel.className = 'status-kernel'
+    this.kernel.hidden = true
+    this.kernel.textContent = 'Computing… Esc to stop'
+
     const spacer = document.createElement('span')
     spacer.className = 'status-spacer'
-    bar.append(coordsGroup, layerGroup, this.selection, spacer, snapGroup, toggleGroup)
+    bar.append(coordsGroup, layerGroup, this.selection, this.kernel, spacer, snapGroup, toggleGroup)
 
     doc.on(() => this.renderDocument())
     settings.onChange(() => bar.classList.toggle('osnap-off', !settings.osnap))
     bar.classList.toggle('osnap-off', !settings.osnap)
     this.setCoords(0, 0, 0)
     this.renderDocument()
+  }
+
+  /** Shows that the geometry kernel is working, once it has taken long enough to notice. */
+  setKernelBusy(busy: boolean): void {
+    if (this.kernelTimer) clearTimeout(this.kernelTimer)
+    this.kernelTimer = null
+    if (busy) this.kernelTimer = setTimeout(() => (this.kernel.hidden = false), 300)
+    else this.kernel.hidden = true
   }
 
   setCoords(x: number, y: number, z: number): void {

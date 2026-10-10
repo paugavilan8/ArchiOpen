@@ -10,9 +10,6 @@ import { loftCurves, shapeOf, toBrep } from '../kernel/brep'
 import { shapeBounds } from '../kernel/measure'
 import { HistoryManager } from './historyManager'
 
-// The kernel is loaded once here, the node way.
-vi.mock('../kernel/loadKernel', () => ({ loadKernel: async () => {}, kernelReady: () => true }))
-
 beforeAll(async () => {
   R.setOC(await opencascade())
 }, 60_000)

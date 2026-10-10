@@ -18,10 +18,11 @@ import {
 import { OBJ, STL } from '../app/files'
 import { CancelError } from '../input/interaction'
 import { writeObj, writeStl } from '../io/meshFiles'
-import { meshToShape, shapeOf, shapeToMesh, toBrep } from '../kernel/brep'
+import { kernelJob } from '../kernel/client'
+import { shapeRef } from '../kernel/wire'
 import { isOption, plural, valueOption } from './helpers'
 import { chosenObjects } from './plot'
-import { boxLines, circleLines, getHeight, getRadius, kernel, memory as solidMemory } from './solids'
+import { boxLines, circleLines, getHeight, getRadius, kernel, memory as solidMemory, readable } from './solids'
 import type { Command, CommandContext } from './runner'
 
 /** Face counts and settings the mesh commands remember. */
@@ -176,7 +177,7 @@ const meshCommand: Command = {
       const g = obj.geometry as BrepGeometry
       const box = new Box3().setFromArray(g.display.vertices)
       const size = Math.max(1e-6, box.getSize(new Vector3()).length())
-      const mesh = shapeToMesh(shapeOf(g), size * relative, angle)
+      const mesh = await readable(kernelJob('shapeToMesh', shapeRef(g), size * relative, angle), 'mesh that object')
       faces += faceCount(mesh)
       made.push(doc.add(mesh, obj.layerId).id)
     }
@@ -199,12 +200,7 @@ const meshToNurb: Command = {
     const made: number[] = []
     for (const id of ids) {
       const obj = doc.objects.get(id)!
-      try {
-        made.push(doc.add(toBrep(meshToShape(meshOf(obj)!)), obj.layerId).id)
-      } catch (error) {
-        console.error(error)
-        throw new Error('Could not turn the mesh into a polysurface')
-      }
+      made.push(doc.add(await readable(kernelJob('meshToShape', meshOf(obj)!), 'turn the mesh into a polysurface'), obj.layerId).id)
     }
     doc.select(made)
     const solids = made.filter((id) => (doc.objects.get(id)!.geometry as BrepGeometry).kind === 'solid').length

@@ -94,14 +94,14 @@ describe('layout sheets', () => {
     expect(pdf).toContain('/MediaBox [0 0 595.276 841.89]')
   })
 
-  it('draw details with hidden lines removed', () => {
+  it('draw details with hidden lines removed', async () => {
     const doc = new Document()
     // Two boxes, the small one behind the big one seen from the front.
     doc.add(toBrep(box(v(0, 0), v(4000, 0), v(0, 1000), v(0, 0, 3000))))
     doc.add(toBrep(box(v(1000, 3000), v(2000, 0), v(0, 1000), v(0, 0, 1000))))
     const layout = newLayout(doc, 1, 'Alzado')
     const detail = fitDetail(doc, { ...layout.details[0], view: view('Front') })
-    const lines = hiddenLineDrawing(doc, detail)
+    const lines = await hiddenLineDrawing(doc, detail)
     const e = extent(lines)
     const k = 1 / detail.scale
     // Only the big box's outline shows: 4 m × 3 m at the detail's scale.

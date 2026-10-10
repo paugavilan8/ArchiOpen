@@ -1,9 +1,8 @@
 import type { Document, HistoryRecord, StepChange } from '../core/document'
 import { isCurve } from '../core/geometry'
 import type { Settings } from '../core/settings'
-import { toBrep } from '../kernel/brep'
-import { loadKernel } from '../kernel/loadKernel'
-import { REBUILDERS } from '../kernel/rebuild'
+import type { BrepGeometry } from '../core/geometry'
+import { kernelJob } from '../kernel/client'
 
 /**
  * Construction history, as in Rhino: an object made from curves with history recorded is made again
@@ -54,12 +53,11 @@ export class HistoryManager {
     }
     if (breaks.length === 0 && rebuild.length === 0) return
 
-    const results = new Map<number, ReturnType<typeof toBrep>>()
+    const results = new Map<number, BrepGeometry>()
     const failed: number[] = []
-    if (rebuild.length > 0) await loadKernel()
     for (const id of rebuild) {
       try {
-        results.set(id, toBrep(this.build(doc.objects.get(id)!.history!)))
+        results.set(id, await this.build(doc.objects.get(id)!.history!))
       } catch (error) {
         console.warn('History could not rebuild an object', error)
         failed.push(id)
@@ -79,15 +77,13 @@ export class HistoryManager {
   }
 
   /** Builds the object a record describes, from its input curves as they are now. */
-  private build(record: HistoryRecord) {
-    const make = REBUILDERS[record.command]
-    if (!make) throw new Error(`No history for ${record.command}`)
+  private build(record: HistoryRecord): Promise<BrepGeometry> {
     const curves = record.inputs.map((id) => {
       const g = this.doc.objects.get(id)?.geometry
       if (!g || !isCurve(g)) throw new Error('A history input is no longer a curve')
       return g
     })
-    return make(curves, record.params ?? {})
+    return kernelJob('rebuild', record.command, curves, record.params ?? {})
   }
 
   /** Remembers how an object was made, if history recording is on. */

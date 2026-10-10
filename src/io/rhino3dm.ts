@@ -29,9 +29,10 @@ export interface RhinoExport {
   objects: { layerId: number; geometry: Geometry }[]
   /**
    * The openNURBS bytes of a surface or solid (see writeBrep), or null if it has no exact form.
-   * Without this, or when it gives null, surfaces and solids are written as meshes.
+   * `index` counts the surfaces and solids in the order they are written: objects in order, with
+   * blocks flattened. Without this, or when it gives null, surfaces and solids go as meshes.
    */
-  exactBrep?: (g: BrepGeometry) => Uint8Array | null
+  exactBrep?: (g: BrepGeometry, index: number) => Uint8Array | null
 }
 
 /** How the surfaces and solids of an export were written. */
@@ -430,6 +431,7 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport, report: R
       return index
     }
     const indexOf = new Map<number, number>()
+    let brepIndex = 0
     // Parents first, so an existing parent layer is used instead of a placeholder.
     const byDepth = [...model.layers].sort((a, b) => a.name.split('::').length - b.name.split('::').length)
     for (const layer of byDepth) indexOf.set(layer.id, byPath.get(layer.name) ?? addLayer(layer.name, layer))
@@ -452,7 +454,7 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport, report: R
           file.objects().add(new rhino.Point(triple(g.point)), attributes)
         } else if (g.type === 'brep') {
           // Exact when possible, else the display mesh.
-          const bytes = model.exactBrep?.(g)
+          const bytes = model.exactBrep?.(g, brepIndex++)
           const brep = bytes ? decodeBrep(rhino, bytes) : null
           if (brep) report.exact++
           else report.meshed++

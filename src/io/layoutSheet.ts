@@ -3,8 +3,8 @@ import type { Document } from '../core/document'
 import { isCurve, tessellate } from '../core/geometry'
 import { Detail, detailObjects, Layout, Point, paperFactor, sheetFrame, sheetSize, viewAxes, wireframeDrawing } from '../core/layout'
 import { dashesOf, DEFAULT_PRINT_WIDTH } from '../core/linetypes'
-import { shapeOf } from '../kernel/brep'
-import { make2DWithMeshes } from '../kernel/make2d'
+import { kernelJob } from '../kernel/client'
+import { shapeRef } from '../kernel/wire'
 import type { Sheet, SheetItem } from './pdf'
 
 /** Lines on the sheet of details drawn with hidden lines removed, by detail id. */
@@ -14,15 +14,15 @@ export type HiddenDrawings = Map<number, Point[][]>
  * The visible lines of a detail's surfaces, solids and curves, on the sheet. Needs the geometry
  * kernel. Texts, dimensions and hatches are not included: they are drawn on top as they are.
  */
-export function hiddenLineDrawing(doc: Document, detail: Detail): Point[][] {
+export async function hiddenLineDrawing(doc: Document, detail: Detail): Promise<Point[][]> {
   const { right, up, back } = viewAxes(detail.view)
   const objects = detailObjects(doc).map((o) => o.geometry)
   const surfaces = objects.filter((g) => g.type === 'brep')
-  const shapes = surfaces.map(shapeOf)
+  const shapes = surfaces.map(shapeRef)
   const curves = objects.filter(isCurve)
   const meshes = objects.filter((g) => g.type === 'mesh')
   if (shapes.length === 0 && curves.length === 0 && meshes.length === 0) return []
-  const { visible } = make2DWithMeshes(shapes, surfaces, curves, meshes, { direction: back, xaxis: right }, false)
+  const { visible } = await kernelJob('make2DWithMeshes', shapes, surfaces, curves, meshes, { direction: back, xaxis: right }, false)
   // make2D draws in the view plane through the world origin; the detail centers its target.
   const target = new Vector3(...detail.target)
   const k = paperFactor(doc, detail)
@@ -41,11 +41,13 @@ export function cachedHiddenLines(doc: Document, detail: Detail): Point[][] | nu
   return hit && hit.revision === doc.revision ? hit.lines : null
 }
 
-export function computeHiddenLines(doc: Document, detail: Detail): Point[][] {
+export async function computeHiddenLines(doc: Document, detail: Detail): Promise<Point[][]> {
   const key = JSON.stringify([detail.view, detail.target, detail.scale, detail.rect])
-  const lines = hiddenLineDrawing(doc, detail)
+  // The model may change while the kernel works: the drawing is of the model as it was asked for.
+  const revision = doc.revision
+  const lines = await hiddenLineDrawing(doc, detail)
   if (cache.size > 64) cache.clear()
-  cache.set(key, { revision: doc.revision, lines })
+  cache.set(key, { revision, lines })
   return lines
 }
 

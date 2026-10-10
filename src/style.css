@@ -860,6 +860,40 @@ input:focus-visible {
   color: var(--accent-hover);
 }
 
+.status-kernel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--text);
+}
+
+.status-kernel[hidden] {
+  display: none;
+}
+
+.status-kernel::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--text-faint);
+  border-top-color: var(--accent-hover);
+  border-radius: 50%;
+  animation: kernel-spin 0.8s linear infinite;
+}
+
+@keyframes kernel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-kernel::before {
+    animation: none;
+  }
+}
+
 .status-spacer {
   flex: 1;
 }

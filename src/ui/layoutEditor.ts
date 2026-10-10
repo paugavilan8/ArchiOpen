@@ -21,7 +21,7 @@ import {
 } from '../core/layout'
 import { DEFAULT_PRINT_WIDTH } from '../core/linetypes'
 import { cachedHiddenLines, computeHiddenLines, usesHiddenLines } from '../io/layoutSheet'
-import { kernelReady, loadKernel } from '../kernel/loadKernel'
+import { kernelReady, loadKernel } from '../kernel/client'
 import type { Display } from '../view/display'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -307,10 +307,8 @@ export class LayoutEditor {
     this.computing.add(key)
     void (async () => {
       if (!kernelReady()) await loadKernel()
-      // Let the sheet draw first.
-      await new Promise((r) => setTimeout(r, 0))
       try {
-        computeHiddenLines(this.doc, detail)
+        await computeHiddenLines(this.doc, detail)
       } catch (error) {
         console.error(error)
         this.log('Could not remove hidden lines in a detail')

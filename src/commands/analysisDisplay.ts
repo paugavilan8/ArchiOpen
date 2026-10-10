@@ -3,12 +3,12 @@ import { curvatureAt } from '../core/curveTools'
 import type { Document } from '../core/document'
 import { AnyCurve, domain, isCurve, pointAt, SegmentGeometry, tessellate } from '../core/geometry'
 import { nakedEdges } from '../core/mesh'
-import { shapeOf } from '../kernel/brep'
-import { borderCurves } from '../kernel/surfaceEdit'
+import { kernelJob } from '../kernel/client'
+import { shapeRef } from '../kernel/wire'
 import type { Display } from '../view/display'
 import { isOption, plural, valueOption } from './helpers'
 import type { Command, CommandContext } from './runner'
-import { kernel } from './solids'
+import { kernel, readable } from './solids'
 
 /** Analysis shown over the model: curvature combs, naked edges, zebra stripes and draft angles. */
 
@@ -159,7 +159,7 @@ const showEdges: Command = {
       } else if (g.type === 'brep') {
         await kernel(ctx)
         // Naked edges joined into the open borders they make.
-        const borders = borderCurves(shapeOf(g))
+        const borders = await readable(kernelJob('borderCurves', shapeRef(g)), 'find the borders')
         count += borders.length
         lines.push(...borders.map((c) => tessellate(c)))
       }

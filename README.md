@@ -36,7 +36,9 @@ se adjuntan a un borrador de *release*.
   tangencia o curvatura) y `Rebuild` (rehace una curva con los puntos de control y el grado que
   se pidan, e indica cuánto se separa de la original).
 - Superficies y sólidos (núcleo [Open CASCADE](https://dev.opencascade.org) a través de
-  [replicad](https://replicad.xyz), cargado la primera vez que se usa):
+  [replicad](https://replicad.xyz), cargado la primera vez que se usa). El núcleo trabaja en
+  segundo plano (en un Web Worker): mientras calcula una booleana, un empalme o un Make2D la
+  ventana sigue respondiendo, la barra de estado muestra «Computing…» y `Esc` lo detiene.
   `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (con opción `Solid` para tapar curvas cerradas
   planas), `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`,
   `BooleanIntersection`, `FilletEdge` (elige aristas con clic), `Sweep1` (perfil a lo largo de

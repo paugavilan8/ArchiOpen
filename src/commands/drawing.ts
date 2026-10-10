@@ -3,12 +3,13 @@ import { flatten } from '../core/blocks'
 import { transform } from '../core/curves'
 import { AnyCurve, expandBox, isCurve, tessellate } from '../core/geometry'
 import type { Layer } from '../core/document'
-import { shapeOf } from '../kernel/brep'
-import { Drawing2D, DrawingView, make2DWithMeshes } from '../kernel/make2d'
+import { kernelJob } from '../kernel/client'
+import type { Drawing2D, DrawingView } from '../kernel/make2d'
+import { shapeRef } from '../kernel/wire'
 import type { Viewport } from '../view/viewport'
 import { isOption, plural, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
-import { kernel } from './solids'
+import { kernel, readable } from './solids'
 
 const VIEWS = ['CurrentView', 'Top', 'Front', 'Right', 'Back', 'Left', 'FourView'] as const
 type ViewChoice = (typeof VIEWS)[number]
@@ -119,16 +120,12 @@ const make2d: Command = {
 
     await kernel(ctx)
     const surfaces = objects.filter((g) => g.type === 'brep')
-    const shapes = surfaces.map(shapeOf)
+    const shapes = surfaces.map(shapeRef)
     const curves = objects.filter(isCurve)
     const meshes = objects.filter((g) => g.type === 'mesh')
-    let drawings: Drawing2D[]
-    try {
-      drawings = arrange(views.map((view) => make2DWithMeshes(shapes, surfaces, curves, meshes, view, memory.hidden)), gap)
-    } catch (error) {
-      console.error(error)
-      throw new Error('Could not compute the drawing')
-    }
+    const views2D: Drawing2D[] = []
+    for (const view of views) views2D.push(await readable(kernelJob('make2DWithMeshes', shapes, surfaces, curves, meshes, view, memory.hidden), 'compute the drawing'))
+    const drawings = arrange(views2D, gap)
 
     const all = drawings.flatMap((d) => [...d.visible, ...d.hidden])
     if (all.length === 0) {

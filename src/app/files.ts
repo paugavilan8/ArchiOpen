@@ -3,11 +3,8 @@ import { readDxf } from '../io/dxfRead'
 import { readObj, readStl } from '../io/meshFiles'
 import { describeSkipped, readRhinoFile, RhinoExportReport, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
 import { loadRhino } from '../io/loadRhino'
-import { toBrep } from '../kernel/brep'
-import { shapeFromRhino } from '../kernel/fromRhino'
-import { loadKernel } from '../kernel/loadKernel'
-import { readStep, StepObject, writeStep } from '../kernel/step'
-import { exactRhinoBrep } from '../kernel/toRhino'
+import { kernelJob } from '../kernel/client'
+import type { StepObject } from '../kernel/step'
 import { flatten } from '../core/blocks'
 import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
 
@@ -293,11 +290,11 @@ export class FileManager {
     if (!location) return null
     const rhino = await loadRhino()
     const objects = [...this.doc.objects.values()].map((o) => ({ layerId: o.layerId, geometry: o.geometry }))
-    // Surfaces and solids go exactly, which takes the geometry kernel.
-    const hasBreps = objects.some((o) => flatten(o.geometry).some((g) => g.type === 'brep'))
-    if (hasBreps) await loadKernel()
+    // Surfaces and solids go exactly, worked out by the geometry kernel in the order they are written.
+    const breps = objects.flatMap((o) => flatten(o.geometry).filter((g) => g.type === 'brep'))
+    const exact = breps.length > 0 ? await kernelJob('exactRhinoBreps', breps) : []
     const report: RhinoExportReport = { exact: 0, meshed: 0 }
-    const bytes = writeRhinoFile(rhino, { units: this.doc.units, layers: this.doc.layers, objects, exactBrep: hasBreps ? exactRhinoBrep : undefined }, report)
+    const bytes = writeRhinoFile(rhino, { units: this.doc.units, layers: this.doc.layers, objects, exactBrep: (_, index) => exact[index] ?? null }, report)
     const fileName = location === 'download' ? `${this.name}.${RHINO.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
     await writeFile(location, bytes, fileName, RHINO)
     return { fileName, report }
@@ -317,8 +314,7 @@ export class FileManager {
   async exportStep(objects: StepObject[]): Promise<string | null> {
     const location = await pickSaveLocation(this.name, STEP)
     if (!location) return null
-    await loadKernel()
-    const bytes = await writeStep(objects, this.doc.units)
+    const bytes = await kernelJob('writeStep', objects, this.doc.units)
     const fileName = location === 'download' ? `${this.name}.${STEP.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
     await writeFile(location, bytes, fileName, STEP)
     return fileName
@@ -329,9 +325,8 @@ export class FileManager {
     const file = await pickFile([STEP])
     if (!file) return null
     const bytes = await file.read()
-    await loadKernel()
-    const { shapes, curves } = await readStep(bytes, this.doc.units)
-    const ids = [...shapes.map((shape) => this.doc.add(toBrep(shape)).id), ...curves.map((curve) => this.doc.add(curve).id)]
+    const { shapes, curves } = await kernelJob('readStep', bytes, this.doc.units)
+    const ids = [...shapes.map((shape) => this.doc.add(shape).id), ...curves.map((curve) => this.doc.add(curve).id)]
     const parts = [`${shapes.length} solid${shapes.length === 1 ? '' : 's'} or surface${shapes.length === 1 ? '' : 's'}`]
     if (curves.length > 0) parts.push(`${curves.length} curve${curves.length === 1 ? '' : 's'}`)
     return { ids, message: `Imported ${file.fileName}: ${parts.join(' and ')}, in ${this.doc.units.toLowerCase()}` }
@@ -347,10 +342,9 @@ export class FileManager {
   private async readRhino(bytes: Uint8Array): Promise<RhinoImport> {
     const result = readRhinoFile(await loadRhino(), bytes)
     if (result.breps.length === 0) return result
-    await loadKernel()
     for (const { layer, data } of result.breps) {
       try {
-        result.objects.push({ layer, geometry: toBrep(shapeFromRhino(data, result.tolerance)) })
+        result.objects.push({ layer, geometry: await kernelJob('shapeFromRhino', data, result.tolerance) })
       } catch (error) {
         console.warn('Could not rebuild a polysurface', error)
         result.skipped.set(NOT_REBUILT, (result.skipped.get(NOT_REBUILT) ?? 0) + 1)
