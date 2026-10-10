@@ -202,7 +202,20 @@ Haz clic en cada apartado para desplegarlo.
   `InterpCrv` (curva que pasa por los puntos), `Ellipse` (exacta, como curva racional), `Polygon`
   (inscrito o circunscrito, con `NumSides`) y `Helix` (con `Turns`). Las curvas NURBS racionales
   (elipses, cónicas) se leen y escriben exactas en `.3dm`, DXF y el núcleo.
-- Transformación: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array`, `ArrayPolar`.
+- Transformación: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array`, `ArrayPolar`, y para
+  colocar unos objetos respecto a otros (menú *Transform*):
+  - `Orient`: lleva un punto de referencia a un punto de destino y, con un segundo par, gira la
+    línea de referencia sobre la de destino (también en 3D). Opciones `Copy` y `Scale` (`No`,
+    `Uniform` o `OneDirection`, que estira solo a lo largo de la línea para que encaje).
+  - `Orient3Pt`: coloca los objetos con tres puntos de referencia sobre tres de destino (origen,
+    dirección y plano), sin deformarlos; por ejemplo, para llevar una pieza dibujada en planta a una
+    fachada.
+  - `Align`: alinea la selección a la izquierda, a la derecha, arriba, abajo o por los centros
+    (`Left`, `Right`, `Top`, `Bottom`, `HorizontalCenter`, `VerticalCenter`, `Center`), en el plano
+    de construcción, entre sí o con un punto. Los grupos se mueven enteros.
+  - `Distribute`: reparte tres o más objetos a lo largo de X, Y o Z, con los centros a la misma
+    distancia o con huecos iguales entre ellos (`Mode`), dejando quietos el primero y el último o con
+    una separación fija (`Spacing`).
 - Edición de curvas: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet` (entre dos líneas),
   `FilletCorners` (todas las esquinas de una polilínea), `Chamfer` (chaflán entre dos líneas con dos
   distancias), `Extend` (alarga curvas hasta otras: rectas en línea recta, arcos siguiendo su
@@ -548,7 +561,7 @@ flowchart LR
 - [x] Referencias `Int`, `Perp`, `Tan` y `Knot`
 - [x] Planos de corte en vivo (`ClippingPlane`) con secciones rellenas
 - [ ] Planos de corte en las láminas, `Make2D` y el PDF
-- [ ] `Orient`, `Orient3Pt`, `Align` y `Distribute`
+- [x] `Orient`, `Orient3Pt`, `Align` y `Distribute`
 - [ ] Leer textos y bloques de `.3dm` y exportar bloques como bloques
 - [ ] Copiar y pegar entre archivos
 - [ ] Superficies: `FilletSrf`, `ChamferEdge`, `MatchSrf`, `RailRevolve`, `Untrim`, `UnrollSrf`
