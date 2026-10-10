@@ -1,13 +1,15 @@
 import * as THREE from 'three'
 import type { Document } from '../core/document'
 import { controlPoints } from '../core/curves'
-import { BrepGeometry, expandBox, MeshGeometry, wireframe } from '../core/geometry'
+import { BrepGeometry, expandBox, InstanceGeometry, MeshGeometry, wireframe } from '../core/geometry'
 import { meshTriangles, nakedEdges } from '../core/mesh'
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { flatten } from '../core/blocks'
+import { flatten, instanceMatrix } from '../core/blocks'
+import { transform } from '../core/curves'
 import { hatchTriangles } from '../core/hatch'
 import { dashesOf } from '../core/linetypes'
 import { METERS } from '../core/units'
+import type { Material } from '../core/materials'
 import { BACKGROUNDS, RENDER_LAYER, RenderScene } from './renderScene'
 import { DisplayMode, Viewport, ViewKind } from './viewport'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
@@ -37,6 +39,24 @@ interface LineBatch {
   selected: boolean
   wireOnly: boolean
   edges: boolean
+}
+
+/** The copies of one surface or mesh of a block, drawn with one material: one draw call for all of them. */
+interface InstancedPart {
+  geometry: BrepGeometry | MeshGeometry
+  material: THREE.Material
+  /** Where each copy goes (column-major 4×4, one after another), and the object it belongs to. */
+  matrices: number[]
+  ids: number[]
+  layer: number
+}
+
+/** The copies of a block's surface or mesh for rendered views, by render material. */
+interface RenderPart {
+  geometry: BrepGeometry | MeshGeometry
+  material: Material
+  selected: boolean
+  matrices: number[]
 }
 
 const bordersCache = new WeakMap<MeshGeometry, THREE.Vector3[][]>()
@@ -275,6 +295,8 @@ export class Display {
     const batches = new Map<string, LineBatch>()
     // Point objects, by color.
     const dots = new Map<string, number[]>()
+    const instanced = new Map<BrepGeometry | MeshGeometry, Map<string, InstancedPart>>()
+    const renderParts = new Map<BrepGeometry | MeshGeometry, Map<string, RenderPart>>()
     const edit = this.doc.blockEdit
     for (const obj of this.doc.objects.values()) {
       const layer = this.doc.layerOf(obj)
@@ -298,6 +320,45 @@ export class Display {
             }),
           )
         return batch
+      }
+      // Blocks draw their surfaces and meshes as GPU instances of the definition's own: one draw call
+      // for all the copies of each, and no copies of their triangles. (Analysis shading, which has
+      // no instanced form, takes the long way below.)
+      if (obj.geometry.type === 'instance' && !this.surfaceAnalysis?.ids.has(obj.id)) {
+        this.addLines(batchOf(material.uuid), wireframe(obj.geometry))
+        const surfaceMaterial = this.surfaceMaterial(selected ? SELECTED_COLOR : layer.color, layer.locked || !this.doc.isEditable(obj))
+        const renderMaterial = this.doc.materialOf(obj)
+        this.placeInstance(obj.geometry, new THREE.Matrix4(), (g, m) => {
+          if (g.type === 'point') {
+            let list = dots.get(color)
+            if (!list) dots.set(color, (list = []))
+            const p = g.point.clone().applyMatrix4(m)
+            list.push(p.x, p.y, p.z)
+          } else if (g.type === 'hatch' && g.pattern === 'Solid') {
+            const fill = new THREE.BufferGeometry()
+            fill.setAttribute('position', new THREE.Float32BufferAttribute(hatchTriangles(transform(g, m) as typeof g), 3))
+            const mesh = new THREE.Mesh(fill, this.fillMaterial(color))
+            mesh.userData.id = obj.id
+            this.fillGroup.add(mesh)
+          } else if (g.type === 'brep' || g.type === 'mesh') {
+            partOf(instanced, g, surfaceMaterial.uuid, () => ({ geometry: g, material: surfaceMaterial, matrices: [], ids: [], layer: SHADED_LAYER }))
+            const part = instanced.get(g)!.get(surfaceMaterial.uuid)!
+            part.matrices.push(...m.elements)
+            part.ids.push(obj.id)
+            const box = shapeBox(g).clone().applyMatrix4(m)
+            modelBox.union(box)
+            // Textures are laid on by world position, so textured copies are placed for real.
+            if (renderMaterial.texture) {
+              const placed = (g.type === 'brep' ? surfaceGeometry(g) : polygonMeshGeometry(g)).applyMatrix4(m)
+              this.renderScene.add(placed, renderMaterial, selected, METERS[this.doc.units] ?? 0.001)
+            } else {
+              const key = `${materialKey(renderMaterial)}:${selected}`
+              partOf(renderParts, g, key, () => ({ geometry: g, material: renderMaterial, selected, matrices: [] }))
+              renderParts.get(g)!.get(key)!.matrices.push(...m.elements)
+            }
+          }
+        })
+        continue
       }
       // A mesh shows every edge in wireframe views, but only its open borders over the shading.
       const mesh = obj.geometry.type === 'mesh' ? obj.geometry : null
@@ -334,6 +395,24 @@ export class Display {
         }
       }
     }
+    for (const byMaterial of instanced.values()) {
+      for (const part of byMaterial.values()) {
+        const geometry = part.geometry.type === 'brep' ? surfaceGeometry(part.geometry) : polygonMeshGeometry(part.geometry)
+        const mesh = new THREE.InstancedMesh(geometry, part.material, part.ids.length)
+        mesh.instanceMatrix.array.set(part.matrices)
+        mesh.instanceMatrix.needsUpdate = true
+        mesh.computeBoundingSphere()
+        mesh.layers.set(part.layer)
+        mesh.userData.ids = part.ids
+        this.surfaceGroup.add(mesh)
+      }
+    }
+    for (const byMaterial of renderParts.values()) {
+      for (const part of byMaterial.values()) {
+        const geometry = part.geometry.type === 'brep' ? surfaceGeometry(part.geometry) : polygonMeshGeometry(part.geometry)
+        this.renderScene.addInstances(geometry, part.matrices, part.material, part.selected)
+      }
+    }
     for (const { material, ...batch } of batches.values()) {
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3))
@@ -354,6 +433,15 @@ export class Display {
     this.renderScene.update(this.doc.renderSettings, modelBox)
     this.rebuildPoints()
     this.requestRender()
+  }
+
+  /** Calls `visit` with each object a block draws (nested blocks opened) and where it goes. */
+  private placeInstance(g: InstanceGeometry, parent: THREE.Matrix4, visit: (g: Exclude<InstanceGeometry['definition']['objects'][number]['geometry'], InstanceGeometry>, m: THREE.Matrix4) => void): void {
+    const m = parent.clone().multiply(instanceMatrix(g))
+    for (const o of g.definition.objects) {
+      if (o.geometry.type === 'instance') this.placeInstance(o.geometry, m, visit)
+      else visit(o.geometry, m)
+    }
   }
 
   /** Adds polylines to a batch of segments. Distances run along each one, so dashes flow around curves. */
@@ -452,7 +540,8 @@ export class Display {
     this.raycaster.setFromCamera(ndc, vp.camera)
     this.raycaster.layers.enableAll()
     for (const hit of this.raycaster.intersectObjects(targets, false)) {
-      const id = hit.object.userData.id as number
+      // Copies of a block's surfaces are instances of one mesh: which copy says which object.
+      const id = (hit.object.userData.ids?.[hit.instanceId ?? -1] ?? hit.object.userData.id) as number
       if (accept(id)) return { id, point: hit.point.clone() }
     }
     return null
@@ -510,7 +599,11 @@ export class Display {
   }
 
   private clearGroup(group: THREE.Group): void {
-    for (const child of group.children) (child as THREE.Line | THREE.Points | THREE.Mesh).geometry.dispose()
+    for (const child of group.children) {
+      ;(child as THREE.Line | THREE.Points | THREE.Mesh).geometry.dispose()
+      // Instanced meshes hold their copies' matrices on the GPU too.
+      if (child instanceof THREE.InstancedMesh) child.dispose()
+    }
     group.clear()
   }
 
@@ -729,6 +822,32 @@ function draftMaterial(angle: number, pull: THREE.Vector3): THREE.ShaderMaterial
         gl_FragColor = vec4(color, 1.0);
       }`,
   })
+}
+
+/** A two-level map entry, made when missing. */
+function partOf<K extends object, T>(map: Map<K, Map<string, T>>, key: K, sub: string, make: () => T): void {
+  let inner = map.get(key)
+  if (!inner) map.set(key, (inner = new Map()))
+  if (!inner.has(sub)) inner.set(sub, make())
+}
+
+const materialKeys = new WeakMap<Material, number>()
+let nextMaterialKey = 0
+
+/** A short key for a render material, by identity (a picture texture would make its JSON huge). */
+function materialKey(m: Material): number {
+  let key = materialKeys.get(m)
+  if (key === undefined) materialKeys.set(m, (key = nextMaterialKey++))
+  return key
+}
+
+const boxCache = new WeakMap<BrepGeometry | MeshGeometry, THREE.Box3>()
+
+/** Bounding box of a surface's or mesh's triangles. */
+function shapeBox(g: BrepGeometry | MeshGeometry): THREE.Box3 {
+  let box = boxCache.get(g)
+  if (!box) boxCache.set(g, (box = new THREE.Box3().setFromArray(g.type === 'brep' ? g.display.vertices : g.vertices)))
+  return box
 }
 
 const polygonMeshCache = new WeakMap<MeshGeometry, THREE.BufferGeometry>()

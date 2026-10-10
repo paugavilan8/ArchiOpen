@@ -207,6 +207,9 @@ se adjuntan a un borrador de *release*.
   (doble clic) y borrar. Se guardan en el `.archi`, se exportan al DXF como bloques e `INSERT`, y
   al abrir o importar un DXF sus bloques se mantienen como bloques (pasados a las unidades del
   modelo; si el nombre ya existe se numera). En `.3dm` y STEP se exportan descompuestos.
+  Las copias se dibujan con instancias en la GPU: las superficies y mallas de un bloque se mandan
+  una sola vez y cada copia es solo su matriz, así que cientos de copias cuestan casi lo mismo que
+  una y no ocupan memoria repetida.
 - Grupos: `Group` (alias `G`), `Ungroup` (`UG`), `AddToGroup` y `RemoveFromGroup`. Al hacer clic
   en un objeto agrupado se selecciona el grupo entero, y las copias de un grupo forman su propio
   grupo.

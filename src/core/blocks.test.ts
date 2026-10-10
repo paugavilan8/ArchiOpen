@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { defineBlock, flatten, insertionPoint, placeInstance, usesBlock } from './blocks'
 import { transform } from './curves'
 import { Document } from './document'
-import { AnyCurve, InstanceGeometry, snapPoints, wireframe } from './geometry'
+import { displayText } from './annotation'
+import { AnnotationGeometry, AnyCurve, InstanceGeometry, snapPoints, wireframe } from './geometry'
 
 const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
 const square: AnyCurve = { type: 'polyline', points: [v(0, 0), v(2, 0), v(2, 2), v(0, 2)], closed: true }
@@ -34,6 +35,39 @@ describe('blocks', () => {
     expect(bounds(g).min.y).toBeCloseTo(9, 9)
     expect(usesBlock(table, 'Chair')).toBe(true)
     expect(usesBlock(chair, 'Table')).toBe(false)
+  })
+})
+
+describe('drawing instances without copying their contents', () => {
+  it('draws and snaps like the placed copies, nested, turned and scaled, dimensions included', () => {
+    const dimension: AnnotationGeometry = {
+      type: 'annotation',
+      kind: 'aligned',
+      points: [v(0, 0), v(2, 0), v(1, -1)],
+      xaxis: v(1, 0),
+      yaxis: v(0, 1),
+      text: '',
+      height: 0.2,
+      arrow: 'arrow',
+      precision: 2,
+    }
+    const leaf = defineBlock('Leaf', [{ layerId: 1, geometry: circle }, { layerId: 1, geometry: dimension }], v(0, 0))
+    const outer = defineBlock('Outer', [{ layerId: 1, geometry: square }, { layerId: 1, geometry: placeInstance(leaf, v(5, 0), 2, 0.3) }], v(0, 0))
+    const g = placeInstance(outer, v(10, 5), 1.5, 1.1)
+    // The old way: every object placed for real, then drawn.
+    const placed = flatten(g)
+    const expected = placed.flatMap((o) => wireframe(o))
+    const lines = wireframe(g)
+    expect(lines).toHaveLength(expected.length)
+    lines.forEach((line, i) => line.forEach((p, k) => expect(p.distanceTo(expected[i][k])).toBeLessThan(1e-9)))
+    // The scaled dimension reads its scaled length (2 × 2 × 1.5 = 6).
+    expect(displayText(placed.find((o) => o.type === 'annotation') as AnnotationGeometry)).toContain('6')
+    const snaps = snapPoints(g)
+    for (const kind of ['mid', 'cen', 'quad'] as const) {
+      const want = placed.flatMap((o) => snapPoints(o)[kind])
+      expect(snaps[kind]).toHaveLength(want.length)
+      snaps[kind].forEach((p, i) => expect(p.distanceTo(want[i])).toBeLessThan(1e-9))
+    }
   })
 })
 

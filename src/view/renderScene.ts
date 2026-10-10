@@ -50,7 +50,10 @@ export class RenderScene {
   }
 
   clear(): void {
-    for (const child of this.meshes.children) (child as THREE.Mesh).geometry.dispose()
+    for (const child of this.meshes.children) {
+      ;(child as THREE.Mesh).geometry.dispose()
+      if (child instanceof THREE.InstancedMesh) child.dispose()
+    }
     this.meshes.clear()
   }
 
@@ -61,6 +64,18 @@ export class RenderScene {
   add(geometry: THREE.BufferGeometry, material: Material, selected: boolean, metersPerUnit: number): void {
     if (material.texture) addBoxUVs(geometry, material.texture.size / metersPerUnit, material.texture.rotation)
     const mesh = new THREE.Mesh(geometry, this.material(material, selected))
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.layers.set(RENDER_LAYER)
+    this.meshes.add(mesh)
+  }
+
+  /** Adds copies of an untextured surface or mesh (a block's), at the given matrices, as GPU instances. */
+  addInstances(geometry: THREE.BufferGeometry, matrices: number[], material: Material, selected: boolean): void {
+    const mesh = new THREE.InstancedMesh(geometry, this.material(material, selected), matrices.length / 16)
+    mesh.instanceMatrix.array.set(matrices)
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.computeBoundingSphere()
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.layers.set(RENDER_LAYER)

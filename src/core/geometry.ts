@@ -1,8 +1,9 @@
-import { Box3, Vector3 } from 'three'
+import { Box3, Matrix4, Vector3 } from 'three'
 import { clampedKnots, evalCurve } from '../math/nurbs'
 import { annotationLines } from './annotation'
 import { hatchLines } from './hatch'
-import { insertionPoint, instanceContents } from './blocks'
+import { insertionPoint } from './blocks'
+import { transform } from './curves'
 import { meshEdgeLines, meshVertexPoints, SNAP_VERTEX_LIMIT } from './mesh'
 
 export interface Plane {
@@ -337,6 +338,29 @@ export function samples(g: AnyCurve): Samples {
   return s
 }
 
+/**
+ * What an instance's contents look like where it is placed. The definition's own lines and snap
+ * points are moved by the instance's matrix, instead of moving whole objects (surfaces with their
+ * display meshes) just to draw them. Annotations are placed for real: a dimension in a scaled block
+ * measures, and reads, the scaled length.
+ */
+function placedContents<T>(g: InstanceGeometry, of: (g: Geometry) => T, move: (value: T, m: Matrix4) => T): T[] {
+  const m = new Matrix4().fromArray(g.matrix)
+  // A nested block is placed by composing matrices (copying nothing), so what it holds is placed in
+  // one go, its annotations with the whole scale.
+  return g.definition.objects.map((o) => (o.geometry.type === 'annotation' || o.geometry.type === 'instance' ? of(transform(o.geometry, m)) : move(of(o.geometry), m)))
+}
+
+const movePoints = (pts: Vector3[], m: Matrix4) => pts.map((p) => p.clone().applyMatrix4(m))
+
+function instanceLines(g: InstanceGeometry): Vector3[][] {
+  return placedContents(g, wireframe, (lines, m) => lines.map((line) => movePoints(line, m))).flat()
+}
+
+function instanceSnaps(g: InstanceGeometry): SnapPoints[] {
+  return placedContents(g, snapPoints, (s, m) => ({ end: movePoints(s.end, m), mid: movePoints(s.mid, m), cen: movePoints(s.cen, m), quad: movePoints(s.quad, m) }))
+}
+
 /** Display polyline for a curve. The result is cached and must not be mutated. */
 export function tessellate(g: AnyCurve): Vector3[] {
   return samples(g).points
@@ -355,7 +379,7 @@ export function wireframe(g: Geometry): Vector3[][] {
         : g.type === 'hatch'
           ? hatchWires(g)
           : g.type === 'instance'
-            ? instanceContents(g).flatMap((o) => wireframe(o.geometry))
+            ? instanceLines(g)
             : g.type === 'mesh'
               ? meshEdgeLines(g)
               : g.type === 'point'
@@ -444,8 +468,7 @@ function buildSnapPoints(g: Geometry): SnapPoints {
     case 'instance':
       // The insertion point, then the snaps of what the block draws.
       snaps.end.push(insertionPoint(g))
-      for (const o of instanceContents(g)) {
-        const s = snapPoints(o.geometry)
+      for (const s of instanceSnaps(g)) {
         snaps.end.push(...s.end)
         snaps.mid.push(...s.mid)
         snaps.cen.push(...s.cen)
