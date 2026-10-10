@@ -425,7 +425,8 @@ Haz clic en cada apartado para desplegarlo.
   con una miniatura y el número de copias, y permite insertar, seleccionar sus copias, renombrar
   (doble clic) y borrar. Se guardan en el `.archi`, se exportan al DXF como bloques e `INSERT`, y
   al abrir o importar un DXF sus bloques se mantienen como bloques (pasados a las unidades del
-  modelo; si el nombre ya existe se numera). En `.3dm` y STEP se exportan descompuestos.
+  modelo; si el nombre ya existe se numera). En `.3dm` se leen y escriben como bloques; en STEP se
+  exportan descompuestos.
   Las copias se dibujan con instancias en la GPU: las superficies y mallas de un bloque se mandan
   una sola vez y cada copia es solo su matriz, así que cientos de copias cuestan casi lo mismo que
   una y no ocupan memoria repetida.
@@ -454,11 +455,15 @@ Haz clic en cada apartado para desplegarlo.
   - `Open` abre `.archi` o `.3dm`. De un `.3dm` se cargan las curvas (líneas, polilíneas, arcos,
     círculos, NURBS y polycurves), las polisuperficies, superficies y extrusiones (reconstruidas
     como geometría exacta y editable: sólidos cerrados, caras recortadas y agujeros), las capas
-    con su color, visibilidad y bloqueo, las mallas y las unidades. Los SubD, textos y bloques aún
-    no se cargan y se avisa de cuántos hay.
+    con su color, visibilidad y bloqueo, las mallas y las unidades. Los bloques siguen siendo
+    bloques (también los anidados y los que tienen polisuperficies dentro), con su nombre y la
+    posición, giro y escala de cada copia; los textos se cargan como textos, en su plano y a la
+    altura de su estilo (sin formato: negritas, fuentes y alineación no se conservan). Los SubD,
+    las cotas, las directrices y los *text dots* aún no se cargan y se avisa de cuántos hay.
   - `Save` nunca sobrescribe un `.3dm` abierto (podría perder lo que no se cargó): guarda un `.archi`.
-  - `Export` escribe un `.3dm` con las curvas, las mallas, las capas (también las anidadas) y las
-    unidades. Las superficies y sólidos van exactos, como polisuperficies de Rhino con sus caras
+  - `Export` escribe un `.3dm` con las curvas, las mallas, las capas (también las anidadas), los
+    bloques (como bloques de Rhino: cada definición una vez, aunque tenga cientos de copias) y las
+    unidades. Los textos y las cotas van como líneas, porque rhino3dm no sabe crear textos. Las superficies y sólidos van exactos, como polisuperficies de Rhino con sus caras
     recortadas y agujeros: los planos como superficies planas; cilindros, conos, esferas, toros y
     revoluciones como superficies de revolución; las extrusiones de curvas como suma de curva y
     recta; y las NURBS tal cual. Como rhino3dm no sabe construir polisuperficies recortadas, se
@@ -547,7 +552,7 @@ flowchart LR
 | Formato | Abrir / importar | Guardar / exportar | Notas |
 | --- | :---: | :---: | --- |
 | `.archi` | ✅ | ✅ | Formato propio (JSON): todo el modelo, láminas, materiales e historial |
-| Rhino `.3dm` | ✅ | ✅ | Superficies y sólidos exactos en los dos sentidos; SubD, textos y bloques aún no se leen |
+| Rhino `.3dm` | ✅ | ✅ | Superficies y sólidos exactos en los dos sentidos, bloques como bloques, textos al abrir; SubD y cotas aún no se leen |
 | STEP `.step` `.stp` | ✅ | ✅ | AP242, B-rep exacto, con capas, colores y unidades |
 | DXF | ✅ | ✅ | ASCII R12–2018: capas, bloques, cotas, textos, sombreados |
 | STL / OBJ | ✅ | ✅ | Mallas; las superficies se exportan trianguladas |
@@ -562,7 +567,8 @@ flowchart LR
 - [x] Planos de corte en vivo (`ClippingPlane`) con secciones rellenas
 - [ ] Planos de corte en las láminas, `Make2D` y el PDF
 - [x] `Orient`, `Orient3Pt`, `Align` y `Distribute`
-- [ ] Leer textos y bloques de `.3dm` y exportar bloques como bloques
+- [x] Leer textos y bloques de `.3dm` y exportar bloques como bloques
+- [ ] Cotas y SubD de `.3dm`
 - [ ] Copiar y pegar entre archivos
 - [ ] Superficies: `FilletSrf`, `ChamferEdge`, `MatchSrf`, `RailRevolve`, `Untrim`, `UnrollSrf`
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
@@ -600,10 +606,10 @@ autorice el administrador.
 <summary><b>¿Puedo abrir mis archivos de Rhino y volver a Rhino?</b></summary>
 <br>
 
-Sí. `Open` e `Import` leen `.3dm` con curvas, superficies, polisuperficies, extrusiones, mallas y
-capas, y `Export` escribe un `.3dm` con las superficies y sólidos exactos (no como mallas). Lo que
-aún no se lee (SubD, textos, bloques) se avisa al abrir, y `Save` nunca sobrescribe el `.3dm`
-original.
+Sí. `Open` e `Import` leen `.3dm` con curvas, superficies, polisuperficies, extrusiones, mallas,
+bloques, textos y capas, y `Export` escribe un `.3dm` con las superficies y sólidos exactos (no
+como mallas) y los bloques como bloques. Lo que aún no se lee (SubD, cotas) se avisa al abrir, y
+`Save` nunca sobrescribe el `.3dm` original.
 
 </details>
 
@@ -667,6 +673,8 @@ npm test           # pruebas de la geometría y el núcleo
 - [Open CASCADE Technology](https://dev.opencascade.org) (LGPL 2.1 con excepción) a través de
   [replicad](https://replicad.xyz) (MIT), [Three.js](https://threejs.org) (MIT),
   [rhino3dm](https://github.com/mcneel/rhino3dm) (MIT) y [Tauri](https://tauri.app) (MIT/Apache 2.0).
+- El archivo de prueba `src/io/fixtures/rhino-text.3dm.b64` contiene dos textos de los modelos de
+  prueba de [rhino3dm](https://github.com/mcneel/rhino3dm) (MIT).
 - El archivo de prueba `src/io/fixtures/ezdxf-sample.dxf` está generado con
   [ezdxf](https://github.com/mozman/ezdxf) (MIT).
 - Tipografía de los textos: fuentes Hershey (A. V. Hershey, U.S. National Bureau of Standards), en
