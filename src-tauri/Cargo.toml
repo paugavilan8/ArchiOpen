@@ -2,6 +2,7 @@
 name = "archiopen"
 version = "0.1.0"
 description = "Open source NURBS modeler"
+license = "MIT"
 edition = "2021"
 
 [lib]

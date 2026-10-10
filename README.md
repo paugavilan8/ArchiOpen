@@ -13,6 +13,7 @@ en una aplicación de escritorio ligera que se maneja con la línea de comandos.
 [![Desktop app](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=instaladores)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
 ![Versión](https://img.shields.io/badge/versión-0.1.0-2f81f7?style=flat-square)
 ![Plataformas](https://img.shields.io/badge/Windows%20·%20macOS%20·%20Linux-555?style=flat-square)
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-f4c430?style=flat-square)](LICENSE)
 <br>
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?style=flat-square&logo=typescript&logoColor=white)
 ![Three.js](https://img.shields.io/badge/Three.js-000?style=flat-square&logo=threedotjs&logoColor=white)
@@ -121,6 +122,12 @@ usa un índice espacial y los bloques se dibujan con instancias en la GPU.
 <td align="center"><sub>Cuatro vistas, gumball y panel de propiedades</sub></td>
 <td align="center"><sub>Lámina A3 con un detalle isométrico de líneas ocultas</sub></td>
 </tr>
+<tr>
+<td colspan="2"><img src="docs/assets/clipping.png" alt="El pabellón cortado por un plano de corte horizontal a 1,80 m: muros, pilares y la caja de vidrio con su sección rellena" /></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><sub>Un plano de corte horizontal convierte la vista en una planta en 3D, con las secciones rellenas del color de cada material</sub></td>
+</tr>
 </table>
 
 <a id="funciones"></a>
@@ -144,6 +151,15 @@ Haz clic en cada apartado para desplegarlo.
     dibuja después (rectángulos, círculos, coordenadas escritas…) queda en ese plano.
   - `NamedView` y `NamedCPlane` guardan, recuperan y borran vistas y planos de construcción con
     nombre; la pestaña *Views* los lista y los recupera con un clic. Se guardan en el `.archi`.
+- Planos de corte (`ClippingPlane`, menú *View*): se dibuja un rectángulo en el plano de
+  construcción de la vista y todo lo que queda delante desaparece, como en una sección o una planta
+  en 3D. La flecha indica el lado que se ve; `Flip` le da la vuelta. Los sólidos cortados se
+  rellenan del color de su material (o de su capa en las vistas sombreadas). El plano se mueve, gira
+  y copia como cualquier objeto, y el corte sigue en directo. Por defecto corta en las cuatro
+  vistas: en el panel de propiedades se eligen cuáles, y `EnableClippingPlanes` /
+  `DisableClippingPlanes` activan o quitan todos los cortes de la vista activa. Lo cortado no se
+  puede seleccionar ni sirve de referencia. Se guardan en el `.archi`; no se exportan, y las
+  láminas, `Make2D` y el PDF todavía no los tienen en cuenta.
 - Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda). El clic, la
   ventana y las referencias a objetos buscan en un índice espacial (un árbol de cajas por
   geometría y otro de objetos), así que siguen siendo inmediatos en modelos de miles de objetos o
@@ -530,7 +546,8 @@ flowchart LR
 ## 🗺️ Hoja de ruta
 
 - [x] Referencias `Int`, `Perp`, `Tan` y `Knot`
-- [ ] Planos de corte en vivo (`ClippingPlane`)
+- [x] Planos de corte en vivo (`ClippingPlane`) con secciones rellenas
+- [ ] Planos de corte en las láminas, `Make2D` y el PDF
 - [ ] `Orient`, `Orient3Pt`, `Align` y `Distribute`
 - [ ] Leer textos y bloques de `.3dm` y exportar bloques como bloques
 - [ ] Copiar y pegar entre archivos
@@ -630,6 +647,8 @@ npm test           # pruebas de la geometría y el núcleo
 
 </details>
 
+<a id="creditos"></a>
+
 ## 🙏 Créditos
 
 - [Open CASCADE Technology](https://dev.opencascade.org) (LGPL 2.1 con excepción) a través de
@@ -642,4 +661,6 @@ npm test           # pruebas de la geometría y el núcleo
 
 ## 📜 Licencia
 
-Por decidir.
+[MIT](LICENSE): puedes usar, copiar, modificar y distribuir ArchiOpen, también en otros proyectos,
+siempre que mantengas el aviso de copyright y la licencia. Las bibliotecas que usa conservan sus
+propias licencias (ver [Créditos](#creditos)).
