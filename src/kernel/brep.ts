@@ -205,6 +205,13 @@ export function filletEdges(shape: AnyShape, edgeIndices: number[], r: number): 
   return (shape as R.Shape3D).fillet((edge) => (chosen.some((c) => c.isSame(edge)) ? r : null))
 }
 
+/** Bevels the given edges (indices into the shape's edge list) by `distance` on each side. */
+export function chamferEdges(shape: AnyShape, edgeIndices: number[], distance: number): AnyShape {
+  const all = shape.edges
+  const chosen = edgeIndices.map((i) => all[i]).filter(Boolean)
+  return (shape as R.Shape3D).chamfer((edge) => (chosen.some((c) => c.isSame(edge)) ? distance : null))
+}
+
 /** Sweeps a profile along a rail. Closed planar profiles give solids. */
 export function sweep(profile: AnyCurve, rail: AnyCurve): AnyShape {
   return R.genericSweep(curveToWire(profile), curveToWire(rail), {})

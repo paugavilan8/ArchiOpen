@@ -175,7 +175,7 @@ Expand a section for details.
 
 - Solids and surfaces: `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (with a `Solid` option),
   `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`, `BooleanIntersection`,
-  `FilletEdge`, `Sweep1`, `Shell`, `Section` and `Contour`. `Explode` splits a polysurface into
+  `FilletEdge`, `ChamferEdge`, `Sweep1`, `Shell`, `Section` and `Contour`. `Explode` splits a polysurface into
   faces and `Join` joins them again.
 - Advanced surfaces:
   - `Sweep2`: sweeps profiles along two rails, interpolating between several profiles;
@@ -188,6 +188,9 @@ Expand a section for details.
   - `Split` and `Trim` work on surfaces, polysurfaces and solids, with curves (projected as seen in
     the viewport) or with other surfaces and solids. Solids split into solids.
   - `Cap`, `ExtrudeSrf`, `OffsetSrf` (with a `Solid` option) and `ExtractSrf`.
+  - `UnrollSrf` flattens planar, cylindrical and conical faces into cutting patterns (outlines in
+    the XY plane, with lengths preserved). Faces that share a straight edge stay joined as a folding
+    net; with `Explode` every face is laid out on its own. Other faces are skipped and reported.
   - Curves from surfaces: `Project`, `Pull`, `Intersect`, `DupBorder` and `DupEdge`.
 - Construction history (on by default, like Rhino's *Record History*): surfaces made with
   `ExtrudeCrv`, `Revolve`, `Loft`, `Sweep1`, `Sweep2`, `Pipe`, `PlanarSrf`, `EdgeSrf`,
@@ -376,7 +379,8 @@ flowchart LR
 - [x] Blocks and text from `.3dm`; blocks exported as blocks
 - [ ] Dimensions and SubD from `.3dm`
 - [x] Copy and paste between files
-- [ ] Surface tools: `FilletSrf`, `ChamferEdge`, `MatchSrf`, `RailRevolve`, `Untrim`, `UnrollSrf`
+- [x] `ChamferEdge` and `UnrollSrf`
+- [ ] Surface tools: `FilletSrf`, `MatchSrf`, `RailRevolve`, `Untrim`
 - [ ] Deformation tools: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] SubD modeling
 - [ ] Architectural tools: walls, slabs, openings and levels

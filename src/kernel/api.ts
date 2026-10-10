@@ -9,6 +9,7 @@ import {
   explodeShape,
   extrudeCurve,
   filletEdges,
+  chamferEdges,
   joinShapes,
   loftCurves,
   meshToShape,
@@ -24,6 +25,7 @@ import {
 } from './brep'
 import { shapeFromRhino } from './fromRhino'
 import { make2DWithMeshes } from './make2d'
+import { unrollShape } from './unroll'
 import { checkShape, shapeArea, shapeBounds, shapeVolume } from './measure'
 import { REBUILDERS } from './rebuild'
 import { readStep, writeStep } from './step'
@@ -68,6 +70,7 @@ export const api = {
   planarFace,
   boolean,
   filletEdges,
+  chamferEdges,
   shellSolid,
   joinShapes,
   explodeShape,
@@ -110,6 +113,7 @@ export const api = {
   shapeToMesh,
   meshToShape,
   make2DWithMeshes,
+  unrollShape,
   /** Makes again an object recorded with construction history, from its input curves. */
   rebuild: (command: string, curves: AnyCurve[], params: Record<string, unknown>) => {
     const make = REBUILDERS[command]

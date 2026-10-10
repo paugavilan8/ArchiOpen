@@ -26,6 +26,7 @@ import { pointCommands } from './points'
 import { clippingCommands } from './clipping'
 import { orientCommands } from './orient'
 import { clipboardCommands } from './clipboard'
+import { unrollCommands } from './unroll'
 
 // Short aliases, following the conventions most NURBS modelers share.
 const ALIASES: Record<string, string> = {
@@ -69,6 +70,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...organizeCommands, ...viewSetupCommands, ...meshCommands, ...analyzeCommands, ...analysisDisplayCommands, ...advancedSurfaceCommands, ...renderCommands, ...historyCommands, ...pointCommands, ...clippingCommands, ...orientCommands, ...clipboardCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...organizeCommands, ...viewSetupCommands, ...meshCommands, ...analyzeCommands, ...analysisDisplayCommands, ...advancedSurfaceCommands, ...renderCommands, ...historyCommands, ...pointCommands, ...clippingCommands, ...orientCommands, ...clipboardCommands, ...unrollCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }

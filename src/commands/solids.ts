@@ -18,6 +18,7 @@ export const memory = {
   extrudeSolid: true,
   revolveAngle: 360,
   filletRadius: 1,
+  chamferEdge: 1,
   shellThickness: 1,
   contourSpacing: 3,
 }
@@ -338,45 +339,56 @@ export function nearestEdge(g: BrepGeometry, p: Vector3): number {
   return index
 }
 
-const filletEdge: Command = {
-  name: 'FilletEdge',
-  async run(ctx) {
-    const { doc, input, display, log } = ctx
-    let target: number | null = null
-    const edges: number[] = []
-    for (;;) {
-      const pick = await input.getPick(edges.length === 0 ? 'Select edges to fillet' : 'Select more edges. Press Enter to fillet', [valueOption('Radius', memory.filletRadius)], (id) => !!brepOf(ctx, id))
-      if (pick.kind === 'option' && isOption(pick.option, 'Radius')) {
-        const r = await input.getNumber('Fillet radius', memory.filletRadius)
-        if (typeof r === 'number' && r > 0) memory.filletRadius = r
-        continue
+/**
+ * Fillets or chamfers edges picked one by one on a surface or solid. `size` is the radius or the
+ * distance, kept in `memory`.
+ */
+function edgeCommand(name: string, verb: string, option: string, key: 'filletRadius' | 'chamferEdge', job: 'filletEdges' | 'chamferEdges', failure: string): Command {
+  return {
+    name,
+    async run(ctx) {
+      const { doc, input, display, log } = ctx
+      let target: number | null = null
+      const edges: number[] = []
+      for (;;) {
+        const pick = await input.getPick(edges.length === 0 ? `Select edges to ${verb}` : `Select more edges. Press Enter to ${verb}`, [valueOption(option, memory[key])], (id) => !!brepOf(ctx, id))
+        if (pick.kind === 'option' && isOption(pick.option, option)) {
+          const r = await input.getNumber(`${capitalize(verb)} ${option.toLowerCase()}`, memory[key])
+          if (typeof r === 'number' && r > 0) memory[key] = r
+          continue
+        }
+        if (pick.kind !== 'pick') break
+        const g = brepOf(ctx, pick.id)
+        if (!g) {
+          log('Pick an edge of a surface or solid')
+          continue
+        }
+        if (target !== null && pick.id !== target) {
+          log('All edges must belong to the same object')
+          continue
+        }
+        target = pick.id
+        const edge = nearestEdge(g, pick.point)
+        if (!edges.includes(edge)) edges.push(edge)
+        display.setPreview(edges.map((i) => wireframe(g)[i]), true)
       }
-      if (pick.kind !== 'pick') break
-      const g = brepOf(ctx, pick.id)
-      if (!g) {
-        log('Pick an edge of a surface or solid')
-        continue
-      }
-      if (target !== null && pick.id !== target) {
-        log('All edges must belong to the same object')
-        continue
-      }
-      target = pick.id
-      const edge = nearestEdge(g, pick.point)
-      if (!edges.includes(edge)) edges.push(edge)
-      display.setPreview(edges.map((i) => wireframe(g)[i]), true)
-    }
-    display.setPreview([])
-    if (target === null || edges.length === 0) return
-    const g = brepOf(ctx, target)!
-    await kernel(ctx)
-    const layerId = doc.objects.get(target)!.layerId
-    const id = await addShape(ctx, kernelJob('filletEdges', shapeRef(g), edges, memory.filletRadius), 'fillet these edges (the radius may be too large)', layerId)
-    doc.remove(target)
-    doc.select([id])
-    log(`${plural('edge', edges.length)} filleted`)
-  },
+      display.setPreview([])
+      if (target === null || edges.length === 0) return
+      const g = brepOf(ctx, target)!
+      await kernel(ctx)
+      const layerId = doc.objects.get(target)!.layerId
+      const id = await addShape(ctx, kernelJob(job, shapeRef(g), edges, memory[key]), failure, layerId)
+      doc.remove(target)
+      doc.select([id])
+      log(`${plural('edge', edges.length)} ${verb === 'fillet' ? 'filleted' : 'chamfered'}`)
+    },
+  }
 }
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
+const filletEdge = edgeCommand('FilletEdge', 'fillet', 'Radius', 'filletRadius', 'filletEdges', 'fillet these edges (the radius may be too large)')
+const chamferEdge = edgeCommand('ChamferEdge', 'chamfer', 'Distance', 'chamferEdge', 'chamferEdges', 'chamfer these edges (the distance may be too large)')
 
 const sweep1: Command = {
   name: 'Sweep1',
@@ -585,4 +597,5 @@ export const solidCommands: Command[] = [
   booleanCommand('BooleanDifference', 'difference'),
   booleanCommand('BooleanIntersection', 'intersection'),
   filletEdge,
+  chamferEdge,
 ]
