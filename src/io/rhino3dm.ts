@@ -1,10 +1,9 @@
 import { Vector3 } from 'three'
-import type { Brep, Curve, GeometryBase, Mesh, NurbsCurve, RhinoModule } from 'rhino3dm'
+import type { AnnotationBase, Brep, Curve, File3dm, GeometryBase, InstanceReference, Mesh, NurbsCurve, RhinoModule } from 'rhino3dm'
 import { chain } from '../core/curves'
 import type { Layer } from '../core/document'
-import { flatten } from '../core/blocks'
 import { wireframe } from '../core/geometry'
-import type { AnyCurve, BrepGeometry, Geometry, MeshGeometry, SegmentGeometry } from '../core/geometry'
+import type { AnnotationGeometry, AnyCurve, BlockDefinition, BlockObject, BrepGeometry, Geometry, InstanceGeometry, MeshGeometry, SegmentGeometry } from '../core/geometry'
 import { interpolate } from '../math/nurbs'
 import type { BrepFaceData, NurbsCurveData, NurbsSurfaceData, RhinoBrepData } from './rhinoBrepData'
 
@@ -14,8 +13,11 @@ export interface RhinoImport {
   layers: Omit<Layer, 'id'>[]
   /** Geometry with the index of its layer in `layers`. */
   objects: { layer: number; geometry: Geometry }[]
-  /** Polysurfaces, surfaces and extrusions, to be rebuilt by the geometry kernel. */
-  breps: { layer: number; data: RhinoBrepData }[]
+  /**
+   * Polysurfaces, surfaces and extrusions, to be rebuilt by the geometry kernel and added to
+   * `objects`, or to the objects of a block definition (`into`) for those inside blocks.
+   */
+  breps: { layer: number; data: RhinoBrepData; into?: BlockObject[] }[]
   /** The file's absolute tolerance, used when joining the faces of polysurfaces. */
   tolerance: number
   /** Objects that could not be read, counted by kind (surfaces, meshes, text, ...). */
@@ -29,16 +31,16 @@ export interface RhinoExport {
   objects: { layerId: number; geometry: Geometry }[]
   /**
    * The openNURBS bytes of a surface or solid (see writeBrep), or null if it has no exact form.
-   * `index` counts the surfaces and solids in the order they are written: objects in order, with
-   * blocks flattened. Without this, or when it gives null, surfaces and solids go as meshes.
+   * Without this, or when it gives null, surfaces and solids go as meshes.
    */
-  exactBrep?: (g: BrepGeometry, index: number) => Uint8Array | null
+  exactBrep?: (g: BrepGeometry) => Uint8Array | null
 }
 
-/** How the surfaces and solids of an export were written. */
+/** How the surfaces and solids of an export were written, and how many block definitions. */
 export interface RhinoExportReport {
   exact: number
   meshed: number
+  blocks?: number
 }
 
 type Triple = number[]
@@ -246,6 +248,36 @@ function readMesh(mesh: Mesh): MeshGeometry | null {
   return faces.length > 0 ? { type: 'mesh', vertices, faces } : null
 }
 
+/**
+ * A block instance, or null if its definition is missing or holds nothing (e.g. a linked block whose
+ * file is not here). `definitionOf` gives null for those.
+ */
+function readInstance(g: InstanceReference, definitionOf: (id: string) => BlockDefinition | null): InstanceGeometry | null {
+  const definition = definitionOf(g.parentIdefId)
+  if (!definition) return null
+  // Entry by entry (m00 … m33, row then column): toFloatArray rounds them to single precision.
+  const t = g.xform as unknown as Record<string, number>
+  const matrix = Array.from({ length: 16 }, (_, i) => t[`m${i % 4}${Math.floor(i / 4)}`])
+  return { type: 'instance', definition, matrix }
+}
+
+/**
+ * A text as a text of ArchiOpen: its plain text (no formatting) from the lower left corner of its
+ * plane, at the height of its dimension style times the style's model scale.
+ */
+function readText(file: File3dm, g: AnnotationBase): AnnotationGeometry | null {
+  const text = g.plainText.replace(/\r\n?/g, '\n').trim()
+  if (!text) return null
+  // findId takes the id, though the typings say otherwise.
+  const style = (file.dimstyles() as unknown as { findId(id: string): Parameters<AnnotationBase['getDimensionStyle']>[0] | null }).findId(g.dimensionStyleId)
+  const effective = style ? g.getDimensionStyle(style) : null
+  const height = (effective?.textHeight || 2.5) * (effective?.dimensionScale || 1)
+  const plane = g.plane as unknown as RhinoPlane
+  const xaxis = vec(plane.xAxis).normalize()
+  const yaxis = vec(plane.yAxis).normalize()
+  return { type: 'annotation', kind: 'text', points: [vec(plane.origin)], xaxis, yaxis, text, height, arrow: 'arrow', precision: 2 }
+}
+
 /** Singular and plural names of the kinds of objects that are not read yet. */
 const KIND_NAMES: Record<string, [string, string]> = {
   Brep: ['polysurface', 'polysurfaces'],
@@ -260,6 +292,9 @@ const KIND_NAMES: Record<string, [string, string]> = {
   PointCloud: ['point cloud', 'point clouds'],
   TextDot: ['text dot', 'text dots'],
   InstanceReference: ['block instance', 'block instances'],
+  Text: ['text', 'texts'],
+  Dimension: ['dimension', 'dimensions'],
+  Leader: ['leader', 'leaders'],
   Hatch: ['hatch', 'hatches'],
 }
 const UNSUPPORTED_CURVE: [string, string] = ['unsupported curve', 'unsupported curves']
@@ -287,14 +322,37 @@ export function readRhinoFile(rhino: RhinoModule, bytes: Uint8Array): RhinoImpor
     const breps: RhinoImport['breps'] = []
     const skipped = new Map<[string, string], number>()
     const skip = (kind: [string, string]) => skipped.set(kind, (skipped.get(kind) ?? 0) + 1)
-    const table = file.objects()
-    for (let i = 0; i < table.count; i++) {
-      const obj = table.get(i)
-      const attributes = obj.attributes()
-      // Geometry inside block definitions is not placed in the model by itself.
-      if (attributes.isInstanceDefinitionObject) continue
-      const geometry = obj.geometry()
-      const layer = Math.min(Math.max(0, attributes.layerIndex), Math.max(0, layers.length - 1))
+    const layerOf = (index: number) => Math.min(Math.max(0, index), Math.max(0, layers.length - 1))
+
+    // Block definitions, read the first time an instance needs them. Their objects are around the
+    // definition's own origin, as here.
+    const definitions = new Map<string, BlockDefinition | null>()
+    const definitionOf = (id: string, depth: number): BlockDefinition | null => {
+      if (definitions.has(id)) return definitions.get(id)!
+      const idef = file.instanceDefinitions().findId(id)
+      if (!idef || depth > 16) return null
+      definitions.set(id, null) // A block that holds itself gets nothing.
+      const definition: BlockDefinition = { name: idef.name || 'Block', objects: [] }
+      for (const objectId of idef.getObjectIds() as string[]) {
+        const obj = file.objects().findId(objectId)
+        if (!obj) continue
+        const layer = layerOf(obj.attributes().layerIndex)
+        read(obj.geometry(), layer, (geometry) => definition.objects.push({ layerId: layer, geometry }), definition.objects, depth + 1)
+      }
+      // Its polysurfaces come later, rebuilt by the kernel: those count as content already.
+      const empty = definition.objects.length === 0 && !breps.some((b) => b.into === definition.objects)
+      definitions.set(id, empty ? null : definition)
+      return empty ? null : definition
+    }
+
+    /** Converts one object; what it becomes goes to `emit`, its polysurface to be rebuilt into `into`. */
+    const read = (geometry: GeometryBase, layer: number, emit: (g: Geometry) => void, into: BlockObject[] | undefined, depth: number) => {
+      if (geometry instanceof rhino.InstanceReference) {
+        const instance = readInstance(geometry, (id) => definitionOf(id, depth))
+        if (instance) emit(instance)
+        else skip(KIND_NAMES.InstanceReference)
+        return
+      }
       const converted =
         geometry instanceof rhino.Curve
           ? readCurve(rhino, geometry)
@@ -302,14 +360,26 @@ export function readRhinoFile(rhino: RhinoModule, bytes: Uint8Array): RhinoImpor
             ? readMesh(geometry)
             : geometry instanceof rhino.Point
               ? ({ type: 'point', point: vec(geometry.location as number[]) } as const)
-              : null
+              : geometry instanceof rhino.Text
+                ? readText(file, geometry)
+                : null
       const brep = converted ? null : readBrep(rhino, geometry)
-      if (converted) objects.push({ layer, geometry: converted })
-      else if (brep) breps.push({ layer, data: brep })
+      if (converted) emit(converted)
+      else if (brep) breps.push({ layer, data: brep, into })
       else {
         const name = geometry?.constructor?.name ?? 'Unknown'
         skip(geometry instanceof rhino.Curve ? UNSUPPORTED_CURVE : (KIND_NAMES[name] ?? OTHER))
       }
+    }
+
+    const table = file.objects()
+    for (let i = 0; i < table.count; i++) {
+      const obj = table.get(i)
+      const attributes = obj.attributes()
+      // Geometry inside block definitions is not placed in the model by itself.
+      if (attributes.isInstanceDefinitionObject) continue
+      const layer = layerOf(attributes.layerIndex)
+      read(obj.geometry(), layer, (geometry) => objects.push({ layer, geometry }), undefined, 0)
     }
     if (layers.length === 0) layers.push({ name: 'Default', color: '#000000', visible: true, locked: false })
     const tolerance = file.settings().modelAbsoluteTolerance || 0.001
@@ -384,6 +454,13 @@ function writeMesh(rhino: RhinoModule, g: BrepGeometry | MeshGeometry): Geometry
   return mesh
 }
 
+/** A Rhino transform from a column-major 4×4 matrix. */
+function rhinoTransform(rhino: RhinoModule, matrix: number[]): InstanceType<RhinoModule['Transform']> {
+  const t = rhino.Transform.identity() as unknown as Record<string, number>
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) t[`m${r}${c}`] = matrix[c * 4 + r]
+  return t as unknown as InstanceType<RhinoModule['Transform']>
+}
+
 function base64(bytes: Uint8Array): string {
   let s = ''
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
@@ -431,38 +508,75 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport, report: R
       return index
     }
     const indexOf = new Map<number, number>()
-    let brepIndex = 0
     // Parents first, so an existing parent layer is used instead of a placeholder.
     const byDepth = [...model.layers].sort((a, b) => a.name.split('::').length - b.name.split('::').length)
     for (const layer of byDepth) indexOf.set(layer.id, byPath.get(layer.name) ?? addLayer(layer.name, layer))
-    for (const obj of model.objects) {
+    const attributesOn = (layerId: number) => {
       const attributes = new rhino.ObjectAttributes()
-      attributes.layerIndex = indexOf.get(obj.layerId) ?? 0
-      // Blocks go as the objects they draw.
-      for (const g of flatten(obj.geometry)) {
+      attributes.layerIndex = indexOf.get(layerId) ?? 0
+      return attributes
+    }
+
+    /** What Rhino gets for a geometry: one object, or several (a hatch's lines), or none. */
+    const toRhino = (g: Geometry): GeometryBase[] => {
+      switch (g.type) {
         // Clipping planes only cut the views here.
-        if (g.type === 'instance' || g.type === 'clipping') continue
-        if (g.type === 'annotation') {
+        case 'clipping':
+          return []
+        case 'instance':
+          // The constructor (definition id, transform) is missing from the package's typings.
+          return [new (rhino.InstanceReference as unknown as new (id: string, xform: unknown) => InstanceReference)(definitionId(g.definition), rhinoTransform(rhino, g.matrix))]
+        case 'annotation':
           // Texts and dimensions go as their line work.
-          for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
-        } else if (g.type === 'hatch') {
+          return wireframe(g).map((points) => writeCurve(rhino, { type: 'polyline', points, closed: false }))
+        case 'hatch':
           // Hatches go as their boundaries and pattern lines.
-          for (const loop of g.loops) file.objects().add(writeCurve(rhino, loop), attributes)
-          if (g.pattern !== 'Solid') {
-            for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)
-          }
-        } else if (g.type === 'point') {
-          file.objects().add(new rhino.Point(triple(g.point)), attributes)
-        } else if (g.type === 'brep') {
+          return [
+            ...g.loops.map((loop) => writeCurve(rhino, loop)),
+            ...(g.pattern === 'Solid' ? [] : wireframe(g).map((points) => writeCurve(rhino, { type: 'polyline', points, closed: false }))),
+          ]
+        case 'point':
+          return [new rhino.Point(triple(g.point))]
+        case 'brep': {
           // Exact when possible, else the display mesh.
-          const bytes = model.exactBrep?.(g, brepIndex++)
+          const bytes = model.exactBrep?.(g)
           const brep = bytes ? decodeBrep(rhino, bytes) : null
           if (brep) report.exact++
           else report.meshed++
-          file.objects().add(brep ?? writeMesh(rhino, g), attributes)
-        } else {
-          file.objects().add(g.type === 'mesh' ? writeMesh(rhino, g) : writeCurve(rhino, g), attributes)
+          return [brep ?? writeMesh(rhino, g)]
         }
+        case 'mesh':
+          return [writeMesh(rhino, g)]
+        default:
+          return [writeCurve(rhino, g)]
+      }
+    }
+
+    // Blocks go as blocks: each definition once (those it holds first), and instances of it.
+    const definitionIds = new Map<BlockDefinition, string>()
+    const definitionId = (d: BlockDefinition): string => {
+      const known = definitionIds.get(d)
+      if (known) return known
+      const geometries: GeometryBase[] = []
+      const attributes: InstanceType<RhinoModule['ObjectAttributes']>[] = []
+      for (const o of d.objects) {
+        for (const g of toRhino(o.geometry)) {
+          geometries.push(g)
+          attributes.push(attributesOn(o.layerId))
+        }
+      }
+      const index = file.instanceDefinitions().add(d.name, '', '', '', [0, 0, 0], geometries, attributes)
+      if (index < 0) throw new Error(`Could not write the block "${d.name}"`)
+      const id = file.instanceDefinitions().get(index).id
+      definitionIds.set(d, id)
+      report.blocks = (report.blocks ?? 0) + 1
+      return id
+    }
+
+    for (const obj of model.objects) {
+      for (const g of toRhino(obj.geometry)) {
+        if (g instanceof rhino.InstanceReference) file.objects().addInstanceObject(g, attributesOn(obj.layerId))
+        else file.objects().add(g, attributesOn(obj.layerId))
       }
     }
     return file.toByteArray()

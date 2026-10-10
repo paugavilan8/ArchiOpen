@@ -5,8 +5,8 @@ import { describeSkipped, readRhinoFile, RhinoExportReport, RhinoImport, writeRh
 import { loadRhino } from '../io/loadRhino'
 import { kernelJob } from '../kernel/client'
 import type { StepObject } from '../kernel/step'
-import { flatten } from '../core/blocks'
 import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
+import type { BlockDefinition, BrepGeometry, Geometry } from '../core/geometry'
 
 interface FileType {
   name: string
@@ -42,6 +42,14 @@ function readMeshFile(fileName: string, bytes: Uint8Array, units: string): Rhino
         })()
   return { units, layers: [layer], objects, breps: [], tolerance: 0, skipped: new Map() }
 }
+/** The surfaces and solids a geometry holds: itself, or those of a block's definition (and the blocks in it). */
+function surfacesIn(g: Geometry, seen = new Set<BlockDefinition>()): BrepGeometry[] {
+  if (g.type === 'brep') return [g]
+  if (g.type !== 'instance' || seen.has(g.definition)) return []
+  seen.add(g.definition)
+  return g.definition.objects.flatMap((o) => surfacesIn(o.geometry, seen))
+}
+
 const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']
 
 /** True when running inside the desktop shell rather than a plain browser tab. */
@@ -291,10 +299,12 @@ export class FileManager {
     const rhino = await loadRhino()
     const objects = [...this.doc.objects.values()].map((o) => ({ layerId: o.layerId, geometry: o.geometry }))
     // Surfaces and solids go exactly, worked out by the geometry kernel in the order they are written.
-    const breps = objects.flatMap((o) => flatten(o.geometry).filter((g) => g.type === 'brep'))
+    // Each one once: blocks are written as blocks, so a block's surfaces are written once however many copies it has.
+    const breps = [...new Set(objects.flatMap((o) => surfacesIn(o.geometry)))]
     const exact = breps.length > 0 ? await kernelJob('exactRhinoBreps', breps) : []
+    const exactOf = new Map(breps.map((g, i) => [g, exact[i]]))
     const report: RhinoExportReport = { exact: 0, meshed: 0 }
-    const bytes = writeRhinoFile(rhino, { units: this.doc.units, layers: this.doc.layers, objects, exactBrep: (_, index) => exact[index] ?? null }, report)
+    const bytes = writeRhinoFile(rhino, { units: this.doc.units, layers: this.doc.layers, objects, exactBrep: (g) => exactOf.get(g) ?? null }, report)
     const fileName = location === 'download' ? `${this.name}.${RHINO.extension}` : location.kind === 'path' ? fileNameOf(location.path) : location.handle.name
     await writeFile(location, bytes, fileName, RHINO)
     return { fileName, report }
@@ -338,13 +348,15 @@ export class FileManager {
     return file ? { name: file.fileName, bytes: await file.read() } : null
   }
 
-  /** Reads a .3dm; its polysurfaces are rebuilt as exact shapes with the geometry kernel. */
+  /** Reads a .3dm; its polysurfaces (also those in blocks) are rebuilt as exact shapes with the geometry kernel. */
   private async readRhino(bytes: Uint8Array): Promise<RhinoImport> {
     const result = readRhinoFile(await loadRhino(), bytes)
     if (result.breps.length === 0) return result
-    for (const { layer, data } of result.breps) {
+    for (const { layer, data, into } of result.breps) {
       try {
-        result.objects.push({ layer, geometry: await kernelJob('shapeFromRhino', data, result.tolerance) })
+        const geometry = await kernelJob('shapeFromRhino', data, result.tolerance)
+        if (into) into.push({ layerId: layer, geometry })
+        else result.objects.push({ layer, geometry })
       } catch (error) {
         console.warn('Could not rebuild a polysurface', error)
         result.skipped.set(NOT_REBUILT, (result.skipped.get(NOT_REBUILT) ?? 0) + 1)
@@ -354,12 +366,17 @@ export class FileManager {
   }
 
   private rhinoSummary(result: RhinoImport): string {
-    const breps = result.objects.filter((o) => o.geometry.type === 'brep').length
-    const meshes = result.objects.filter((o) => o.geometry.type === 'mesh').length
-    const curveCount = result.objects.length - breps - meshes
-    const parts = curveCount > 0 || breps + meshes === 0 ? [`${curveCount} object${curveCount === 1 ? '' : 's'}`] : []
+    const count = (type: Geometry['type']) => result.objects.filter((o) => o.geometry.type === type).length
+    const breps = count('brep')
+    const meshes = count('mesh')
+    const blocks = count('instance')
+    const texts = count('annotation')
+    const curveCount = result.objects.length - breps - meshes - blocks - texts
+    const parts = curveCount > 0 || result.objects.length === 0 ? [`${curveCount} object${curveCount === 1 ? '' : 's'}`] : []
     if (breps > 0) parts.push(`${breps} polysurface${breps === 1 ? '' : 's'}`)
     if (meshes > 0) parts.push(`${meshes} mesh${meshes === 1 ? '' : 'es'}`)
+    if (blocks > 0) parts.push(`${blocks} block instance${blocks === 1 ? '' : 's'}`)
+    if (texts > 0) parts.push(`${texts} text${texts === 1 ? '' : 's'}`)
     const curves = `${parts.join(' and ')} on ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}`
     const skipped = describeSkipped(result.skipped)
     return skipped ? `${curves}. Not loaded yet: ${skipped}` : curves

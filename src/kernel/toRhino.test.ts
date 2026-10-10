@@ -4,11 +4,11 @@ import rhino3dm from 'rhino3dm/rhino3dm.module.js'
 import opencascade from 'replicad-opencascadejs'
 import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { AnyCurve } from '../core/geometry'
+import type { AnyCurve, BlockDefinition, InstanceGeometry } from '../core/geometry'
 import { ellipse } from '../core/curveTools'
 import { clampedKnots } from '../math/nurbs'
 import { writeBrep } from '../io/openNurbs'
-import { readRhinoFile, writeRhinoFile } from '../io/rhino3dm'
+import { readRhinoFile, RhinoExportReport, writeRhinoFile } from '../io/rhino3dm'
 import { boolean, box, cylinder, extrudeCurve, filletEdges, loftCurves, revolveCurve, sphere, sweep, toBrep } from './brep'
 import { shapeFromRhino } from './fromRhino'
 import { shapeArea, shapeVolume } from './measure'
@@ -146,5 +146,26 @@ describe('exact polysurfaces for Rhino', () => {
     expect(model.breps).toHaveLength(1)
     expect(model.breps[0].data.faces).toHaveLength(7)
     expect(model.objects.filter((o) => o.geometry.type === 'mesh')).toHaveLength(1)
+  })
+
+  it('exports a block holding a solid once, as a block, and reads the solid back into the block', () => {
+    const layers = [{ id: 1, name: 'Default', color: '#000000', visible: true, locked: false }]
+    const column = toBrep(cylinder(v(0, 0, 0), 0.2, 3, v(0, 0, 1)))
+    const definition: BlockDefinition = { name: 'Column', objects: [{ layerId: 1, geometry: column }] }
+    const copies = [0, 5, 10].map((x) => ({ layerId: 1, geometry: { type: 'instance' as const, definition, matrix: new Matrix4().makeTranslation(x, 0, 0).toArray() } }))
+    let asked = 0
+    const report: RhinoExportReport = { exact: 0, meshed: 0 }
+    const bytes = writeRhinoFile(rhino, { units: 'Meters', layers, objects: copies, exactBrep: (g) => (asked++, exactRhinoBrep(g)) }, report)
+    // One column in the file, however many copies.
+    expect(asked).toBe(1)
+    expect(report).toEqual({ exact: 1, meshed: 0, blocks: 1 })
+    const model = readRhinoFile(rhino, bytes)
+    expect(model.objects).toHaveLength(3)
+    const block = (model.objects[0].geometry as InstanceGeometry).definition
+    // The column is to be rebuilt into the block's own objects.
+    expect(model.breps).toHaveLength(1)
+    expect(model.breps[0].into).toBe(block.objects)
+    const rebuilt = shapeFromRhino(model.breps[0].data, model.tolerance)
+    expect(Math.abs(meshMeasures(rebuilt).volume / (Math.PI * 0.04 * 3) - 1)).toBeLessThan(1e-3)
   })
 })

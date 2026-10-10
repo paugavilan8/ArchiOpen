@@ -1,12 +1,14 @@
-import { Vector3 } from 'three'
+import { Matrix4, Vector3 } from 'three'
 import type { RhinoModule } from 'rhino3dm'
 import rhino3dm from 'rhino3dm/rhino3dm.module.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { length } from '../core/curves'
 import type { Layer } from '../core/document'
-import { AnyCurve, BrepGeometry, domain, Geometry, isCurve, pointAt } from '../core/geometry'
+import { AnnotationGeometry, AnyCurve, BlockDefinition, BrepGeometry, domain, Geometry, InstanceGeometry, isCurve, pointAt, wireframe } from '../core/geometry'
 import { clampedKnots } from '../math/nurbs'
-import { describeSkipped, readRhinoFile, writeRhinoFile } from './rhino3dm'
+import { describeSkipped, readRhinoFile, RhinoExportReport, writeRhinoFile } from './rhino3dm'
+// Two texts from the rhino3dm test models (MIT), one of them on a tilted plane, as base64.
+import textFile from './fixtures/rhino-text.3dm.b64?raw'
 
 let rhino: RhinoModule
 beforeAll(async () => {
@@ -154,5 +156,80 @@ describe('reading Rhino content', () => {
 
   it('rejects files that are not .3dm', () => {
     expect(() => readRhinoFile(rhino, new TextEncoder().encode('not a model'))).toThrow()
+  })
+})
+
+describe('.3dm blocks', () => {
+  const layers: Layer[] = [
+    { id: 1, name: 'Default', color: '#000000', visible: true, locked: false },
+    { id: 2, name: 'Furniture', color: '#8e44ad', visible: true, locked: false },
+  ]
+  // A leg (nested block) and a chair made of a seat outline and four legs.
+  const leg: BlockDefinition = { name: 'Leg', objects: [{ layerId: 2, geometry: { type: 'circle', center: v(0, 0), xaxis: v(1, 0), yaxis: v(0, 1), radius: 0.2 } }] }
+  const at = (x: number, y: number): InstanceGeometry => ({ type: 'instance', definition: leg, matrix: new Matrix4().makeTranslation(x, y, 0).toArray() })
+  const chair: BlockDefinition = {
+    name: 'Chair',
+    objects: [
+      { layerId: 1, geometry: { type: 'polyline', points: [v(0, 0), v(4, 0), v(4, 4), v(0, 4)], closed: true } },
+      ...[at(0.5, 0.5), at(3.5, 0.5), at(3.5, 3.5), at(0.5, 3.5)].map((geometry) => ({ layerId: 2, geometry })),
+    ],
+  }
+  const placed = new Matrix4().makeTranslation(100, 50, 0).multiply(new Matrix4().makeRotationZ(Math.PI / 6)).multiply(new Matrix4().makeScale(2, 2, 2))
+  const instances: InstanceGeometry[] = [
+    { type: 'instance', definition: chair, matrix: new Matrix4().makeTranslation(10, 0, 0).toArray() },
+    { type: 'instance', definition: chair, matrix: placed.toArray() },
+  ]
+
+  it('are written as blocks and read back as blocks, nested ones included', () => {
+    const report: RhinoExportReport = { exact: 0, meshed: 0 }
+    const bytes = writeRhinoFile(rhino, { units: 'Meters', layers, objects: instances.map((geometry) => ({ layerId: 2, geometry })) }, report)
+    expect(report.blocks).toBe(2)
+    const file = rhino.File3dm.fromByteArray(bytes)!
+    // Two definitions in the file, each written once, and two instances in the model.
+    expect(file.instanceDefinitions().count).toBe(2)
+    file.destroy()
+
+    const result = readRhinoFile(rhino, bytes)
+    expect(result.objects).toHaveLength(2)
+    const [a, b] = result.objects.map((o) => o.geometry as InstanceGeometry)
+    expect(a.type).toBe('instance')
+    // Both copies share one definition, as in the file.
+    expect(a.definition).toBe(b.definition)
+    expect(a.definition.name).toBe('Chair')
+    expect(a.definition.objects).toHaveLength(5)
+    const legs = a.definition.objects.filter((o) => o.geometry.type === 'instance')
+    expect(legs).toHaveLength(4)
+    expect((legs[0].geometry as InstanceGeometry).definition.name).toBe('Leg')
+    // Layers of the objects inside blocks are kept.
+    expect(result.layers[legs[0].layerId].name).toBe('Furniture')
+    // Placement (move, turn and scale) is kept exactly.
+    b.matrix.forEach((x, i) => expect(x).toBeCloseTo(placed.elements[i], 9))
+    expect(result.skipped.size).toBe(0)
+  })
+
+  it('keep their contents in the definition: what it draws matches', () => {
+    const bytes = writeRhinoFile(rhino, { units: 'Meters', layers, objects: [{ layerId: 1, geometry: instances[1] }] })
+    const back = readRhinoFile(rhino, bytes).objects[0].geometry
+    const before = wireframe(instances[1]).flat()
+    const after = wireframe(back).flat()
+    expect(after).toHaveLength(before.length)
+    after.forEach((p, i) => expect(p.distanceTo(before[i])).toBeLessThan(1e-9))
+  })
+})
+
+describe('.3dm texts', () => {
+  it('are read as texts, with their plane and their style height', () => {
+    const bytes = Uint8Array.from(atob(textFile.replace(/\s/g, '')), (c) => c.charCodeAt(0))
+    const result = readRhinoFile(rhino, bytes)
+    const texts = result.objects.map((o) => o.geometry as AnnotationGeometry)
+    expect(texts.map((t) => t.text)).toEqual(['Hello World!', 'Hello Cruel World!'])
+    expect(texts.every((t) => t.type === 'annotation' && t.kind === 'text')).toBe(true)
+    expect(texts[0].height).toBe(10)
+    expect(texts[0].points[0].toArray()).toEqual([0, 0, 0])
+    // The second stands on a tilted plane.
+    expect(texts[1].xaxis.length()).toBeCloseTo(1)
+    expect(texts[1].xaxis.dot(texts[1].yaxis)).toBeCloseTo(0)
+    expect(texts[1].xaxis.z).toBeGreaterThan(0.5)
+    expect(result.skipped.size).toBe(0)
   })
 })
