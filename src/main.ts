@@ -1,6 +1,8 @@
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
 import { HistoryManager } from './app/historyManager'
+import { copyObjects, readClipboard, rememberCopied } from './app/clipboard'
+import { pasteNext } from './commands/clipboard'
 import { registerCommands } from './commands'
 import { CommandContext, CommandRunner } from './commands/runner'
 import { Document } from './core/document'
@@ -201,6 +203,31 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key.length === 1 && !e.altKey) {
     commandLine.focus()
   }
+})
+
+// Ctrl+C, Ctrl+X and Ctrl+V copy and paste objects through the system clipboard, between windows
+// and files (the copy and paste events can use it without asking). Text selected in the command
+// line, or in another field, is copied as usual.
+function copyEvent(e: ClipboardEvent, cut: boolean): void {
+  if ((isTextEntry(e.target) && !commandLine.hasFocus) || commandLine.hasSelectedText) return
+  if (doc.selection.size === 0 || runner.busy || !e.clipboardData) return
+  const text = copyObjects(doc, doc.selection)
+  e.clipboardData.setData('text/plain', text)
+  e.preventDefault()
+  rememberCopied(text)
+  if (cut) void runner.run('Delete')
+  else commandLine.log(`${doc.selection.size} object${doc.selection.size === 1 ? '' : 's'} copied to the clipboard`)
+}
+document.addEventListener('copy', (e) => copyEvent(e, false))
+document.addEventListener('cut', (e) => copyEvent(e, true))
+document.addEventListener('paste', (e) => {
+  if (isTextEntry(e.target) && !commandLine.hasFocus) return
+  const text = e.clipboardData?.getData('text/plain') ?? ''
+  // Other text (a coordinate, a command name) is pasted into the command line as usual.
+  if (!readClipboard(text) || runner.busy) return
+  e.preventDefault()
+  pasteNext(text)
+  void runner.run('Paste')
 })
 
 // Clicking buttons or viewports hands the keyboard back to the command line.

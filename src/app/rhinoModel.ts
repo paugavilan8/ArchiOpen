@@ -18,6 +18,12 @@ function definitionsIn(geometries: Geometry[], out = new Set<BlockDefinition>())
   return out
 }
 
+/** True if a definition holds the same objects, on the same layers, as `objects`. */
+function sameContents(definition: BlockDefinition, objects: BlockDefinition['objects']): boolean {
+  const key = (list: BlockDefinition['objects']) => JSON.stringify(list.map((o) => [o.layerId, geometryToJSON(o.geometry)]))
+  return definition.objects.length === objects.length && key(definition.objects) === key(objects)
+}
+
 /**
  * Replaces the document with the content of an imported file (.3dm or .dxf), keeping its units.
  * Layer numbers in the file (also those of objects inside blocks) become layer ids from 1.
@@ -64,11 +70,17 @@ export function mergeRhinoImport(doc: Document, model: RhinoImport): { ids: numb
   const adoptDefinition = (definition: BlockDefinition): BlockDefinition => {
     let done = adopted.get(definition)
     if (done) return done
+    const objects = definition.objects.map((o) => ({ layerId: layerIds[o.layerId] ?? doc.currentLayerId, geometry: adopt(o.geometry) }))
+    // The same block already here (pasted back into its own file, say): its copies use it.
+    const existing = doc.blocks.get(definition.name)
+    if (existing && sameContents(existing, objects)) {
+      adopted.set(definition, existing)
+      return existing
+    }
     let name = definition.name
     for (let n = 2; doc.blocks.has(name); n++) name = `${definition.name} ${n}`
-    done = { name, objects: [] }
+    done = { name, objects }
     adopted.set(definition, done)
-    done.objects.push(...definition.objects.map((o) => ({ layerId: layerIds[o.layerId] ?? doc.currentLayerId, geometry: adopt(o.geometry) })))
     doc.setBlock(name, done)
     return done
   }
