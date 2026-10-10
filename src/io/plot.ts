@@ -75,6 +75,8 @@ export function plotSheet(doc: Document, vp: Viewport, objects: CadObject[], opt
     if (!entry) byLayer.set(obj.layerId, (entry = { lines: [], fills: [] }))
     // Blocks print what they hold, on the block's layer.
     for (const g of flatten(obj.geometry)) {
+      // Clipping planes cut views on screen; they are not drawn on paper.
+      if (g.type === 'clipping') continue
       if (g.type === 'hatch' && g.pattern === 'Solid') {
         const region = g.loops.map((loop) => tessellate(loop).map(project).filter((p): p is Point => p !== null))
         region.flat().forEach(grow)

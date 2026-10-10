@@ -440,7 +440,8 @@ export function writeRhinoFile(rhino: RhinoModule, model: RhinoExport, report: R
       attributes.layerIndex = indexOf.get(obj.layerId) ?? 0
       // Blocks go as the objects they draw.
       for (const g of flatten(obj.geometry)) {
-        if (g.type === 'instance') continue
+        // Clipping planes only cut the views here.
+        if (g.type === 'instance' || g.type === 'clipping') continue
         if (g.type === 'annotation') {
           // Texts and dimensions go as their line work.
           for (const points of wireframe(g)) file.objects().add(writeCurve(rhino, { type: 'polyline', points, closed: false }), attributes)

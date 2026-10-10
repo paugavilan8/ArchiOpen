@@ -11,6 +11,8 @@ import { dashesOf } from '../core/linetypes'
 import { METERS } from '../core/units'
 import type { Material } from '../core/materials'
 import { BACKGROUNDS, RENDER_LAYER, RenderScene } from './renderScene'
+import { clippable, ClippingCaps, isClipped, viewClippingPlanes } from './clipping'
+import { isClosedMesh } from '../core/mesh'
 import { DisplayMode, Viewport, ViewKind } from './viewport'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
@@ -49,6 +51,8 @@ interface InstancedPart {
   matrices: number[]
   ids: number[]
   layer: number
+  /** Color of their cut faces in rendered views: their render material's. */
+  capColor: string
 }
 
 /** The copies of a block's surface or mesh for rendered views, by render material. */
@@ -94,8 +98,13 @@ export class Display {
     ids: Set<number>
   } | null = null
   private readonly analysisMaterials = new Map<string, THREE.ShaderMaterial>()
+  /**
+   * The clipping planes every material of the model cuts by, filled with each viewport's own just
+   * before it is drawn (see clipping.ts).
+   */
+  private readonly clipPlanes: THREE.Plane[] = []
   /** What rendered views draw: materials, sun, environment and ground shadows. */
-  readonly renderScene = new RenderScene(() => this.requestRender())
+  readonly renderScene = new RenderScene(() => this.requestRender(), this.clipPlanes)
   private readonly surfaceMaterials = new Map<string, THREE.MeshStandardMaterial>()
   private readonly headlight = new THREE.DirectionalLight(0xffffff, 1.6)
   private readonly raycaster = new THREE.Raycaster()
@@ -113,6 +122,11 @@ export class Display {
   })
   private readonly pointMaterial = pointMaterial(POINT_COLOR, POINT_SIZE)
   private readonly selectedPointMaterial = pointMaterial(SELECTED_COLOR, POINT_SIZE + 2)
+  /** The clipping planes of each viewport, by name, as of the last rebuild. */
+  private viewPlanes = new Map<string, THREE.Plane[]>()
+  private readonly caps = new ClippingCaps()
+  /** Clipping planes' own lines, which they do not cut. */
+  private readonly planeMaterials = new Map<string, THREE.LineBasicMaterial>()
   /** Objects left out of the drawing, e.g. while a dragged copy of them is shown as a preview. */
   private hidden = new Set<number>()
   /** The layout shown over the viewports, or null for the model. */
@@ -144,7 +158,8 @@ export class Display {
     canvas.className = 'viewport-canvas'
     container.appendChild(canvas)
 
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true })
+    this.renderer.localClippingEnabled = true
     this.renderer.setPixelRatio(window.devicePixelRatio)
     this.renderer.autoClear = false
 
@@ -289,6 +304,8 @@ export class Display {
     this.clearGroup(this.surfaceGroup)
     this.clearGroup(this.fillGroup)
     this.renderScene.clear()
+    this.caps.clear()
+    this.viewPlanes = new Map(this.viewports.map((vp) => [vp.kind, viewClippingPlanes(this.doc, vp.kind)]))
     const modelBox = new THREE.Box3()
     // Line work is batched into one set of segments per material, so large drawings take a few draw
     // calls instead of one per line.
@@ -305,13 +322,13 @@ export class Display {
       // While a block is edited, everything else is shown dimmed.
       const color = selected ? SELECTED_COLOR : layer.locked || obj.locked || !this.doc.isEditable(obj) ? LOCKED_COLOR : layer.color
       const material = this.material(color, layer.linetype)
-      const batchOf = (key: string) => {
+      const batchOf = (key: string, lineMaterial = material) => {
         let batch = batches.get(key)
         if (!batch)
           batches.set(
             key,
             (batch = {
-              material,
+              material: lineMaterial,
               positions: [],
               distances: [],
               selected,
@@ -320,6 +337,11 @@ export class Display {
             }),
           )
         return batch
+      }
+      // A clipping plane's rectangle and arrow, which no plane cuts.
+      if (obj.geometry.type === 'clipping') {
+        this.addLines(batchOf(`clip:${color}`, this.planeMaterial(color)), wireframe(obj.geometry))
+        continue
       }
       // Blocks draw their surfaces and meshes as GPU instances of the definition's own: one draw call
       // for all the copies of each, and no copies of their triangles. (Analysis shading, which has
@@ -341,8 +363,8 @@ export class Display {
             mesh.userData.id = obj.id
             this.fillGroup.add(mesh)
           } else if (g.type === 'brep' || g.type === 'mesh') {
-            partOf(instanced, g, surfaceMaterial.uuid, () => ({ geometry: g, material: surfaceMaterial, matrices: [], ids: [], layer: SHADED_LAYER }))
-            const part = instanced.get(g)!.get(surfaceMaterial.uuid)!
+            partOf(instanced, g, `${surfaceMaterial.uuid}:${renderMaterial.color}`, () => ({ geometry: g, material: surfaceMaterial, matrices: [], ids: [], layer: SHADED_LAYER, capColor: renderMaterial.color }))
+            const part = instanced.get(g)!.get(`${surfaceMaterial.uuid}:${renderMaterial.color}`)!
             part.matrices.push(...m.elements)
             part.ids.push(obj.id)
             const box = shapeBox(g).clone().applyMatrix4(m)
@@ -392,6 +414,7 @@ export class Display {
           mesh.layers.set(analysis ? 0 : SHADED_LAYER)
           mesh.userData.id = obj.id
           this.surfaceGroup.add(mesh)
+          if (isSolid(g)) this.caps.add(mesh, (material as THREE.MeshStandardMaterial).color ?? layer.color, this.doc.materialOf(obj).color)
         }
       }
     }
@@ -405,6 +428,7 @@ export class Display {
         mesh.layers.set(part.layer)
         mesh.userData.ids = part.ids
         this.surfaceGroup.add(mesh)
+        if (isSolid(part.geometry)) this.caps.add(mesh, part.material instanceof THREE.MeshStandardMaterial ? part.material.color : '#888888', part.capColor)
       }
     }
     for (const byMaterial of renderParts.values()) {
@@ -431,6 +455,7 @@ export class Display {
       this.objectsGroup.add(points)
     }
     this.renderScene.update(this.doc.renderSettings, modelBox)
+    this.caps.setModelBox(modelBox)
     this.rebuildPoints()
     this.requestRender()
   }
@@ -504,6 +529,8 @@ export class Display {
         polygonOffset: true,
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
+        clippingPlanes: this.clipPlanes,
+        clipShadows: true,
       })
       material.userData.opacity = material.opacity
       this.surfaceMaterials.set(key, material)
@@ -515,7 +542,8 @@ export class Display {
     const key = mode.kind === 'zebra' ? 'zebra' : `draft:${mode.angle}:${mode.pull.toArray().join(',')}`
     let material = this.analysisMaterials.get(key)
     if (!material) {
-      material = mode.kind === 'zebra' ? zebraMaterial() : draftMaterial(mode.angle, mode.pull)
+      material = clippable(mode.kind === 'zebra' ? zebraMaterial() : draftMaterial(mode.angle, mode.pull))
+      material.clippingPlanes = this.clipPlanes
       this.analysisMaterials.set(key, material)
     }
     return material
@@ -539,7 +567,9 @@ export class Display {
     const ndc = new THREE.Vector2((sx / vp.width) * 2 - 1, -(sy / vp.height) * 2 + 1)
     this.raycaster.setFromCamera(ndc, vp.camera)
     this.raycaster.layers.enableAll()
+    const planes = this.clippingPlanes(vp)
     for (const hit of this.raycaster.intersectObjects(targets, false)) {
+      if (isClipped(planes, hit.point)) continue
       // Copies of a block's surfaces are instances of one mesh: which copy says which object.
       const id = (hit.object.userData.ids?.[hit.instanceId ?? -1] ?? hit.object.userData.id) as number
       if (accept(id)) return { id, point: hit.point.clone() }
@@ -560,15 +590,34 @@ export class Display {
           color,
           dashSize: pixels(dashes[0]),
           gapSize: pixels(dashes[1] ?? dashes[0]),
+          clippingPlanes: this.clipPlanes,
         })
         this.dashedMaterials.push(dashed)
         material = dashed
       } else {
-        material = new THREE.LineBasicMaterial({ color })
+        material = new THREE.LineBasicMaterial({ color, clippingPlanes: this.clipPlanes })
       }
       this.materials.set(key, material)
     }
     return material
+  }
+
+  /** Line material for clipping planes' own lines, which are not cut. */
+  private planeMaterial(color: string): THREE.LineBasicMaterial {
+    let material = this.planeMaterials.get(color)
+    if (!material) this.planeMaterials.set(color, (material = new THREE.LineBasicMaterial({ color })))
+    return material
+  }
+
+  /** The clipping planes that cut a viewport. */
+  clippingPlanes(vp: Viewport): readonly THREE.Plane[] {
+    if (this.stale) this.rebuildObjects()
+    return this.viewPlanes.get(vp.kind) ?? []
+  }
+
+  /** True if a point is cut away in a viewport (so it cannot be picked or snapped to there). */
+  isClipped(vp: Viewport, p: THREE.Vector3): boolean {
+    return isClipped(this.clippingPlanes(vp), p)
   }
 
   private readonly dotMaterials = new Map<string, THREE.PointsMaterial>()
@@ -578,6 +627,7 @@ export class Display {
     let material = this.dotMaterials.get(color)
     if (!material) {
       material = pointMaterial(color, POINT_SIZE - 1)
+      material.clippingPlanes = this.clipPlanes
       this.dotMaterials.set(color, material)
     }
     return material
@@ -592,6 +642,7 @@ export class Display {
         polygonOffset: true,
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
+        clippingPlanes: this.clipPlanes,
       })
       this.fillMaterials.set(color, material)
     }
@@ -663,7 +714,12 @@ export class Display {
       this.headlight.target.position.copy(vp.target)
       this.headlight.target.updateMatrixWorld()
     }
-    if (rendered && options.occlusion) {
+    // Each viewport is cut by its own clipping planes.
+    const planes = this.viewPlanes.get(vp.kind) ?? []
+    this.clipPlanes.length = 0
+    this.clipPlanes.push(...planes)
+    // Ambient occlusion has no way to draw the cut faces, so a cut view goes without it.
+    if (rendered && options.occlusion && planes.length === 0) {
       // Ambient occlusion darkens creases and contacts; the output pass then tone maps the result.
       const size = r.getDrawingBufferSize(new THREE.Vector2())
       const composer = new EffectComposer(r)
@@ -680,6 +736,8 @@ export class Display {
     }
     r.clear()
     r.render(this.scene, camera)
+    // Cut solids are filled where they are cut, in shaded and rendered views.
+    if (vp.shaded && planes.length > 0) this.caps.draw(r, camera, planes, rendered)
   }
 
   /**
@@ -749,6 +807,9 @@ function pointMaterial(color: string, size: number): THREE.PointsMaterial {
     depthTest: false,
   })
 }
+
+/** A closed solid or mesh, which is filled where a clipping plane cuts it. */
+const isSolid = (g: BrepGeometry | MeshGeometry): boolean => (g.type === 'brep' ? g.kind === 'solid' : isClosedMesh(g))
 
 /** Facets meeting at a sharper angle than this are shaded as a crease. */
 const CREASE_ANGLE = (40 * Math.PI) / 180

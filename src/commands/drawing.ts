@@ -86,7 +86,7 @@ const make2d: Command = {
     const { doc, input, display, log } = ctx
     const ids = await input.getObjects('Select objects to draw')
     // Blocks are drawn from what they hold.
-    const objects = ids.flatMap((id) => flatten(doc.objects.get(id)!.geometry))
+    const objects = ids.flatMap((id) => flatten(doc.objects.get(id)!.geometry)).filter((g) => g.type !== 'clipping')
 
     const model = new Box3()
     for (const g of objects) {

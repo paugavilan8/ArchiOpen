@@ -1,3 +1,4 @@
+import { flipClipping } from './clipping'
 import { Box3, Vector3 } from 'three'
 import type { CadObject } from '../core/document'
 import { BrepGeometry, MeshGeometry, TOLERANCE } from '../core/geometry'
@@ -220,6 +221,30 @@ function meshEdit(name: string, prompt: string, change: (g: MeshGeometry, ctx: C
   }
 }
 
+/** Flips meshes (their faces turn around) and clipping planes (they keep the other side). */
+const flip: Command = {
+  name: 'Flip',
+  async run(ctx) {
+    const { doc } = ctx
+    const ids = await ctx.input.getObjects('Select meshes or clipping planes to flip')
+    let meshes = 0
+    let planes = 0
+    for (const id of ids) {
+      const obj = doc.objects.get(id)
+      const mesh = meshOf(obj)
+      if (mesh) {
+        doc.setGeometry(id, flipMesh(mesh))
+        meshes++
+      } else if (obj?.geometry.type === 'clipping') {
+        doc.setGeometry(id, flipClipping(obj.geometry))
+        planes++
+      }
+    }
+    if (meshes + planes === 0) throw new Error('Select meshes or clipping planes')
+    ctx.log([meshes ? plural('mesh', meshes) : '', planes ? plural('clipping plane', planes) : ''].filter(Boolean).join(' and ') + ' flipped')
+  },
+}
+
 const weld: Command = {
   name: 'Weld',
   async run(ctx) {
@@ -314,7 +339,7 @@ export const meshCommands: Command[] = [
   meshToNurb,
   weld,
   meshEdit('Unweld', 'Select meshes to unweld', unweldMesh, (n) => `${plural('mesh', n)} unwelded: every face has its own vertices`),
-  meshEdit('Flip', 'Select meshes to flip', flipMesh, (n) => `${plural('mesh', n)} flipped`),
+  flip,
   unifyMeshNormals,
   fillMeshHoles,
   exportStl,

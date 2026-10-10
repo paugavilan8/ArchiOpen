@@ -254,6 +254,8 @@ export function insertParameters(matrix: number[]): { at: Vector3; rotation: num
 }
 
 function writeEntity(out: Out, layer: string, g: Geometry): void {
+  // Clipping planes only cut the views here.
+  if (g.type === 'clipping') return
   const { w } = out
   if (g.type === 'instance') {
     const insert = insertParameters(g.matrix)

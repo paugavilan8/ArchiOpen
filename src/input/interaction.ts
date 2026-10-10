@@ -3,6 +3,7 @@ import type { CadObject, Document } from '../core/document'
 import { controlPoints } from '../core/curves'
 import { isCurve, wireframe, type AnyCurve } from '../core/geometry'
 import { crossing, meetingPoint, perpendicularPoints, tangentPoints } from '../core/osnap'
+import { isClipped } from '../view/clipping'
 import { PickIndex, type PickItem, type Range, type ScreenRect } from '../core/pickIndex'
 import { editedIds, transformSelection, transformedSelection, translation } from '../core/selectionEdit'
 import type { Settings, SnapKind } from '../core/settings'
@@ -564,6 +565,9 @@ export class Interaction {
     // Perp and Tan are measured from the point the command started from.
     const base = this.request?.kind === 'point' ? this.request.opts.base : undefined
     const fromBase = !!base && (enabled.perp || enabled.tan)
+    // What a clipping plane cuts away in this view cannot be snapped to.
+    const planes = this.display.clippingPlanes(vp)
+    const clipped = (p: Vector3) => planes.length > 0 && isClipped(planes, p)
     // Drawn lines near the cursor, for the snaps that look at more than one point (Int, Perp, Tan).
     const lines: { id: number; item: PickItem }[] = []
 
@@ -573,6 +577,7 @@ export class Interaction {
         if (enabled.int || fromBase) lines.push({ id, item })
         if (!enabled.near) return
         const hit = this.closestOnRanges(vp, item.ranges, sx, sy)
+        if (hit && clipped(hit.point)) return
         if (hit && (hit.distance < nearDistance || (hit.distance === nearDistance && near && index.before(id, item, near.id, near.item)))) {
           nearDistance = hit.distance
           near = { point: hit.point, id, item }
@@ -583,7 +588,7 @@ export class Interaction {
       for (const r of item.ranges) {
         for (let k = r.from; k <= r.to; k++) {
           const p = r.points[k]
-          if (!vp.project(p, this.a)) continue
+          if (!vp.project(p, this.a) || clipped(p)) continue
           const d = Math.hypot(this.a.x - sx, this.a.y - sy)
           if (d < bestDistance || (d === bestDistance && best && index.before(id, item, best.id, best.item))) {
             bestDistance = d
@@ -595,7 +600,7 @@ export class Interaction {
     // Fixed points win a tie, so a corner snaps as End rather than as Int.
     let found = best ? { point: best.point, label: best.label } : null
     const consider = (point: Vector3, kind: SnapKind) => {
-      if (!vp.project(point, this.a)) return
+      if (!vp.project(point, this.a) || clipped(point)) return
       const d = Math.hypot(this.a.x - sx, this.a.y - sy)
       if (d < bestDistance) {
         bestDistance = d
@@ -752,11 +757,14 @@ export class Interaction {
     let result = null as { id: number; point: Vector3; item: PickItem } | null
     const pickable = this.filter((obj) => this.doc.isSelectable(obj) && accept(obj.id))
     const index = this.pickIndex()
+    const planes = this.display.clippingPlanes(vp)
     this.near(vp, sx, sy, PICK_TOLERANCE + POINT_PREFERENCE, (id, item) => {
       if (item.kind !== 'line' || !pickable(id)) return
       // A point lying on a curve wins over the curve, as it would be hard to pick otherwise.
       const preference = this.doc.objects.get(id)!.geometry.type === 'point' ? POINT_PREFERENCE : 0
       const hit = this.closestOnRanges(vp, item.ranges, sx, sy)
+      // Lines cut away by a clipping plane are not there to click.
+      if (hit && planes.length > 0 && isClipped(planes, hit.point)) return
       // Equally near: the first object in the model, then its first line, wins.
       if (hit && (hit.distance - preference < best || (hit.distance - preference === best && result && index.before(id, item, result.id, result.item)))) {
         best = hit.distance - preference
