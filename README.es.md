@@ -184,12 +184,16 @@ Despliega cada apartado para ver los detalles.
   - `Patch`: superficie ajustada a un contorno cerrado y a las curvas interiores;
   - `EdgeSrf` (de dos a cuatro curvas de borde) y `SrfPt` (de tres o cuatro esquinas);
   - `BlendSrf`: superficie de transición entre aristas de dos superficies, tangente a ambas;
-  - `Pipe`: tubo a lo largo de curvas, con radio inicial y final y opción de cerrarlo como sólido.
+  - `Pipe`: tubo a lo largo de curvas, con radio inicial y final y opción de cerrarlo como sólido;
+  - `RailRevolve`: un perfil girado alrededor de un eje mientras uno de sus extremos sigue una curva
+    carril, para cúpulas y cubiertas sobre plantas ovaladas o irregulares.
 - Edición de superficies:
   - `Split` y `Trim` funcionan con superficies, polisuperficies y sólidos, cortando con curvas
     (proyectadas tal como se ven en la vista) o con otras superficies y sólidos. Los sólidos se
     parten en sólidos.
   - `Cap`, `ExtrudeSrf`, `OffsetSrf` (con opción `Solid`) y `ExtractSrf`.
+  - `Untrim` quita los agujeros de una cara (`HolesOnly`) o todos sus recortes, hasta la superficie
+    completa; el resto de la polisuperficie se vuelve a unir.
   - `UnrollSrf` desarrolla caras planas, cilíndricas y cónicas en patrones de corte (contornos en el
     plano XY, con las longitudes conservadas). Las caras que comparten una arista recta siguen
     unidas como una red para plegar; con `Explode` cada cara va por separado. Las demás caras se
@@ -238,7 +242,8 @@ Despliega cada apartado para ver los detalles.
 <br>
 
 - Modo `Rendered`: materiales físicos con reflejos de un entorno de estudio, sol con sombras suaves
-  y sombra sobre el suelo.
+  y sombra sobre el suelo. Los objetos sin material se ven como una maqueta de arcilla mate,
+  ligeramente teñida por el color de su capa.
 - Materiales a partir de presets (yeso, hormigón, madera, ladrillo, azulejo, mármol, acero, vidrio,
   agua…), con color, rugosidad, metal y transparencia editables, asignados a objetos o capas.
 - Texturas: patrones generados (`Wood`, `Brick`, `Tiles`, `Concrete`, `Marble`) o imágenes (JPEG,
@@ -386,7 +391,8 @@ flowchart LR
 - [ ] Cotas y SubD de `.3dm`
 - [x] Copiar y pegar entre archivos
 - [x] `ChamferEdge` y `UnrollSrf`
-- [ ] Superficies: `FilletSrf`, `MatchSrf`, `RailRevolve`, `Untrim`
+- [x] `Untrim` y `RailRevolve`
+- [ ] Superficies: `FilletSrf`, `MatchSrf`
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] Modelado SubD
 - [ ] Herramientas de arquitectura: muros, forjados, huecos y niveles

@@ -12,6 +12,7 @@ import {
   chamferEdges,
   joinShapes,
   loftCurves,
+  loftSurface,
   meshToShape,
   planarFace,
   revolveCurve,
@@ -42,6 +43,7 @@ import {
   projectCurves,
   pullCurve,
   splitShape,
+  untrim,
 } from './surfaceEdit'
 import { exactRhinoBrep } from './toRhino'
 import { inArena } from './arena'
@@ -66,6 +68,7 @@ export const api = {
   extrudeCurve,
   revolveCurve,
   loftCurves,
+  loftSurface,
   sweep,
   planarFace,
   boolean,
@@ -97,6 +100,7 @@ export const api = {
   pullCurve,
   intersectionCurves,
   extractFaces,
+  untrim,
   borderCurves,
   edgeCurves,
   sweep2,
