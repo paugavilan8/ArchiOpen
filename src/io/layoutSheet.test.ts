@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { Document } from '../core/document'
 import { Detail, fitDetail, newLayout, sheetFrame, sheetScale, sheetSize, view, wireframeDrawing } from '../core/layout'
 import { box, toBrep } from '../kernel/brep'
-import { cachedHiddenLines, hiddenLineDrawing, layoutSheet } from './layoutSheet'
+import { cachedHiddenLines, hiddenLineDrawing, layoutSheet, SECTION_WIDTH } from './layoutSheet'
 import { Matrix4 } from 'three'
 import { transform } from '../core/curves'
 import { contentStream, writePdf } from './pdf'
@@ -103,7 +103,7 @@ describe('layout sheets', () => {
     doc.add(toBrep(box(v(1000, 3000), v(2000, 0), v(0, 1000), v(0, 0, 1000))))
     const layout = newLayout(doc, 1, 'Alzado')
     const detail = fitDetail(doc, { ...layout.details[0], view: view('Front') })
-    const lines = await hiddenLineDrawing(doc, detail)
+    const { lines } = await hiddenLineDrawing(doc, detail)
     const e = extent(lines)
     const k = 1 / detail.scale
     // Only the big box's outline shows: 4 m × 3 m at the detail's scale.
@@ -143,10 +143,37 @@ describe('layout sheets', () => {
     // Moving the detail on the sheet only places the same drawing elsewhere.
     const moved = { ...detail, rect: [detail.rect[0] + 50, detail.rect[1], detail.rect[2], detail.rect[3]] as Detail['rect'] }
     const shifted = cachedHiddenLines(doc, moved)!
-    expect(shifted[0][0][0]).toBeCloseTo(first[0][0][0] + 50, 9)
+    expect(shifted.lines[0][0][0]).toBeCloseTo(first.lines[0][0][0] + 50, 9)
     // Moving the box changes what the detail shows.
     const g = doc.objects.get(big)!.geometry
     doc.setGeometry(big, transform(g, new Matrix4().makeTranslation(500, 0, 0)))
     expect(cachedHiddenLines(doc, detail)).toBeNull()
+  })
+
+  it('draws a plan cut by a clipping plane, with its cut lines apart, when the detail asks for it', async () => {
+    const doc = new Document()
+    // A 4 × 1 × 3 m wall, and a clipping plane at 1.5 m keeping what is below.
+    doc.add(toBrep(box(v(0, 0), v(4000, 0), v(0, 1000), v(0, 0, 3000))))
+    const plane = doc.add({ type: 'clipping', center: v(2000, 500, 1500), xaxis: v(1, 0), yaxis: v(0, -1), width: 6000, height: 3000, views: [] }).id
+    const layout = newLayout(doc, 1, 'Planta')
+    const plain = fitDetail(doc, { ...layout.details[0], view: view('Front'), hidden: true })
+    const cut = { ...plain, clipping: true }
+    const whole = await hiddenLineDrawing(doc, plain)
+    expect(whole.section).toHaveLength(0)
+    const section = await hiddenLineDrawing(doc, cut)
+    const k = 1 / cut.scale
+    // Seen from the front, the wall now stops at the cut, whose edge is a cut line 4 m long.
+    expect(extent([...section.lines, ...section.section]).maxY - extent([...section.lines, ...section.section]).minY).toBeCloseTo(1500 * k, 6)
+    const length = (ls: [number, number][][]) => ls.reduce((sum, l) => sum + l.slice(1).reduce((s2, p, i) => s2 + Math.hypot(p[0] - l[i][0], p[1] - l[i][1]), 0), 0)
+    expect(length(section.section)).toBeCloseTo(4000 * k, 6)
+    // The sheet prints the cut lines with a heavier pen.
+    const sheet = layoutSheet(doc, { ...layout, details: [cut] }, { black: true, sheetNumber: 1, sheetCount: 1 }, new Map([[cut.id, section]]))
+    expect(sheet.items.some((item) => item.width === SECTION_WIDTH && item.lines.length > 0)).toBe(true)
+    // Wireframe details are cut too.
+    const wire = extent(wireframeDrawing(doc, { ...cut, hidden: false }).layers.get(1)!.lines)
+    expect(wire.maxY - wire.minY).toBeCloseTo(1500 * k, 6)
+    // Hiding the plane draws the whole wall again.
+    doc.setState(plane, { hidden: 'user' })
+    expect(extent(wireframeDrawing(doc, { ...cut, hidden: false }).layers.get(1)!.lines).maxY - wire.minY).toBeCloseTo(3000 * k, 6)
   })
 })

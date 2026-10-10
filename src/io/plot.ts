@@ -1,4 +1,5 @@
 import { PerspectiveCamera, Vector3 } from 'three'
+import { clipPolyline, drawingClipPlanes } from '../core/clipPlanes'
 import { flatten } from '../core/blocks'
 import type { CadObject, Document } from '../core/document'
 import { tessellate, wireframe } from '../core/geometry'
@@ -61,6 +62,8 @@ export function plotSheet(doc: Document, vp: Viewport, objects: CadObject[], opt
   const [width, height] = options.landscape ? [h, w] : [w, h]
   const margin = options.margin ?? 10
   const project = projector(vp)
+  // What the viewport's clipping planes cut away is not printed (texts, dimensions and hatches stay whole).
+  const planes = drawingClipPlanes(doc, vp.kind)
 
   // Project everything once, grouped by layer.
   const byLayer = new Map<number, { lines: Point[][]; fills: Point[][][] }>()
@@ -83,7 +86,8 @@ export function plotSheet(doc: Document, vp: Viewport, objects: CadObject[], opt
         entry.fills.push(region)
         continue
       }
-      for (const line of wireframe(g)) {
+      const lines = planes.length > 0 && g.type !== 'annotation' && g.type !== 'hatch' ? wireframe(g).flatMap((l) => clipPolyline(l, planes)) : wireframe(g)
+      for (const line of lines) {
         // A line that passes behind a perspective camera is split there.
         let run: Point[] = []
         for (const p of line) {

@@ -20,7 +20,7 @@ import {
   wireframeDrawing,
 } from '../core/layout'
 import { DEFAULT_PRINT_WIDTH } from '../core/linetypes'
-import { cachedHiddenLines, computeHiddenLines, usesHiddenLines } from '../io/layoutSheet'
+import { cachedHiddenLines, computeHiddenLines, SECTION_WIDTH, usesHiddenLines } from '../io/layoutSheet'
 import { kernelReady, loadKernel } from '../kernel/client'
 import type { Display } from '../view/display'
 
@@ -268,7 +268,10 @@ export class LayoutEditor {
       const hidden = usesHiddenLines(detail) ? cachedHiddenLines(this.doc, detail) : null
       if (usesHiddenLines(detail) && !hidden) this.computeLater(detail)
       const drawing = wireframeDrawing(this.doc, detail, hidden ? (geo) => geo.type === 'annotation' || geo.type === 'hatch' : undefined)
-      if (hidden) content.append(svg('path', { class: 'detail-lines', d: pathData(hidden, height), stroke: '#000', 'stroke-width': 0.25 }))
+      if (hidden) {
+        content.append(svg('path', { class: 'detail-lines', d: pathData(hidden.lines, height), stroke: '#000', 'stroke-width': 0.25 }))
+        if (hidden.section.length) content.append(svg('path', { class: 'detail-lines', d: pathData(hidden.section, height), stroke: '#000', 'stroke-width': SECTION_WIDTH }))
+      }
       for (const layer of this.doc.layers) {
         const entry = drawing.layers.get(layer.id)
         if (!entry) continue
@@ -413,6 +416,11 @@ export class LayoutEditor {
           select([['wire', 'Wireframe'], ['hidden', 'Hidden lines removed']], detail.hidden ? 'hidden' : 'wire', (v) => this.patchDetail(id, (d) => ({ ...d, hidden: v === 'hidden' }))),
         )
       }
+      field(
+        dl,
+        'Clipping',
+        select([['off', 'Off'], ['on', 'Clipping planes']], detail.clipping ? 'on' : 'off', (v) => this.patchDetail(id, (d) => ({ ...d, clipping: v === 'on' }))),
+      )
       field(dl, 'Caption', text(detail.title, (v) => this.patchDetail(id, (d) => ({ ...d, title: v }))))
       const hint = document.createElement('p')
       hint.className = 'panel-hint layout-hint'

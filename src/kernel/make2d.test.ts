@@ -4,8 +4,9 @@ import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { length } from '../core/curves'
 import { AnyCurve, tessellate } from '../core/geometry'
-import { box, sphere } from './brep'
-import { make2D } from './make2d'
+import type { ClipPlane } from '../core/clipPlanes'
+import { box, cylinder, sphere } from './brep'
+import { make2D, make2DWithMeshes } from './make2d'
 
 beforeAll(async () => {
   R.setOC(await opencascade())
@@ -55,5 +56,43 @@ describe('Make2D', () => {
   it('draws the silhouette of a curved surface', () => {
     const { visible } = make2D([sphere(v(0, 0), 2)], [], front, false)
     expect(total(visible)).toBeCloseTo(Math.PI * 4, 3)
+  })
+})
+
+describe('Make2D with clipping planes', () => {
+  // A 10 × 10 × 10 box and a cylinder beside it, cut at height 4 keeping what is below (a plan).
+  const below: ClipPlane = { normal: v(0, 0, -1), constant: 4, origin: v(0, 0, 4) }
+  const top = { direction: v(0, 0, 1), xaxis: v(1, 0, 0) }
+  const shapes = () => [box(v(0, 0), v(10, 0), v(0, 10), v(0, 0, 10)), cylinder(v(20, 5), 2, 10, v(0, 0, 1))]
+
+  it('draws a plan: the cut outlines as section lines, nothing above the cut', () => {
+    const drawing = make2DWithMeshes(shapes(), [], [], [], top, false, [below])
+    // The square and the circle where the plane cuts.
+    expect(total(drawing.section!)).toBeCloseTo(40 + 2 * Math.PI * 2, 4)
+    // Seen from above, the cut hides everything below it.
+    expect(total(drawing.visible)).toBeCloseTo(0, 6)
+  })
+
+  it('draws a cut elevation: the solids up to the cut, and the cut edge as a section line', () => {
+    const drawing = make2DWithMeshes(shapes(), [], [], [], front, false, [below])
+    const all = [...drawing.visible, ...drawing.section!]
+    expect(bounds(all).max.y).toBeCloseTo(4, 6)
+    expect(bounds(all).min.y).toBeCloseTo(0, 6)
+    // Along the cut: the box's top edge (10) and the cylinder's (4) — seen edge on.
+    expect(total(drawing.section!)).toBeCloseTo(14, 4)
+  })
+
+  it('leaves out a solid wholly cut away, and trims curves', () => {
+    const high = box(v(0, 0, 6), v(1, 0), v(0, 1), v(0, 0, 1))
+    const post: AnyCurve = { type: 'polyline', points: [v(30, 0, 0), v(30, 0, 10)], closed: false }
+    const drawing = make2DWithMeshes([high], [], [post], [], front, false, [below])
+    expect(drawing.section ?? []).toHaveLength(0)
+    expect(total(drawing.visible)).toBeCloseTo(4, 6)
+  })
+
+  it('is the plain drawing without planes', () => {
+    const drawing = make2DWithMeshes(shapes(), [], [], [], top, false)
+    expect(drawing.section).toBeUndefined()
+    expect(total(drawing.visible)).toBeCloseTo(40 + 2 * Math.PI * 2, 4)
   })
 })

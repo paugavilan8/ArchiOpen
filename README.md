@@ -106,7 +106,10 @@ Expand a section for details.
   solids are capped in their material's color. Planes can be moved, rotated and copied like any
   object, and the cut updates live. Each plane can be enabled per viewport in the properties panel,
   and `EnableClippingPlanes` / `DisableClippingPlanes` toggle all planes in the active viewport.
-  Geometry that is clipped away cannot be picked or snapped to.
+  Geometry that is clipped away cannot be picked or snapped to. Clipping planes also cut drawings:
+  `Make2D` (the planes on in the active viewport, option `Clipping`), layout details (option
+  *Clipping* in the detail panel) and printed views. Cut lines go on their own layer,
+  *Make2D Section*, and print with a heavier pen.
 - Selection by click, window (left to right) and crossing (right to left), backed by a spatial
   index so it stays immediate in models with thousands of objects or very dense meshes.
 - Gumball on the selection: arrows to move, arcs to rotate (Shift snaps to 15°), boxes to scale
@@ -245,6 +248,8 @@ Expand a section for details.
 
 - `Make2D` projects the selection with hidden-line removal into flat curves: plans, elevations
   and axonometric views, or four views at once (`FourView`), optionally including hidden lines.
+  With clipping planes it draws plans and sections: solids are cut and their cut outlines go on the
+  *Make2D Section* layer.
 - Text and dimensions drawn with a single-stroke technical font: `Text`, `Dim`, `DimAligned`,
   `DimRadius`, `DimDiameter`, `DimAngle` and `Leader`, with arrowheads or architectural ticks.
   Dimensions update when their geometry changes, and their text, height and precision are editable
@@ -365,7 +370,7 @@ flowchart LR
 
 - [x] `Int`, `Perp`, `Tan` and `Knot` object snaps
 - [x] Live clipping planes with filled sections
-- [ ] Clipping planes in layouts, `Make2D` and PDF output
+- [x] Clipping planes in layouts, `Make2D` and PDF output
 - [x] `Orient`, `Orient3Pt`, `Align` and `Distribute`
 - [x] Blocks and text from `.3dm`; blocks exported as blocks
 - [ ] Dimensions and SubD from `.3dm`

@@ -1,5 +1,6 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import { flatten } from '../core/blocks'
+import { drawingClipPlanes } from '../core/clipPlanes'
 import { transform } from '../core/curves'
 import { AnyCurve, expandBox, isCurve, tessellate } from '../core/geometry'
 import type { Layer } from '../core/document'
@@ -14,7 +15,7 @@ import { kernel, readable } from './solids'
 const VIEWS = ['CurrentView', 'Top', 'Front', 'Right', 'Back', 'Left', 'FourView'] as const
 type ViewChoice = (typeof VIEWS)[number]
 
-const memory: { view: ViewChoice; hidden: boolean } = { view: 'CurrentView', hidden: false }
+const memory: { view: ViewChoice; hidden: boolean; clipping: boolean } = { view: 'CurrentView', hidden: false, clipping: true }
 
 const FIXED: Record<string, DrawingView> = {
   Top: { direction: new Vector3(0, 0, 1), xaxis: new Vector3(1, 0, 0) },
@@ -42,17 +43,20 @@ function boundsOf(curves: AnyCurve[]): Box3 {
 const shift = (drawing: Drawing2D, offset: Vector3): Drawing2D => {
   const m = new Matrix4().makeTranslation(offset.x, offset.y, 0)
   const move = (c: AnyCurve) => transform(c, m) as AnyCurve
-  return { visible: drawing.visible.map(move), hidden: drawing.hidden.map(move) }
+  return { visible: drawing.visible.map(move), hidden: drawing.hidden.map(move), section: drawing.section?.map(move) }
 }
 
 /** The layer with this name, created if missing. */
-function layerNamed(ctx: CommandContext, name: string, color: string, linetype?: string): Layer {
+function layerNamed(ctx: CommandContext, name: string, color: string, linetype?: string, printWidth?: number): Layer {
   const existing = ctx.doc.layers.find((l) => l.name === name)
   if (existing) return existing
   const layer = ctx.doc.addLayer()
-  ctx.doc.updateLayer(layer.id, { name, color, linetype })
+  ctx.doc.updateLayer(layer.id, { name, color, linetype, ...(printWidth ? { printWidth } : {}) })
   return layer
 }
+
+/** Print width of Make2D's cut lines, in millimeters. */
+const SECTION_PEN = 0.5
 
 /**
  * Lays out the drawings of the views. A single view keeps its own coordinates; four views are
@@ -62,7 +66,7 @@ function layerNamed(ctx: CommandContext, name: string, color: string, linetype?:
 function arrange(drawings: Drawing2D[], gap: number): Drawing2D[] {
   if (drawings.length === 1) return drawings
   const [front, top, right, persp] = drawings
-  const box = (d: Drawing2D) => boundsOf([...d.visible, ...d.hidden])
+  const box = (d: Drawing2D) => boundsOf([...d.visible, ...d.hidden, ...(d.section ?? [])])
   const [bf, bt, br, bp] = [front, top, right, persp].map(box)
   const fx = bf.isEmpty() ? 0 : bf.max.x
   const fy = bf.isEmpty() ? 0 : bf.max.y
@@ -96,15 +100,18 @@ const make2d: Command = {
     const size = model.getSize(new Vector3())
     const gap = Math.max(size.x, size.y, size.z, 1e-6) * 0.25
 
+    const planes = drawingClipPlanes(doc, display.active.kind)
     let location: Vector3 | null = null
     for (;;) {
       const result = await input.getPoint({
         prompt: 'Lower left corner of the drawing <beside the model>',
-        options: [`View=${memory.view}`, yesNo('HiddenLines', memory.hidden)],
+        // Clipping planes on in the active viewport cut the drawing (plans and sections).
+        options: [`View=${memory.view}`, yesNo('HiddenLines', memory.hidden), ...(planes.length > 0 ? [yesNo('Clipping', memory.clipping)] : [])],
       })
       if (result.kind === 'option') {
         if (isOption(result.option, 'View')) memory.view = VIEWS[(VIEWS.indexOf(memory.view) + 1) % VIEWS.length]
         else if (isOption(result.option, 'HiddenLines')) memory.hidden = !memory.hidden
+        else if (isOption(result.option, 'Clipping')) memory.clipping = !memory.clipping
         continue
       }
       if (result.kind === 'point') location = result.point
@@ -124,10 +131,11 @@ const make2d: Command = {
     const curves = objects.filter(isCurve)
     const meshes = objects.filter((g) => g.type === 'mesh')
     const views2D: Drawing2D[] = []
-    for (const view of views) views2D.push(await readable(kernelJob('make2DWithMeshes', shapes, surfaces, curves, meshes, view, memory.hidden), 'compute the drawing'))
+    const clip = memory.clipping ? planes : []
+    for (const view of views) views2D.push(await readable(kernelJob('make2DWithMeshes', shapes, surfaces, curves, meshes, view, memory.hidden, clip), 'compute the drawing'))
     const drawings = arrange(views2D, gap)
 
-    const all = drawings.flatMap((d) => [...d.visible, ...d.hidden])
+    const all = drawings.flatMap((d) => [...d.visible, ...d.hidden, ...(d.section ?? [])])
     if (all.length === 0) {
       log('Nothing to draw')
       return
@@ -139,13 +147,17 @@ const make2d: Command = {
 
     const visibleLayer = layerNamed(ctx, 'Make2D Visible', '#000000')
     const hiddenLayer = memory.hidden ? layerNamed(ctx, 'Make2D Hidden', '#8c8c8c', 'Hidden') : null
+    // Cut lines go on a layer of their own, printed with a heavier pen.
+    const sectionLayer = drawings.some((d) => d.section?.length) ? layerNamed(ctx, 'Make2D Section', '#000000', undefined, SECTION_PEN) : null
     const created: number[] = []
     for (const d of drawings) {
       for (const c of d.visible) created.push(doc.add(transform(c, m), visibleLayer.id).id)
+      if (sectionLayer) for (const c of d.section ?? []) created.push(doc.add(transform(c, m), sectionLayer.id).id)
       if (hiddenLayer) for (const c of d.hidden) created.push(doc.add(transform(c, m), hiddenLayer.id).id)
     }
     doc.select(created)
-    log(`${plural('curve', created.length)} drawn on layer ${visibleLayer.name}${hiddenLayer ? ` and ${hiddenLayer.name}` : ''}`)
+    const layers = [visibleLayer, sectionLayer, hiddenLayer].filter((l) => l !== null).map((l) => l.name)
+    log(`${plural('curve', created.length)} drawn on layer${layers.length > 1 ? 's' : ''} ${layers.join(', ')}`)
   },
 }
 
