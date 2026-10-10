@@ -176,7 +176,7 @@ Despliega cada apartado para ver los detalles.
 
 - Sólidos y superficies: `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (con opción `Solid`),
   `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`, `BooleanIntersection`,
-  `FilletEdge`, `Sweep1`, `Shell`, `Section` y `Contour`. `Explode` separa una polisuperficie en
+  `FilletEdge`, `ChamferEdge`, `Sweep1`, `Shell`, `Section` y `Contour`. `Explode` separa una polisuperficie en
   caras y `Join` las vuelve a unir.
 - Superficies avanzadas:
   - `Sweep2`: barre perfiles a lo largo de dos carriles, interpolando entre varios perfiles;
@@ -190,6 +190,10 @@ Despliega cada apartado para ver los detalles.
     (proyectadas tal como se ven en la vista) o con otras superficies y sólidos. Los sólidos se
     parten en sólidos.
   - `Cap`, `ExtrudeSrf`, `OffsetSrf` (con opción `Solid`) y `ExtractSrf`.
+  - `UnrollSrf` desarrolla caras planas, cilíndricas y cónicas en patrones de corte (contornos en el
+    plano XY, con las longitudes conservadas). Las caras que comparten una arista recta siguen
+    unidas como una red para plegar; con `Explode` cada cara va por separado. Las demás caras se
+    omiten y se avisa.
   - Curvas a partir de superficies: `Project`, `Pull`, `Intersect`, `DupBorder` y `DupEdge`.
 - Historial de construcción (activo por defecto, como *Record History* de Rhino): las superficies
   hechas con `ExtrudeCrv`, `Revolve`, `Loft`, `Sweep1`, `Sweep2`, `Pipe`, `PlanarSrf`, `EdgeSrf`,
@@ -381,7 +385,8 @@ flowchart LR
 - [x] Bloques y textos de `.3dm`; bloques exportados como bloques
 - [ ] Cotas y SubD de `.3dm`
 - [x] Copiar y pegar entre archivos
-- [ ] Superficies: `FilletSrf`, `ChamferEdge`, `MatchSrf`, `RailRevolve`, `Untrim`, `UnrollSrf`
+- [x] `ChamferEdge` y `UnrollSrf`
+- [ ] Superficies: `FilletSrf`, `MatchSrf`, `RailRevolve`, `Untrim`
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] Modelado SubD
 - [ ] Herramientas de arquitectura: muros, forjados, huecos y niveles

@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { transform } from '../core/curves'
 import type { AnyCurve, BrepGeometry } from '../core/geometry'
 import { clampedKnots } from '../math/nurbs'
-import { boolean, box, cylinder, explodeShape, extrudeCurve, filletEdges, joinShapes, loftCurves, meshToShape, nearestFace, planarFace, revolveCurve, sectionCurves, shapeOf, shapeToMesh, shellSolid, sphere, sweep, toBrep } from './brep'
+import { boolean, box, chamferEdges, cylinder, explodeShape, extrudeCurve, filletEdges, joinShapes, loftCurves, meshToShape, nearestFace, planarFace, revolveCurve, sectionCurves, shapeOf, shapeToMesh, shellSolid, sphere, sweep, toBrep } from './brep'
 import { faceCount, isClosedMesh, meshBox, meshVolume as polygonMeshVolume } from '../core/mesh'
 import { length } from '../core/curves'
 
@@ -81,6 +81,14 @@ describe('booleans and fillets', () => {
     const rounded = filletEdges(block, [0], 1)
     expect(rounded.faces.length).toBe(7)
     expect(volume(rounded)).toBeCloseTo(64 - 4 * (1 - Math.PI / 4), 4)
+  })
+
+  it('chamfers chosen edges', () => {
+    const block = box(v(0, 0), v(4, 0), v(0, 4), v(0, 0, 4))
+    const beveled = chamferEdges(block, [0], 1)
+    expect(beveled.faces.length).toBe(7)
+    // A right triangle of legs 1 cut along a 4-long edge.
+    expect(volume(beveled)).toBeCloseTo(64 - 0.5 * 4, 6)
   })
 
   it('makes spheres', () => {
