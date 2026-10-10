@@ -62,6 +62,11 @@ export class CommandLine {
     this.input.focus()
   }
 
+  /** True if some of the typed text is selected (so Ctrl+C copies text, not objects). */
+  get hasSelectedText(): boolean {
+    return this.input.selectionStart !== this.input.selectionEnd
+  }
+
   get hasFocus(): boolean {
     return document.activeElement === this.input
   }

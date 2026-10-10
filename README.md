@@ -501,6 +501,12 @@ Haz clic en cada apartado para desplegarlo.
 <summary><b>⌨️&nbsp; Otros comandos y alias</b></summary>
 <br>
 
+- Copiar y pegar (menú *Edit*): `Ctrl+C` / `CopyToClipboard`, `Ctrl+X` / `Cut` y `Ctrl+V` /
+  `Paste` pasan objetos por el portapapeles del sistema, también entre ventanas y archivos
+  distintos. Se pegan en el mismo sitio, seleccionados, con sus capas (las que tienen el mismo
+  nombre se reutilizan), sus materiales, sus grupos y sus bloques (un bloque igual al que ya hay se
+  reutiliza; uno distinto con el mismo nombre se numera), y escalados si el archivo tiene otras
+  unidades. El texto copiado de otros programas se pega en la línea de comandos, como siempre.
 - Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
   `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
   `ExportSTEP`.
@@ -569,7 +575,7 @@ flowchart LR
 - [x] `Orient`, `Orient3Pt`, `Align` y `Distribute`
 - [x] Leer textos y bloques de `.3dm` y exportar bloques como bloques
 - [ ] Cotas y SubD de `.3dm`
-- [ ] Copiar y pegar entre archivos
+- [x] Copiar y pegar entre archivos
 - [ ] Superficies: `FilletSrf`, `ChamferEdge`, `MatchSrf`, `RailRevolve`, `Untrim`, `UnrollSrf`
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] Modelado SubD
