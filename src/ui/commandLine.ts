@@ -51,6 +51,11 @@ export class CommandLine {
 
   setIdle(): void {
     this.setPrompt(IDLE_PROMPT, [])
+    // Lines typed ahead that the finished command did not need: the next command and its answers.
+    const [next, ...rest] = this.interaction.takeTypeAhead()
+    if (next === undefined) return
+    for (const line of rest) this.interaction.typeAheadLine(line)
+    this.run(next)
   }
 
   focus(): void {
@@ -79,14 +84,21 @@ export class CommandLine {
 
     if (this.runner.busy) {
       if (text !== '') this.log(text)
-      this.interaction.handleText(text)
-    } else if (text === '') {
+      // A command at work (on the kernel, say) asks for nothing yet: keep the line for it.
+      if (this.interaction.busy) this.interaction.handleText(text)
+      else this.interaction.typeAheadLine(text)
+    } else this.run(text, picked)
+  }
+
+  /** Runs a typed command (or a suggestion picked for it); an empty line repeats the last one. */
+  private run(text: string, picked?: string): void {
+    if (text === '') {
       this.runner.repeat()
-    } else {
-      const macro = this.runner.resolve(text) ?? picked
-      if (macro) void this.runner.run(macro)
-      else this.log(`Unknown command: ${text}`)
+      return
     }
+    const macro = this.runner.resolve(text) ?? picked
+    if (macro) void this.runner.run(macro)
+    else this.log(`Unknown command: ${text}`)
   }
 
   private onKeyDown(e: KeyboardEvent): void {

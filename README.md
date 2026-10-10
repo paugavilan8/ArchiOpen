@@ -235,7 +235,10 @@ se adjuntan a un borrador de *release*.
   `ZEA`, `ZS`, `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
 - Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
   número antes de hacer clic.
-- Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda).
+- Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda). El clic, la
+  ventana y las referencias a objetos buscan en un índice espacial (un árbol de cajas por
+  geometría y otro de objetos), así que siguen siendo inmediatos en modelos de miles de objetos o
+  con mallas muy densas.
 - Gumball sobre la selección: flechas para mover, arcos para girar (Mayús: pasos de 15°), cajas
   para escalar en un eje (Mayús: uniforme) y centro para mover en el plano. Un clic en una
   flecha, arco o caja sin arrastrar pide el valor exacto.

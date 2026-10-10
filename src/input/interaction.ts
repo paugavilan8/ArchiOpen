@@ -1,7 +1,8 @@
 import { Vector3 } from 'three'
-import type { Document } from '../core/document'
+import type { CadObject, Document } from '../core/document'
 import { controlPoints } from '../core/curves'
-import { snapPoints, wireframe, type SnapPoints } from '../core/geometry'
+import { wireframe, type SnapPoints } from '../core/geometry'
+import { PickIndex, type PickItem, type Range, type ScreenRect } from '../core/pickIndex'
 import { editedIds, transformSelection, transformedSelection, translation } from '../core/selectionEdit'
 import type { Settings, SnapKind } from '../core/settings'
 import type { Display } from '../view/display'
@@ -81,11 +82,15 @@ export class Interaction {
   private request: Request | null = null
   private drag: Drag | null = null
   private script: string[] = []
+  /** Lines typed while the running command was busy (e.g. waiting for the kernel), for its next prompts. */
+  private typeAhead: string[] = []
   private lastPoint = new Vector3()
   private readonly marker = document.createElement('div')
   private readonly selectionBox = document.createElement('div')
   private readonly a: ScreenPoint = { x: 0, y: 0 }
   private readonly b: ScreenPoint = { x: 0, y: 0 }
+  private index: PickIndex | null = null
+  private indexRevision = -1
 
   constructor(
     private readonly doc: Document,
@@ -159,11 +164,26 @@ export class Interaction {
     this.script = [...inputs]
   }
 
+  /**
+   * Keeps a line typed while a command runs but asks for nothing (it is working), to answer its
+   * next prompt, as typing ahead works when the window is busy.
+   */
+  typeAheadLine(text: string): void {
+    this.typeAhead.push(text)
+  }
+
+  /** The lines typed ahead that no prompt has taken, emptying the queue. */
+  takeTypeAhead(): string[] {
+    const lines = this.typeAhead
+    this.typeAhead = []
+    return lines
+  }
+
   private start(kind: Request['kind'], opts: GetPointOptions): Promise<GetResult> {
     return new Promise((resolve, reject) => {
       this.request = { kind, opts, resolve, reject }
       this.ui.setPrompt(opts.prompt, opts.options ?? [])
-      const scripted = this.script.shift()
+      const scripted = this.script.shift() ?? this.typeAhead.shift()
       if (scripted !== undefined) queueMicrotask(() => this.handleText(scripted))
     })
   }
@@ -189,6 +209,7 @@ export class Interaction {
   cancel(): void {
     const request = this.request
     this.script = []
+    this.typeAhead = []
     if (!request) return
     this.clearRequest()
     request.reject(new CancelError())
@@ -506,47 +527,91 @@ export class Interaction {
 
   private findSnap(vp: Viewport, sx: number, sy: number): { point: Vector3; label: string } | null {
     const enabled = this.settings.snaps
-    let best: { point: Vector3; label: string } | null = null
+    // Casts, as TypeScript does not follow assignments in callbacks. Equally near candidates go to
+    // the one first in the model, then first in its object.
+    let best = null as { point: Vector3; label: string; id: number; item: PickItem } | null
     let bestDistance = SNAP_TOLERANCE
-    let near: Vector3 | null = null
+    let near = null as { point: Vector3; id: number; item: PickItem } | null
     let nearDistance = SNAP_TOLERANCE
+    const visible = this.filter((obj) => this.doc.isVisible(obj) && !this.display.isHidden(obj.id))
+    const index = this.pickIndex()
 
-    for (const obj of this.doc.objects.values()) {
-      if (!this.doc.isVisible(obj) || this.display.isHidden(obj.id)) continue
-      const snaps = snapPoints(obj.geometry)
-      for (const kind of POINT_SNAPS) {
-        if (!enabled[kind]) continue
-        for (const p of snaps[kind]) {
+    this.near(vp, sx, sy, SNAP_TOLERANCE, (id, item) => {
+      if (!visible(id)) return
+      if (item.kind === 'line') {
+        if (!enabled.near) return
+        const hit = this.closestOnRanges(vp, item.ranges, sx, sy)
+        if (hit && (hit.distance < nearDistance || (hit.distance === nearDistance && near && index.before(id, item, near.id, near.item)))) {
+          nearDistance = hit.distance
+          near = { point: hit.point, id, item }
+        }
+        return
+      }
+      if (!enabled[item.kind]) return
+      for (const r of item.ranges) {
+        for (let k = r.from; k <= r.to; k++) {
+          const p = r.points[k]
           if (!vp.project(p, this.a)) continue
           const d = Math.hypot(this.a.x - sx, this.a.y - sy)
-          if (d < bestDistance) {
+          if (d < bestDistance || (d === bestDistance && best && index.before(id, item, best.id, best.item))) {
             bestDistance = d
-            best = { point: p.clone(), label: SNAP_LABELS[kind] }
+            best = { point: p.clone(), label: SNAP_LABELS[item.kind], id, item }
           }
         }
       }
-      if (enabled.near && !best) {
-        for (const line of wireframe(obj.geometry)) {
-          const hit = this.closestOnPolyline(vp, line, sx, sy)
-          if (hit && hit.distance < nearDistance) {
-            nearDistance = hit.distance
-            near = hit.point
-          }
-        }
-      }
+    })
+    // A point snap wins over a nearest point on a line.
+    if (best) return { point: best.point, label: best.label }
+    return near ? { point: near.point, label: SNAP_LABELS.near } : null
+  }
+
+  /** The index of what can be picked, made again when the model has changed. */
+  private pickIndex(): PickIndex {
+    if (!this.index || this.indexRevision !== this.doc.revision) {
+      this.index = new PickIndex(this.doc.objects.values())
+      this.indexRevision = this.doc.revision
     }
-    return best ?? (near ? { point: near, label: SNAP_LABELS.near } : null)
+    return this.index
+  }
+
+  /** Visits the indexed runs and snap groups within `radius` pixels of a screen position. */
+  private near(vp: Viewport, sx: number, sy: number, radius: number, visit: (id: number, item: PickItem, inside: boolean) => void): void {
+    this.pickIndex().query((p, out) => vp.project(p, out), { minX: sx - radius, minY: sy - radius, maxX: sx + radius, maxY: sy + radius }, visit)
+  }
+
+  /** A test on objects by id, worked out once per object for one query. */
+  private filter(test: (obj: CadObject) => boolean): (id: number) => boolean {
+    const known = new Map<number, boolean>()
+    return (id) => {
+      let ok = known.get(id)
+      if (ok === undefined) {
+        const obj = this.doc.objects.get(id)
+        ok = !!obj && test(obj)
+        known.set(id, ok)
+      }
+      return ok
+    }
+  }
+
+  /** Closest point of some pieces of polylines to a screen position; the first wins a tie. */
+  private closestOnRanges(vp: Viewport, ranges: Range[], sx: number, sy: number): { distance: number; point: Vector3 } | null {
+    let best: { distance: number; point: Vector3 } | null = null
+    for (const r of ranges) {
+      const hit = this.closestOnPolyline(vp, r.points, sx, sy, r.from, r.to)
+      if (hit && (!best || hit.distance < best.distance)) best = hit
+    }
+    return best
   }
 
   /** Closest point of a world polyline to a screen position, measured on screen. */
-  private closestOnPolyline(vp: Viewport, pts: Vector3[], sx: number, sy: number): { distance: number; point: Vector3 } | null {
+  private closestOnPolyline(vp: Viewport, pts: Vector3[], sx: number, sy: number, from = 0, to = pts.length - 1): { distance: number; point: Vector3 } | null {
     let best = Infinity
     let bestIndex = -1
     let bestT = 0
     // A point object: the distance to it.
     if (pts.length === 1) return vp.project(pts[0], this.a) ? { distance: Math.hypot(this.a.x - sx, this.a.y - sy), point: pts[0].clone() } : null
-    let prevVisible = pts.length > 0 && vp.project(pts[0], this.a)
-    for (let i = 1; i < pts.length; i++) {
+    let prevVisible = to > from && vp.project(pts[from], this.a)
+    for (let i = from + 1; i <= to; i++) {
       const visible = vp.project(pts[i], this.b)
       if (visible && prevVisible) {
         const ex = this.b.x - this.a.x
@@ -577,52 +642,72 @@ export class Interaction {
   /** The selectable object nearest the cursor, and the point on it under the cursor. */
   private pickPoint(vp: Viewport, sx: number, sy: number, accept: (id: number) => boolean = () => true): { id: number; point: Vector3 } | null {
     let best = PICK_TOLERANCE
-    let result: { id: number; point: Vector3 } | null = null
-    for (const obj of this.doc.objects.values()) {
-      if (!this.doc.isSelectable(obj) || !accept(obj.id)) continue
+    // Set inside the visit below (a cast, as TypeScript does not follow assignments in callbacks).
+    let result = null as { id: number; point: Vector3; item: PickItem } | null
+    const pickable = this.filter((obj) => this.doc.isSelectable(obj) && accept(obj.id))
+    const index = this.pickIndex()
+    this.near(vp, sx, sy, PICK_TOLERANCE + POINT_PREFERENCE, (id, item) => {
+      if (item.kind !== 'line' || !pickable(id)) return
       // A point lying on a curve wins over the curve, as it would be hard to pick otherwise.
-      const preference = obj.geometry.type === 'point' ? POINT_PREFERENCE : 0
-      for (const line of wireframe(obj.geometry)) {
-        const hit = this.closestOnPolyline(vp, line, sx, sy)
-        if (hit && hit.distance - preference < best) {
-          best = hit.distance - preference
-          result = { id: obj.id, point: hit.point }
-        }
+      const preference = this.doc.objects.get(id)!.geometry.type === 'point' ? POINT_PREFERENCE : 0
+      const hit = this.closestOnRanges(vp, item.ranges, sx, sy)
+      // Equally near: the first object in the model, then its first line, wins.
+      if (hit && (hit.distance - preference < best || (hit.distance - preference === best && result && index.before(id, item, result.id, result.item)))) {
+        best = hit.distance - preference
+        result = { id, point: hit.point, item }
       }
-    }
+    })
     // In shaded views, clicking on a surface picks it too. A click near an edge of a shaded surface
     // takes the point on the surface itself, so commands that pick faces get the face under the cursor.
     const shaded = this.display.pickShaded(vp, sx, sy, (id) => this.doc.isSelectable(this.doc.objects.get(id)!) && accept(id))
     if (result && shaded && shaded.id === result.id) return shaded
-    return result ?? shaded
+    return result ? { id: result.id, point: result.point } : shaded
   }
 
   private pickWindow(vp: Viewport, x0: number, y0: number, x1: number, y1: number, crossing: boolean): number[] {
-    const minX = Math.min(x0, x1)
-    const maxX = Math.max(x0, x1)
-    const minY = Math.min(y0, y1)
-    const maxY = Math.max(y0, y1)
-    const inside = (p: ScreenPoint) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY
-
-    const ids: number[] = []
-    for (const obj of this.doc.objects.values()) {
-      if (!this.doc.isSelectable(obj)) continue
-      const lines = wireframe(obj.geometry)
-      let allInside = lines.some((pts) => pts.length > 0)
-      let anyTouch = false
-      for (const pts of lines) {
-        let prevVisible = false
-        for (let i = 0; i < pts.length; i++) {
-          const visible = vp.project(pts[i], this.b)
-          if (!visible || !inside(this.b)) allInside = false
-          if (visible && inside(this.b)) anyTouch = true
-          if (i > 0 && visible && prevVisible && segmentHitsRect(this.a, this.b, minX, minY, maxX, maxY)) anyTouch = true
-          this.a.x = this.b.x
-          this.a.y = this.b.y
-          prevVisible = visible
+    const rect: ScreenRect = { minX: Math.min(x0, x1), maxX: Math.max(x0, x1), minY: Math.min(y0, y1), maxY: Math.max(y0, y1) }
+    const inside = (p: ScreenPoint) => p.x >= rect.minX && p.x <= rect.maxX && p.y >= rect.minY && p.y <= rect.maxY
+    const selectable = this.filter((obj) => this.doc.isSelectable(obj))
+    const index = this.pickIndex()
+    // Per object: its line items wholly in the window, and whether any touches it.
+    const itemsInside = new Map<number, number>()
+    const touched = new Set<number>()
+    const wholly = new Set<number>()
+    index.query(
+      (p, out) => vp.project(p, out),
+      rect,
+      (id, item, whole) => {
+        if (item.kind !== 'line' || !selectable(id)) return
+        let allInside = whole
+        let anyTouch = whole
+        if (!whole) {
+          allInside = true
+          for (const r of item.ranges) {
+            let prevVisible = false
+            for (let i = r.from; i <= r.to; i++) {
+              const visible = vp.project(r.points[i], this.b)
+              if (!visible || !inside(this.b)) allInside = false
+              if (visible && inside(this.b)) anyTouch = true
+              if (i > r.from && visible && prevVisible && segmentHitsRect(this.a, this.b, rect.minX, rect.minY, rect.maxX, rect.maxY)) anyTouch = true
+              this.a.x = this.b.x
+              this.a.y = this.b.y
+              prevVisible = visible
+            }
+          }
         }
-      }
-      if (crossing ? anyTouch : allInside) ids.push(obj.id)
+        if (allInside) itemsInside.set(id, (itemsInside.get(id) ?? 0) + 1)
+        if (anyTouch) touched.add(id)
+      },
+      // Objects wholly in the window are in it either way, point for point.
+      (id) => {
+        if (selectable(id) && index.lineItems(id) > 0) wholly.add(id)
+      },
+    )
+    // In the order of the model, as before.
+    const ids: number[] = []
+    for (const id of this.doc.objects.keys()) {
+      const lineItems = index.lineItems(id)
+      if (wholly.has(id) || (crossing ? touched.has(id) : lineItems > 0 && itemsInside.get(id) === lineItems)) ids.push(id)
     }
     return ids
   }
