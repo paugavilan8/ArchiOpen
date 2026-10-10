@@ -148,6 +148,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
       [
         item('Extrude Curve', 'ExtrudeCrv', 'EXT'),
         item('Revolve', 'Revolve', 'REV'),
+        item('Rail Revolve', 'RailRevolve'),
         item('Loft', 'Loft'),
         item('Sweep 1 Rail', 'Sweep1'),
         item('Sweep 2 Rails', 'Sweep2'),
@@ -163,6 +164,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Extrude Surface', 'ExtrudeSrf'),
         item('Cap Planar Holes', 'Cap'),
         item('Extract Faces', 'ExtractSrf'),
+        item('Untrim', 'Untrim'),
         item('Unroll (Cutting Pattern)', 'UnrollSrf'),
         'separator',
         item('Project Curves', 'Project'),

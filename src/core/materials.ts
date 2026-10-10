@@ -65,8 +65,21 @@ export const MATERIAL_PRESETS: Material[] = [
   { name: 'Water', color: '#4f8fa8', roughness: 0.05, metalness: 0, transparency: 0.7 },
 ]
 
-/** The material objects get when none is assigned: their layer color, as matte paint. */
-export const layerMaterial = (color: string): Material => ({ name: '', color, roughness: 0.7, metalness: 0, transparency: 0 })
+/** How far an unassigned object's layer color is lightened towards a warm white, as in a clay model. */
+const CLAY = 0.65
+const CLAY_WHITE = [0xec, 0xe9, 0xe4]
+
+/**
+ * The material objects get when none is assigned: their layer color lightened towards white, as
+ * matte clay (as the shaded view lightens it). So black layers render light gray, not black, and
+ * colored layers keep a hint of their color.
+ */
+export function layerMaterial(color: string): Material {
+  const hex = /^#?([0-9a-f]{6})$/i.exec(color)?.[1] ?? '000000'
+  const rgb = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  const mixed = rgb.map((c, i) => Math.round(c + (CLAY_WHITE[i] - c) * CLAY))
+  return { name: '', color: `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`, roughness: 0.8, metalness: 0, transparency: 0 }
+}
 
 const clamp01 = (x: unknown, fallback: number) => (typeof x === 'number' && Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : fallback)
 

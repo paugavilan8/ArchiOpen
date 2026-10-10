@@ -7,6 +7,7 @@ import { kernelJob, kernelReady, loadKernel } from '../kernel/client'
 import { shapeRef } from '../kernel/wire'
 import { brepHooks } from './curveEdit'
 import { sectionMesh } from '../core/mesh'
+import { railRevolveSections } from '../core/railRevolve'
 import { isOption, plural, valueOption, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
 
@@ -247,6 +248,31 @@ const revolve: Command = {
     }
     doc.select(created)
     log(`${plural('object', created.length)} created`)
+  },
+}
+
+/** Revolve following a rail: the profile turns about the axis while one of its ends rides the rail. */
+const railRevolve: Command = {
+  name: 'RailRevolve',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const profile = await input.getPick('Select the profile curve', [], (id) => !!curveOf(ctx, id))
+    if (profile.kind !== 'pick') return
+    const profileId = profile.id
+    const rail = await input.getPick('Select the rail curve', [], (id) => id !== profileId && !!curveOf(ctx, id))
+    if (rail.kind !== 'pick') return
+    const railId = rail.id
+    const start = await input.getPoint({ prompt: 'Start of revolve axis' })
+    if (start.kind !== 'point') return
+    const end = await input.getPoint({ prompt: 'End of revolve axis', base: start.point })
+    if (end.kind !== 'point') return
+    const axis = end.point.clone().sub(start.point)
+    if (axis.length() < 1e-9) throw new Error('The axis has no length')
+    const sections = railRevolveSections(curveOf(ctx, profileId)!, curveOf(ctx, railId)!, start.point, axis)
+    await kernel(ctx)
+    const made = await addShape(ctx, kernelJob('loftSurface', sections), 'revolve along the rail', doc.objects.get(profileId)!.layerId)
+    doc.select([made])
+    log('1 surface created')
   },
 }
 
@@ -591,6 +617,7 @@ export const solidCommands: Command[] = [
   sphereCommand,
   extrudeCrv,
   revolve,
+  railRevolve,
   loft,
   planarSrf,
   booleanCommand('BooleanUnion', 'union'),

@@ -7,7 +7,7 @@ import { shapeRef, ShapeRef } from '../kernel/wire'
 import { brepHooks } from './curveEdit'
 import { isOption, plural, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
-import { brepOf, curveOf, faceOutline, kernel, nearestEdge, readable, shapeOfId } from './solids'
+import { addShape, brepOf, curveOf, faceOutline, kernel, nearestEdge, readable, shapeOfId } from './solids'
 
 const memory = { offset: 1, offsetSolid: false, extrude: 10, deleteInput: true }
 
@@ -311,4 +311,38 @@ const dupEdge: Command = {
   },
 }
 
-export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge]
+const untrimMemory = { holesOnly: true }
+
+/**
+ * Removes the trims of a face: its holes only (openings in a wall, say), or every trim, back to the
+ * surface it lies on. The other faces of a polysurface are joined back to it.
+ */
+const untrim: Command = {
+  name: 'Untrim',
+  async run(ctx) {
+    const { doc, input, display, log } = ctx
+    await kernel(ctx)
+    for (;;) {
+      const pick = await input.getPick('Select a face to untrim', [yesNo('HolesOnly', untrimMemory.holesOnly)], (id) => !!brepOf(ctx, id))
+      if (pick.kind === 'option') {
+        if (isOption(pick.option, 'HolesOnly')) untrimMemory.holesOnly = !untrimMemory.holesOnly
+        continue
+      }
+      if (pick.kind !== 'pick') return
+      const g = brepOf(ctx, pick.id)
+      if (!g) continue
+      const geometry = g.display.faceTriangles ? g : await readable(kernelJob('faces', shapeRef(g)), 'find the faces of that object')
+      const face = nearestFace(geometry, pick.point)
+      if (face < 0) continue
+      display.setPreview(faceOutline(geometry, face), true)
+      const id = await addShape(ctx, kernelJob('untrim', shapeRef(geometry), face, untrimMemory.holesOnly), 'untrim that face', doc.objects.get(pick.id)!.layerId)
+      display.setPreview([])
+      doc.remove(pick.id)
+      doc.select([id])
+      log(untrimMemory.holesOnly ? 'Holes removed from the face' : 'Face untrimmed')
+      return
+    }
+  },
+}
+
+export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge, untrim]
