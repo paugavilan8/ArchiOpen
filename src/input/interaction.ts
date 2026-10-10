@@ -1,7 +1,8 @@
 import { Vector3 } from 'three'
 import type { CadObject, Document } from '../core/document'
 import { controlPoints } from '../core/curves'
-import { wireframe, type SnapPoints } from '../core/geometry'
+import { isCurve, wireframe, type AnyCurve } from '../core/geometry'
+import { crossing, meetingPoint, perpendicularPoints, tangentPoints } from '../core/osnap'
 import { PickIndex, type PickItem, type Range, type ScreenRect } from '../core/pickIndex'
 import { editedIds, transformSelection, transformedSelection, translation } from '../core/selectionEdit'
 import type { Settings, SnapKind } from '../core/settings'
@@ -68,8 +69,33 @@ const PICK_TOLERANCE = 6
 const SNAP_TOLERANCE = 12
 const DRAG_THRESHOLD = 4
 const ZOOM_STEP = 1.15
-const SNAP_LABELS: Record<SnapKind, string> = { end: 'End', near: 'Near', mid: 'Mid', cen: 'Cen', quad: 'Quad' }
-const POINT_SNAPS: (keyof SnapPoints)[] = ['end', 'mid', 'cen', 'quad']
+const SNAP_LABELS: Record<SnapKind, string> = { end: 'End', near: 'Near', mid: 'Mid', cen: 'Cen', quad: 'Quad', knot: 'Knot', int: 'Int', perp: 'Perp', tan: 'Tan' }
+/** At most this many drawn segments near the cursor are tried against each other for Int. */
+const INT_SEGMENTS = 200
+
+/** A drawn segment near the cursor: points[k] to points[k + 1] of a line, and where it is on screen. */
+interface ScreenSegment {
+  id: number
+  item: PickItem
+  points: Vector3[]
+  k: number
+  ax: number
+  ay: number
+  bx: number
+  by: number
+}
+
+/** Perp and Tan points of a curve from one base point, kept while the cursor moves. */
+const fromPointCache = new WeakMap<AnyCurve, { key: string; points: Vector3[] }>()
+
+function pointsFrom(g: AnyCurve, kind: 'perp' | 'tan', base: Vector3, normal: Vector3): Vector3[] {
+  const key = `${kind} ${base.x} ${base.y} ${base.z} ${normal.x} ${normal.y} ${normal.z}`
+  const cached = fromPointCache.get(g)
+  if (cached?.key === key) return cached.points
+  const points = kind === 'perp' ? perpendicularPoints(g, base) : tangentPoints(g, base, normal)
+  fromPointCache.set(g, { key, points })
+  return points
+}
 
 const NUMBER = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)`
 const COORDINATE = new RegExp(String.raw`^(r|@|w)?\s*(${NUMBER})\s*,\s*(${NUMBER})(?:\s*,\s*(${NUMBER}))?$`, 'i')
@@ -535,10 +561,16 @@ export class Interaction {
     let nearDistance = SNAP_TOLERANCE
     const visible = this.filter((obj) => this.doc.isVisible(obj) && !this.display.isHidden(obj.id))
     const index = this.pickIndex()
+    // Perp and Tan are measured from the point the command started from.
+    const base = this.request?.kind === 'point' ? this.request.opts.base : undefined
+    const fromBase = !!base && (enabled.perp || enabled.tan)
+    // Drawn lines near the cursor, for the snaps that look at more than one point (Int, Perp, Tan).
+    const lines: { id: number; item: PickItem }[] = []
 
     this.near(vp, sx, sy, SNAP_TOLERANCE, (id, item) => {
       if (!visible(id)) return
       if (item.kind === 'line') {
+        if (enabled.int || fromBase) lines.push({ id, item })
         if (!enabled.near) return
         const hit = this.closestOnRanges(vp, item.ranges, sx, sy)
         if (hit && (hit.distance < nearDistance || (hit.distance === nearDistance && near && index.before(id, item, near.id, near.item)))) {
@@ -560,9 +592,83 @@ export class Interaction {
         }
       }
     })
+    // Fixed points win a tie, so a corner snaps as End rather than as Int.
+    let found = best ? { point: best.point, label: best.label } : null
+    const consider = (point: Vector3, kind: SnapKind) => {
+      if (!vp.project(point, this.a)) return
+      const d = Math.hypot(this.a.x - sx, this.a.y - sy)
+      if (d < bestDistance) {
+        bestDistance = d
+        found = { point, label: SNAP_LABELS[kind] }
+      }
+    }
+    if (enabled.int && lines.length > 0) {
+      const hit = this.intersectionNear(vp, lines, sx, sy, bestDistance)
+      if (hit) consider(hit, 'int')
+    }
+    if (fromBase) {
+      const curves = new Set(lines.map((l) => l.id))
+      for (const id of curves) {
+        const g = this.doc.objects.get(id)!.geometry
+        if (!isCurve(g)) continue
+        if (enabled.perp) for (const p of pointsFrom(g, 'perp', base!, vp.cplane.normal)) consider(p, 'perp')
+        if (enabled.tan) for (const p of pointsFrom(g, 'tan', base!, vp.cplane.normal)) consider(p, 'tan')
+      }
+    }
     // A point snap wins over a nearest point on a line.
-    if (best) return { point: best.point, label: best.label }
+    if (found) return found
     return near ? { point: near.point, label: SNAP_LABELS.near } : null
+  }
+
+  /**
+   * Where two drawn lines cross nearest the cursor (within `within` pixels): where two curves meet
+   * in space, or, if one only passes in front of the other, the point on the first in the model.
+   */
+  private intersectionNear(vp: Viewport, lines: { id: number; item: PickItem }[], sx: number, sy: number, within: number): Vector3 | null {
+    const segments: ScreenSegment[] = []
+    const a = this.a
+    const b = this.b
+    for (const { id, item } of lines) {
+      for (const r of item.ranges) {
+        for (let k = r.from; k < r.to && segments.length < INT_SEGMENTS; k++) {
+          if (!vp.project(r.points[k], a) || !vp.project(r.points[k + 1], b)) continue
+          if (distanceToSegment(sx, sy, a.x, a.y, b.x, b.y) > within) continue
+          segments.push({ id, item, points: r.points, k, ax: a.x, ay: a.y, bx: b.x, by: b.y })
+        }
+      }
+    }
+    let best = null as { first: ScreenSegment; second: ScreenSegment; s: number; u: number } | null
+    let bestDistance = within
+    for (let i = 0; i < segments.length; i++) {
+      for (let j = i + 1; j < segments.length; j++) {
+        const p = segments[i]
+        const q = segments[j]
+        // Neighbouring pieces of one line meet at their shared point, which is no crossing.
+        if (p.points === q.points && (Math.abs(p.k - q.k) <= 1 || sharesEnd(p, q))) continue
+        const hit = crossing(p.ax, p.ay, p.bx, p.by, q.ax, q.ay, q.bx, q.by)
+        if (!hit) continue
+        const d = Math.hypot(p.ax + (p.bx - p.ax) * hit.s - sx, p.ay + (p.by - p.ay) * hit.s - sy)
+        if (d < bestDistance) {
+          bestDistance = d
+          best = { first: p, second: q, s: hit.s, u: hit.u }
+        }
+      }
+    }
+    if (!best) return null
+    const index = this.pickIndex()
+    // The first in the model gives the point when they only seem to cross.
+    const swap = index.before(best.second.id, best.second.item, best.first.id, best.first.item)
+    const first = swap ? best.second : best.first
+    const second = swap ? best.first : best.second
+    const s = swap ? best.u : best.s
+    const u = swap ? best.s : best.u
+    const pa = first.points[first.k].clone().lerp(first.points[first.k + 1], s)
+    const pb = second.points[second.k].clone().lerp(second.points[second.k + 1], u)
+    const ga = this.doc.objects.get(first.id)!.geometry
+    const gb = this.doc.objects.get(second.id)!.geometry
+    // Curves are drawn as chords: find where the curves themselves meet.
+    if (first.id !== second.id && isCurve(ga) && isCurve(gb)) return meetingPoint(ga, gb, pa, pb) ?? pa
+    return pa.distanceTo(pb) < 1e-6 * Math.max(1, pa.length()) ? pa.add(pb).multiplyScalar(0.5) : pa
   }
 
   /** The index of what can be picked, made again when the model has changed. */
@@ -779,4 +885,19 @@ function segmentHitsRect(a: ScreenPoint, b: ScreenPoint, minX: number, minY: num
     if (t0 > t1) return false
   }
   return true
+}
+
+/** Screen distance from (px, py) to the segment from (ax, ay) to (bx, by). */
+function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const ex = bx - ax
+  const ey = by - ay
+  const len2 = ex * ex + ey * ey
+  const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * ex + (py - ay) * ey) / len2))
+  return Math.hypot(ax + ex * t - px, ay + ey * t - py)
+}
+
+/** True for the first and last pieces of a closed line, which meet where it closes. */
+function sharesEnd(p: ScreenSegment, q: ScreenSegment): boolean {
+  const last = p.points.length - 2
+  return ((p.k === 0 && q.k === last) || (q.k === 0 && p.k === last)) && p.points[0].equals(p.points[last + 1])
 }

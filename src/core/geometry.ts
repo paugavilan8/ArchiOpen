@@ -175,6 +175,18 @@ export interface SnapPoints {
   mid: Vector3[]
   cen: Vector3[]
   quad: Vector3[]
+  /** Where the spans of a B-spline curve meet (its distinct knots). */
+  knot: Vector3[]
+}
+
+/** The kinds of fixed snap points a geometry has, in the order they are gone through. */
+export const SNAP_POINT_KINDS = ['end', 'mid', 'cen', 'quad', 'knot'] as const
+
+const emptySnaps = (): SnapPoints => ({ end: [], mid: [], cen: [], quad: [], knot: [] })
+
+/** Adds every snap point of `from` to `to`, moved by `move` if given. */
+function addSnaps(to: SnapPoints, from: SnapPoints, move?: (p: Vector3) => Vector3): void {
+  for (const kind of SNAP_POINT_KINDS) for (const p of from[kind]) to[kind].push(move ? move(p) : p)
 }
 
 /** Model tolerance: points closer than this are the same point. */
@@ -358,7 +370,11 @@ function instanceLines(g: InstanceGeometry): Vector3[][] {
 }
 
 function instanceSnaps(g: InstanceGeometry): SnapPoints[] {
-  return placedContents(g, snapPoints, (s, m) => ({ end: movePoints(s.end, m), mid: movePoints(s.mid, m), cen: movePoints(s.cen, m), quad: movePoints(s.quad, m) }))
+  return placedContents(g, snapPoints, (s, m) => {
+    const moved = emptySnaps()
+    addSnaps(moved, s, (p) => p.clone().applyMatrix4(m))
+    return moved
+  })
 }
 
 /** Display polyline for a curve. The result is cached and must not be mutated. */
@@ -420,7 +436,7 @@ function midPoint(g: AnyCurve): Vector3 {
 }
 
 function buildSnapPoints(g: Geometry): SnapPoints {
-  const snaps: SnapPoints = { end: [], mid: [], cen: [], quad: [] }
+  const snaps = emptySnaps()
   switch (g.type) {
     case 'polyline': {
       const pts = tessellate(g)
@@ -443,15 +459,10 @@ function buildSnapPoints(g: Geometry): SnapPoints {
       if (g.points.length < 2) break
       snaps.end = [startPoint(g), endPoint(g)]
       snaps.mid = [midPoint(g)]
+      snaps.knot = [...new Set(g.knots.slice(g.degree, g.points.length + 1))].map((t) => pointAt(g, t))
       break
     case 'polycurve':
-      for (const segment of g.segments) {
-        const s = snapPoints(segment)
-        snaps.end.push(...s.end)
-        snaps.mid.push(...s.mid)
-        snaps.cen.push(...s.cen)
-        snaps.quad.push(...s.quad)
-      }
+      for (const segment of g.segments) addSnaps(snaps, snapPoints(segment))
       break
     case 'annotation':
       snaps.end = g.points
@@ -468,12 +479,7 @@ function buildSnapPoints(g: Geometry): SnapPoints {
     case 'instance':
       // The insertion point, then the snaps of what the block draws.
       snaps.end.push(insertionPoint(g))
-      for (const s of instanceSnaps(g)) {
-        snaps.end.push(...s.end)
-        snaps.mid.push(...s.mid)
-        snaps.cen.push(...s.cen)
-        snaps.quad.push(...s.quad)
-      }
+      for (const s of instanceSnaps(g)) addSnaps(snaps, s)
       break
     case 'brep':
       // Corners and edge midpoints of surfaces and solids.

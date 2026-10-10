@@ -1,4 +1,4 @@
-export type SnapKind = 'end' | 'near' | 'mid' | 'cen' | 'quad'
+export type SnapKind = 'end' | 'near' | 'mid' | 'cen' | 'quad' | 'knot' | 'int' | 'perp' | 'tan'
 export type ToggleKey = 'gridSnap' | 'ortho' | 'osnap' | 'gumball' | 'history'
 
 export class Settings {
@@ -9,7 +9,7 @@ export class Settings {
   /** Surfaces made from curves remember them and update when the curves change. */
   history = true
   gridSpacing = 1
-  readonly snaps: Record<SnapKind, boolean> = { end: true, near: false, mid: true, cen: true, quad: false }
+  readonly snaps: Record<SnapKind, boolean> = { end: true, near: false, mid: true, cen: true, quad: false, knot: false, int: true, perp: false, tan: false }
 
   private listeners = new Set<() => void>()
 

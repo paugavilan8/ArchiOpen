@@ -8,6 +8,10 @@ const SNAPS: [SnapKind, string][] = [
   ['mid', 'Mid'],
   ['cen', 'Cen'],
   ['quad', 'Quad'],
+  ['knot', 'Knot'],
+  ['int', 'Int'],
+  ['perp', 'Perp'],
+  ['tan', 'Tan'],
 ]
 
 const TOGGLES: [ToggleKey, string, string][] = [

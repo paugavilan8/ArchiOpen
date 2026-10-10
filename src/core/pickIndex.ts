@@ -1,5 +1,5 @@
 import type { Vector3 } from 'three'
-import { snapPoints, wireframe, type Geometry, type SnapPoints } from './geometry'
+import { SNAP_POINT_KINDS, snapPoints, wireframe, type Geometry, type SnapPoints } from './geometry'
 
 /**
  * Bounding volume hierarchies over everything the cursor can land on, so picking, object snaps and
@@ -158,7 +158,7 @@ function treeOf(g: Geometry): GeometryTree {
   group('line', runs, items)
   const lineItems = items.length
   const snaps = snapPoints(g)
-  for (const kind of ['end', 'mid', 'cen', 'quad'] as const) {
+  for (const kind of SNAP_POINT_KINDS) {
     const pts = snaps[kind]
     group(
       kind,
