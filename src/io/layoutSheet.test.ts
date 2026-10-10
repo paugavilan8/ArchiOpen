@@ -5,7 +5,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { Document } from '../core/document'
 import { Detail, fitDetail, newLayout, sheetFrame, sheetScale, sheetSize, view, wireframeDrawing } from '../core/layout'
 import { box, toBrep } from '../kernel/brep'
-import { hiddenLineDrawing, layoutSheet } from './layoutSheet'
+import { cachedHiddenLines, hiddenLineDrawing, layoutSheet } from './layoutSheet'
+import { Matrix4 } from 'three'
+import { transform } from '../core/curves'
 import { contentStream, writePdf } from './pdf'
 
 beforeAll(async () => {
@@ -112,5 +114,39 @@ describe('layout sheets', () => {
     // Centered like the wireframe drawing.
     const wire = extent(wireframeDrawing(doc, detail).layers.get(1)!.lines)
     expect((e.minX + e.maxX) / 2).toBeCloseTo((wire.minX + wire.maxX) / 2, 6)
+  })
+
+  it('draws hidden lines again only when what they show changes', async () => {
+    const doc = new Document()
+    const big = doc.add(toBrep(box(v(0, 0), v(4000, 0), v(0, 1000), v(0, 0, 3000)))).id
+    const layout = newLayout(doc, 1, 'Alzado')
+    const detail = fitDetail(doc, { ...layout.details[0], view: view('Top') })
+    expect(cachedHiddenLines(doc, detail)).toBeNull()
+    const first = await hiddenLineDrawing(doc, detail)
+    // A new layer color, a text, an object on a hidden layer: the drawing is still good.
+    doc.updateLayer(doc.layers[0].id, { color: '#ff0000' })
+    doc.add({
+      type: 'annotation',
+      kind: 'text',
+      points: [v(0, -500)],
+      xaxis: v(1, 0),
+      yaxis: v(0, 1),
+      text: 'Planta',
+      height: 200,
+      arrow: 'arrow',
+      precision: 0,
+    })
+    const hidden = doc.addLayer()
+    doc.updateLayer(hidden.id, { visible: false })
+    doc.add(toBrep(box(v(9000, 0), v(100, 0), v(0, 100), v(0, 0, 100))), hidden.id)
+    expect(cachedHiddenLines(doc, detail)).toEqual(first)
+    // Moving the detail on the sheet only places the same drawing elsewhere.
+    const moved = { ...detail, rect: [detail.rect[0] + 50, detail.rect[1], detail.rect[2], detail.rect[3]] as Detail['rect'] }
+    const shifted = cachedHiddenLines(doc, moved)!
+    expect(shifted[0][0][0]).toBeCloseTo(first[0][0][0] + 50, 9)
+    // Moving the box changes what the detail shows.
+    const g = doc.objects.get(big)!.geometry
+    doc.setGeometry(big, transform(g, new Matrix4().makeTranslation(500, 0, 0)))
+    expect(cachedHiddenLines(doc, detail)).toBeNull()
   })
 })

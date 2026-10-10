@@ -180,7 +180,9 @@ se adjuntan a un borrador de *release*.
     arrastrar se desplaza el modelo dentro; la rueda acerca la lámina;
   - cada detalle tiene vista (planta, alzados, isométricas o la perspectiva actual), escala (1:1 a
     1:10000), modo de dibujo (alámbrico o con líneas ocultas eliminadas, calculadas con el núcleo)
-    y un título que se rotula debajo con su escala;
+    y un título que se rotula debajo con su escala. Las líneas ocultas solo se recalculan cuando
+    cambia lo que el detalle dibuja: un color de capa, un texto, un objeto en una capa oculta o
+    mover, escalar o redimensionar el detalle no las rehacen;
   - el cajetín muestra proyecto, plano, número, autor, fecha, escala y número de hoja (1/3…);
   - el papel y la orientación se cambian en el panel y los detalles se recolocan;
   - `ExportPDF` con una lámina abierta imprime esa lámina o todas (opción `Sheets`) en un PDF de
