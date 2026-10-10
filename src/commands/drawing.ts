@@ -2,7 +2,7 @@ import { Box3, Matrix4, Vector3 } from 'three'
 import { flatten } from '../core/blocks'
 import { drawingClipPlanes } from '../core/clipPlanes'
 import { transform } from '../core/curves'
-import { AnyCurve, expandBox, isCurve, tessellate } from '../core/geometry'
+import { AnyCurve, expandBox, HatchGeometry, isCurve, tessellate } from '../core/geometry'
 import type { Layer } from '../core/document'
 import { kernelJob } from '../kernel/client'
 import type { Drawing2D, DrawingView } from '../kernel/make2d'
@@ -15,7 +15,7 @@ import { kernel, readable } from './solids'
 const VIEWS = ['CurrentView', 'Top', 'Front', 'Right', 'Back', 'Left', 'FourView'] as const
 type ViewChoice = (typeof VIEWS)[number]
 
-const memory: { view: ViewChoice; hidden: boolean; clipping: boolean } = { view: 'CurrentView', hidden: false, clipping: true }
+const memory: { view: ViewChoice; hidden: boolean; clipping: boolean; fill: boolean } = { view: 'CurrentView', hidden: false, clipping: true, fill: true }
 
 const FIXED: Record<string, DrawingView> = {
   Top: { direction: new Vector3(0, 0, 1), xaxis: new Vector3(1, 0, 0) },
@@ -43,7 +43,12 @@ function boundsOf(curves: AnyCurve[]): Box3 {
 const shift = (drawing: Drawing2D, offset: Vector3): Drawing2D => {
   const m = new Matrix4().makeTranslation(offset.x, offset.y, 0)
   const move = (c: AnyCurve) => transform(c, m) as AnyCurve
-  return { visible: drawing.visible.map(move), hidden: drawing.hidden.map(move), section: drawing.section?.map(move) }
+  return {
+    visible: drawing.visible.map(move),
+    hidden: drawing.hidden.map(move),
+    section: drawing.section?.map(move),
+    fills: drawing.fills?.map((loops) => loops.map((loop) => loop.map((p) => p.clone().add(offset)))),
+  }
 }
 
 /** The layer with this name, created if missing. */
@@ -53,6 +58,20 @@ function layerNamed(ctx: CommandContext, name: string, color: string, linetype?:
   const layer = ctx.doc.addLayer()
   ctx.doc.updateLayer(layer.id, { name, color, linetype, ...(printWidth ? { printWidth } : {}) })
   return layer
+}
+
+/** A solid hatch over a cut face: its outline loops in the drawing's plane, moved by m. */
+function sectionFill(loops: Vector3[][], m: Matrix4): HatchGeometry {
+  return {
+    type: 'hatch',
+    loops: loops.map((loop) => ({ type: 'polyline', points: loop.map((p) => p.clone().applyMatrix4(m)), closed: true })),
+    pattern: 'Solid',
+    scale: 1,
+    rotation: 0,
+    origin: new Vector3().applyMatrix4(m),
+    xaxis: new Vector3(1, 0, 0),
+    yaxis: new Vector3(0, 1, 0),
+  }
 }
 
 /** Print width of Make2D's cut lines, in millimeters. */
@@ -106,12 +125,13 @@ const make2d: Command = {
       const result = await input.getPoint({
         prompt: 'Lower left corner of the drawing <beside the model>',
         // Clipping planes on in the active viewport cut the drawing (plans and sections).
-        options: [`View=${memory.view}`, yesNo('HiddenLines', memory.hidden), ...(planes.length > 0 ? [yesNo('Clipping', memory.clipping)] : [])],
+        options: [`View=${memory.view}`, yesNo('HiddenLines', memory.hidden), ...(planes.length > 0 ? [yesNo('Clipping', memory.clipping), yesNo('SectionFill', memory.fill)] : [])],
       })
       if (result.kind === 'option') {
         if (isOption(result.option, 'View')) memory.view = VIEWS[(VIEWS.indexOf(memory.view) + 1) % VIEWS.length]
         else if (isOption(result.option, 'HiddenLines')) memory.hidden = !memory.hidden
         else if (isOption(result.option, 'Clipping')) memory.clipping = !memory.clipping
+        else if (isOption(result.option, 'SectionFill')) memory.fill = !memory.fill
         continue
       }
       if (result.kind === 'point') location = result.point
@@ -149,15 +169,20 @@ const make2d: Command = {
     const hiddenLayer = memory.hidden ? layerNamed(ctx, 'Make2D Hidden', '#8c8c8c', 'Hidden') : null
     // Cut lines go on a layer of their own, printed with a heavier pen.
     const sectionLayer = drawings.some((d) => d.section?.length) ? layerNamed(ctx, 'Make2D Section', '#000000', undefined, SECTION_PEN) : null
+    // Cut faces are filled solid on a layer of their own, so their shade is the layer's color.
+    const fillLayer = memory.fill && drawings.some((d) => d.fills?.length) ? layerNamed(ctx, 'Make2D Section Fill', '#5a5a5a') : null
     const created: number[] = []
     for (const d of drawings) {
       for (const c of d.visible) created.push(doc.add(transform(c, m), visibleLayer.id).id)
       if (sectionLayer) for (const c of d.section ?? []) created.push(doc.add(transform(c, m), sectionLayer.id).id)
+      if (fillLayer) for (const loops of d.fills ?? []) created.push(doc.add(sectionFill(loops, m), fillLayer.id).id)
       if (hiddenLayer) for (const c of d.hidden) created.push(doc.add(transform(c, m), hiddenLayer.id).id)
     }
     doc.select(created)
-    const layers = [visibleLayer, sectionLayer, hiddenLayer].filter((l) => l !== null).map((l) => l.name)
-    log(`${plural('curve', created.length)} drawn on layer${layers.length > 1 ? 's' : ''} ${layers.join(', ')}`)
+    const layers = [visibleLayer, sectionLayer, fillLayer, hiddenLayer].filter((l) => l !== null).map((l) => l.name)
+    const fills = created.filter((id) => doc.objects.get(id)?.geometry.type === 'hatch').length
+    const made = fills > 0 ? `${plural('curve', created.length - fills)} and ${plural('fill', fills)}` : plural('curve', created.length)
+    log(`${made} drawn on layer${layers.length > 1 ? 's' : ''} ${layers.join(', ')}`)
   },
 }
 

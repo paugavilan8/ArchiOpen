@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { length } from '../core/curves'
 import { AnyCurve, tessellate } from '../core/geometry'
 import type { ClipPlane } from '../core/clipPlanes'
-import { box, cylinder, sphere } from './brep'
+import { boolean, box, cylinder, sphere, toBrep } from './brep'
 import { make2D, make2DWithMeshes } from './make2d'
 
 beforeAll(async () => {
@@ -94,5 +94,26 @@ describe('Make2D with clipping planes', () => {
     const drawing = make2DWithMeshes(shapes(), [], [], [], top, false)
     expect(drawing.section).toBeUndefined()
     expect(total(drawing.visible)).toBeCloseTo(40 + 2 * Math.PI * 2, 4)
+  })
+
+  it('fills the cut faces of solids in a plan, with holes, and not in a view that sees the cut edge on', () => {
+    // A hollow 10 × 10 room (walls 1 thick) and a column, cut at height 4.
+    const room = boolean('difference', box(v(0, 0), v(10, 0), v(0, 10), v(0, 0, 10)), [box(v(1, 1, -1), v(8, 0), v(0, 8), v(0, 0, 12))])
+    const column = cylinder(v(20, 5), 2, 10, v(0, 0, 1))
+    const solids = [room, column]
+    const surfaces = solids.map(toBrep)
+    const plan = make2DWithMeshes(solids, surfaces, [], [], top, false, [below])
+    expect(plan.fills).toHaveLength(2)
+    const area = (loop: Vector3[]) => Math.abs(loop.reduce((s, p, i) => s + p.x * loop[(i + 1) % loop.length].y - loop[(i + 1) % loop.length].x * p.y, 0) / 2)
+    // The room's walls: an outer loop and its hole.
+    const walls = plan.fills!.find((loops) => loops.length === 2)!
+    expect(area(walls[0]) + area(walls[1])).toBeCloseTo(100 + 64, 6)
+    expect(Math.max(area(walls[0]), area(walls[1])) - Math.min(area(walls[0]), area(walls[1]))).toBeCloseTo(36, 6)
+    const disc = plan.fills!.find((loops) => loops.length === 1)!
+    expect(area(disc[0])).toBeCloseTo(Math.PI * 4, 1)
+    // Seen from the front the cut is edge on: nothing to fill.
+    expect(make2DWithMeshes(solids, surfaces, [], [], front, false, [below]).fills).toBeUndefined()
+    // Seen from below, the cut faces are behind the solids: nothing to fill either.
+    expect(make2DWithMeshes(solids, surfaces, [], [], { direction: v(0, 0, -1), xaxis: v(1, 0, 0) }, false, [below]).fills).toBeUndefined()
   })
 })

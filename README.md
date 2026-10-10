@@ -109,7 +109,8 @@ Expand a section for details.
   Geometry that is clipped away cannot be picked or snapped to. Clipping planes also cut drawings:
   `Make2D` (the planes on in the active viewport, option `Clipping`), layout details (option
   *Clipping* in the detail panel) and printed views. Cut lines go on their own layer,
-  *Make2D Section*, and print with a heavier pen.
+  *Make2D Section*, and print with a heavier pen; in plans and sections, the cut faces of solids
+  are filled (*Make2D Section Fill*, option `SectionFill`).
 - Selection by click, window (left to right) and crossing (right to left), backed by a spatial
   index so it stays immediate in models with thousands of objects or very dense meshes.
 - Gumball on the selection: arrows to move, arcs to rotate (Shift snaps to 15°), boxes to scale

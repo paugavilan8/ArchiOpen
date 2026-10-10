@@ -20,7 +20,7 @@ import {
   wireframeDrawing,
 } from '../core/layout'
 import { DEFAULT_PRINT_WIDTH } from '../core/linetypes'
-import { cachedHiddenLines, computeHiddenLines, SECTION_WIDTH, usesHiddenLines } from '../io/layoutSheet'
+import { cachedHiddenLines, computeHiddenLines, SECTION_FILL, SECTION_WIDTH, usesHiddenLines } from '../io/layoutSheet'
 import { kernelReady, loadKernel } from '../kernel/client'
 import type { Display } from '../view/display'
 
@@ -269,6 +269,7 @@ export class LayoutEditor {
       if (usesHiddenLines(detail) && !hidden) this.computeLater(detail)
       const drawing = wireframeDrawing(this.doc, detail, hidden ? (geo) => geo.type === 'annotation' || geo.type === 'hatch' : undefined)
       if (hidden) {
+        if (hidden.fills.length) content.append(svg('path', { d: fillData(hidden.fills, height), fill: SECTION_FILL, 'fill-rule': 'evenodd' }))
         content.append(svg('path', { class: 'detail-lines', d: pathData(hidden.lines, height), stroke: '#000', 'stroke-width': 0.25 }))
         if (hidden.section.length) content.append(svg('path', { class: 'detail-lines', d: pathData(hidden.section, height), stroke: '#000', 'stroke-width': SECTION_WIDTH }))
       }

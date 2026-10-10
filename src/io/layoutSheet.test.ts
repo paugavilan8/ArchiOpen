@@ -166,6 +166,11 @@ describe('layout sheets', () => {
     expect(extent([...section.lines, ...section.section]).maxY - extent([...section.lines, ...section.section]).minY).toBeCloseTo(1500 * k, 6)
     const length = (ls: [number, number][][]) => ls.reduce((sum, l) => sum + l.slice(1).reduce((s2, p, i) => s2 + Math.hypot(p[0] - l[i][0], p[1] - l[i][1]), 0), 0)
     expect(length(section.section)).toBeCloseTo(4000 * k, 6)
+    // Seen edge on, the cut face is not filled; seen from above (a plan), it is.
+    expect(section.fills).toHaveLength(0)
+    const plan = await hiddenLineDrawing(doc, fitDetail(doc, { ...cut, view: view('Top') }))
+    expect(plan.fills).toHaveLength(1)
+    expect(plan.fills[0]).toHaveLength(1)
     // The sheet prints the cut lines with a heavier pen.
     const sheet = layoutSheet(doc, { ...layout, details: [cut] }, { black: true, sheetNumber: 1, sheetCount: 1 }, new Map([[cut.id, section]]))
     expect(sheet.items.some((item) => item.width === SECTION_WIDTH && item.lines.length > 0)).toBe(true)
