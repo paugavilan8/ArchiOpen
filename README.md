@@ -1,17 +1,56 @@
+<div align="center">
+
+<img src="src-tauri/icons/128x128@2x.png" alt="ArchiOpen" width="112" />
+
 # ArchiOpen
 
-Modelador NURBS de código abierto para proyectos de arquitectura, con un flujo de trabajo basado en
-línea de comandos: escribes el nombre de un comando (o lo eliges en un menú o una barra de
-herramientas) y el programa te va pidiendo puntos, opciones o distancias.
+### Modelador NURBS de código abierto para arquitectura
 
-Es una aplicación de escritorio para Windows, macOS y Linux. La interfaz está hecha con
-TypeScript y Three.js, y se empaqueta como aplicación nativa con [Tauri](https://tauri.app).
+**Curvas, superficies y sólidos exactos, planos y láminas, render y archivos de Rhino, STEP y DXF,
+en una aplicación de escritorio ligera que se maneja con la línea de comandos.**
 
-## Descargar
+[![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
+[![Desktop app](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=instaladores)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
+![Versión](https://img.shields.io/badge/versión-0.1.0-2f81f7?style=flat-square)
+![Plataformas](https://img.shields.io/badge/Windows%20·%20macOS%20·%20Linux-555?style=flat-square)
+<br>
+![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?style=flat-square&logo=typescript&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-000?style=flat-square&logo=threedotjs&logoColor=white)
+![Open CASCADE](https://img.shields.io/badge/Open%20CASCADE-WebAssembly-654ff0?style=flat-square&logo=webassembly&logoColor=white)
+![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?style=flat-square&logo=tauri&logoColor=white)
+
+[Descargar](#descargar) · [Qué incluye](#que-incluye) · [Funciones](#funciones) ·
+[Cómo funciona](#como-funciona) · [Formatos](#formatos) ·
+[Hoja de ruta](#hoja-de-ruta) · [Preguntas](#preguntas) · [Desarrollo](#desarrollo)
+
+<br>
+
+<img src="docs/assets/hero.png" alt="Un pabellón modelado en ArchiOpen, en la vista Rendered: forjado de hormigón, muro de ladrillo, pilares de acero, caja de vidrio, tarima de madera y una lámina de agua" width="100%" />
+
+</div>
+
+---
+
+ArchiOpen trabaja como los modeladores NURBS profesionales: escribes el nombre de un comando
+(`Line`, `Loft`, `BooleanDifference`, `Make2D`…), o lo eliges en un menú o una barra de
+herramientas, y el programa te va pidiendo puntos, opciones o distancias. La geometría es exacta:
+las curvas son NURBS y las superficies y sólidos son B-rep del núcleo
+[Open CASCADE](https://dev.opencascade.org), el mismo tipo de geometría que usan los programas de
+CAD industriales, así que lo que se exporta a Rhino o a STEP llega como superficies, no como mallas.
+
+<a id="descargar"></a>
+
+## ⬇️ Descargar
+
+> [!TIP]
+> El instalador es un solo archivo y no necesita nada más: la interfaz, el núcleo geométrico y el
+> lector de archivos de Rhino van dentro del ejecutable. Ver
+> [¿El instalador solo instala un .exe?](#instalador)
 
 Los instaladores se generan en GitHub Actions:
 
-1. Ve a la pestaña **Actions** del repositorio y abre el flujo **Desktop app**.
+1. Abre el flujo [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
+   en la pestaña **Actions**.
 2. Pulsa **Run workflow** (o abre la última ejecución terminada).
 3. Al acabar, descarga el artefacto de tu sistema, por ejemplo `ArchiOpen-Windows`, que contiene
    el instalador `.msi` y el `.exe`.
@@ -19,11 +58,130 @@ Los instaladores se generan en GitHub Actions:
 Al publicar una etiqueta de versión (`git tag v0.1.0 && git push --tags`) los instaladores también
 se adjuntan a un borrador de *release*.
 
-## Qué hace ahora
+<a id="que-incluye"></a>
+
+## ✨ Qué incluye
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**🧊 Modelado exacto**<br>
+Curvas NURBS (también racionales), superficies por barrido, red de curvas, parche y transición,
+sólidos con booleanas, empalmes y vaciados, e historial de construcción que rehace las superficies
+al editar sus curvas.
+
+</td>
+<td width="33%" valign="top">
+
+**📐 Dibujo preciso**<br>
+Referencias a objetos (`End`, `Mid`, `Cen`, `Int`, `Perp`, `Tan`…), coordenadas escritas,
+ortogonal, planos de construcción y gumball, como en un programa de CAD de escritorio.
+
+</td>
+<td width="33%" valign="top">
+
+**📄 Planos**<br>
+`Make2D` con líneas ocultas, cotas que se actualizan solas, sombreados, tipos de línea y grosores,
+láminas con cajetín y exportación a PDF vectorial y DXF.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**🎨 Render**<br>
+Vista realista con materiales físicos (hormigón, madera, vidrio, metal…), texturas, sol con
+sombras y oclusión ambiental, e imágenes de hasta 4K.
+
+</td>
+<td valign="top">
+
+**🔁 Compatibilidad**<br>
+Abre y exporta `.3dm` de Rhino con superficies exactas, STEP (AP242), DXF de AutoCAD con capas,
+bloques y cotas, y STL u OBJ para impresión 3D.
+
+</td>
+<td valign="top">
+
+**⚡ Fluido con modelos grandes**<br>
+El núcleo calcula en segundo plano (la ventana no se congela y `Esc` lo detiene), la selección
+usa un índice espacial y los bloques se dibujan con instancias en la GPU.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/assets/views.png" alt="Cuatro vistas del modelo, con un objeto seleccionado y el gumball" /></td>
+<td width="50%"><img src="docs/assets/layout.png" alt="Una lámina A3 con una vista isométrica con líneas ocultas y el cajetín" /></td>
+</tr>
+<tr>
+<td align="center"><sub>Cuatro vistas, gumball y panel de propiedades</sub></td>
+<td align="center"><sub>Lámina A3 con un detalle isométrico de líneas ocultas</sub></td>
+</tr>
+</table>
+
+<a id="funciones"></a>
+
+## 🧰 Funciones
+
+Haz clic en cada apartado para desplegarlo.
+
+<details>
+<summary><b>🖥️&nbsp; Interfaz y vistas</b></summary>
+<br>
 
 - Cuatro vistas (Top, Front, Right, Perspective) con rejilla, gizmo de ejes y menú por vista.
 - Órbita (botón derecho en Perspective), encuadre (Shift + botón derecho o botón central) y zoom
   con la rueda.
+- Visualización:
+  - Modos por vista: `Wireframe`, `Shaded`, `Ghosted` (superficies translúcidas) y `X-Ray`
+    (las aristas ocultas se ven a través), desde el menú de la vista o con `SetDisplayMode`.
+  - `CPlane` cambia el plano de construcción de la vista activa: nuevo origen con un clic,
+    `3Point` (origen, eje X y lado del eje Y), `Elevation` (lo sube o baja) y `World`. Lo que se
+    dibuja después (rectángulos, círculos, coordenadas escritas…) queda en ese plano.
+  - `NamedView` y `NamedCPlane` guardan, recuperan y borran vistas y planos de construcción con
+    nombre; la pestaña *Views* los lista y los recupera con un clic. Se guardan en el `.archi`.
+- Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda). El clic, la
+  ventana y las referencias a objetos buscan en un índice espacial (un árbol de cajas por
+  geometría y otro de objetos), así que siguen siendo inmediatos en modelos de miles de objetos o
+  con mallas muy densas.
+- Gumball sobre la selección: flechas para mover, arcos para girar (Mayús: pasos de 15°), cajas
+  para escalar en un eje (Mayús: uniforme) y centro para mover en el plano. Un clic en una
+  flecha, arco o caja sin arrastrar pide el valor exacto.
+- Capas con color, visibilidad y bloqueo; panel de propiedades del objeto seleccionado.
+
+</details>
+
+<details>
+<summary><b>📐&nbsp; Dibujo de precisión</b></summary>
+<br>
+
+- Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
+  número antes de hacer clic.
+- Referencias a objetos (barra de estado; F3 las activa o desactiva todas):
+  - `End`, `Mid`, `Cen`, `Quad` y `Near`, como siempre;
+  - `Knot`: los nudos de las curvas NURBS (donde se juntan sus tramos);
+  - `Int`: el cruce de dos curvas, aristas o líneas de una malla. Si se cortan de verdad el punto
+    es exacto (no el de las líneas con que se dibujan); si solo se cruzan en la vista (una pasa por
+    encima de la otra) se toma el punto de la primera;
+  - `Perp` y `Tan`: el punto de una curva donde la línea que sale del punto anterior es
+    perpendicular o tangente (p. ej. una recta tangente a dos círculos, o la perpendicular a un
+    muro), exactos en rectas, arcos, círculos y NURBS.
+
+  Ortho (F8) y forzado a rejilla (F9).
+- Arrastrar un objeto o un punto de control seleccionado lo mueve (con referencias a objetos).
+- Puntos de control: `PointsOn` (F10) y `PointsOff` (F11) en polilíneas y curvas; se seleccionan,
+  arrastran, mueven con el gumball o se borran con Supr.
+
+</details>
+
+<details>
+<summary><b>〰️&nbsp; Curvas y puntos</b></summary>
+<br>
+
 - Dibujo: `Line`, `Polyline`, `Rectangle`, `Circle`, `Arc`, `Curve` (por puntos de control),
   `InterpCrv` (curva que pasa por los puntos), `Ellipse` (exacta, como curva racional), `Polygon`
   (inscrito o circunscrito, con `NumSides`) y `Helix` (con `Turns`). Las curvas NURBS racionales
@@ -35,6 +193,18 @@ se adjuntan a un borrador de *release*.
   círculo), `BlendCrv` (curva de transición entre dos extremos con continuidad de posición,
   tangencia o curvatura) y `Rebuild` (rehace una curva con los puntos de control y el grado que
   se pidan, e indica cuánto se separa de la original).
+- Puntos: `Point` y `Points` colocan puntos (como los de Rhino: marcas, puntos topográficos);
+  `Divide` reparte puntos a lo largo de curvas, en un número de tramos iguales (`Segments`) o cada
+  cierta longitud (`Length`). Se mueven, copian y seleccionan como cualquier objeto (con prioridad
+  sobre la curva en la que estén), sirven de referencia `End` y se guardan en `.3dm` y DXF
+  (`POINT`). `SelPt` los selecciona.
+
+</details>
+
+<details>
+<summary><b>🧊&nbsp; Superficies, sólidos e historial</b></summary>
+<br>
+
 - Superficies y sólidos (núcleo [Open CASCADE](https://dev.opencascade.org) a través de
   [replicad](https://replicad.xyz), cargado la primera vez que se usa). El núcleo trabaja en
   segundo plano (en un Web Worker): mientras calcula una booleana, un empalme o un Make2D la
@@ -74,11 +244,20 @@ se adjuntan a un borrador de *release*.
   - Curvas sobre superficies: `Project` (a lo largo de la normal del plano de construcción, sobre
     todas las caras donde caen), `Pull` (al punto más cercano), `Intersect` (curvas donde se cortan
     superficies y sólidos), `DupBorder` (bordes abiertos) y `DupEdge` (aristas elegidas).
-- Puntos: `Point` y `Points` colocan puntos (como los de Rhino: marcas, puntos topográficos);
-  `Divide` reparte puntos a lo largo de curvas, en un número de tramos iguales (`Segments`) o cada
-  cierta longitud (`Length`). Se mueven, copian y seleccionan como cualquier objeto (con prioridad
-  sobre la curva en la que estén), sirven de referencia `End` y se guardan en `.3dm` y DXF
-  (`POINT`). `SelPt` los selecciona.
+- Historial de construcción (como `Record History` de Rhino, activo por defecto; botón *History*
+  en la barra de estado o menú *Tools*): las superficies y sólidos hechos con `ExtrudeCrv`,
+  `Revolve`, `Loft`, `Sweep1`, `Sweep2`, `Pipe`, `PlanarSrf`, `EdgeSrf`, `NetworkSrf` y `Patch`
+  recuerdan sus curvas y se rehacen al moverlas, girarlas, escalarlas o editar sus puntos, en el
+  mismo paso de deshacer. Editar el resultado a mano o borrar una de sus curvas rompe el historial
+  (el objeto se queda como está). `SelChildren`, `SelParents` y `HistoryPurge`; el panel de
+  propiedades indica de qué está hecho cada objeto. Se guarda en el `.archi`.
+
+</details>
+
+<details>
+<summary><b>🔺&nbsp; Mallas</b></summary>
+<br>
+
 - Mallas (como las de STL, OBJ o Rhino: triángulos y cuadriláteros):
   - `Mesh` convierte superficies y sólidos en mallas (opción `Density`: `Coarse`, `Medium` o
     `Fine`), dejando los originales; `MeshBox`, `MeshSphere`, `MeshCylinder` y `MeshPlane` crean
@@ -100,6 +279,13 @@ se adjuntan a un borrador de *release*.
     como caras planas.
   - `Make2D` las dibuja por sus siluetas, pliegues (de más de 40°) y bordes abiertos, ocultas por
     otras mallas y por superficies y sólidos; `Section` y `Contour` también las cortan.
+
+</details>
+
+<details>
+<summary><b>📏&nbsp; Análisis</b></summary>
+<br>
+
 - Análisis (menú *Analyze*):
   - Medir: `Distance` (con incrementos y ángulos en el plano de construcción), `Length`, `Angle`
     (tres puntos u opción `TwoLines`), `Radius` (radio de círculos y arcos, o de curvatura en el
@@ -119,13 +305,13 @@ se adjuntan a un borrador de *release*.
   - `What` describe los objetos; `Check` busca problemas (geometría no válida, aristas de más de
     dos caras, caras sin área, curvas sin longitud) e indica si están cerrados; `SelBadObjects`
     selecciona los que tienen problemas.
-- Historial de construcción (como `Record History` de Rhino, activo por defecto; botón *History*
-  en la barra de estado o menú *Tools*): las superficies y sólidos hechos con `ExtrudeCrv`,
-  `Revolve`, `Loft`, `Sweep1`, `Sweep2`, `Pipe`, `PlanarSrf`, `EdgeSrf`, `NetworkSrf` y `Patch`
-  recuerdan sus curvas y se rehacen al moverlas, girarlas, escalarlas o editar sus puntos, en el
-  mismo paso de deshacer. Editar el resultado a mano o borrar una de sus curvas rompe el historial
-  (el objeto se queda como está). `SelChildren`, `SelParents` y `HistoryPurge`; el panel de
-  propiedades indica de qué está hecho cada objeto. Se guarda en el `.archi`.
+
+</details>
+
+<details>
+<summary><b>🎨&nbsp; Render y materiales</b></summary>
+<br>
+
 - Render:
   - Modo de vista `Rendered` (menú de cada vista o `SetDisplayMode`): materiales físicos con
     reflejos de un entorno de estudio, sol con sombras suaves y sombra sobre un suelo bajo el
@@ -145,6 +331,13 @@ se adjuntan a un borrador de *release*.
   - `Render` dibuja la vista activa a 1280 × 720, 1920 × 1080, 3840 × 2160 o el tamaño de la vista,
     con suavizado y oclusión ambiental, y la muestra en una ventana desde la que se guarda como PNG.
     `ViewCaptureToFile` guarda una imagen de la vista tal como se ve (opciones `Scale` y `Grid`).
+
+</details>
+
+<details>
+<summary><b>📄&nbsp; Planos, cotas y láminas</b></summary>
+<br>
+
 - Planos 2D: `Make2D` dibuja la selección vista desde una dirección, con eliminación de líneas
   ocultas, como curvas planas en el plano XY (alzados, plantas y axonometrías). Opciones: `View`
   (la vista activa, `Top`, `Front`, `Right`, `Back`, `Left` o `FourView`, que coloca alzado, planta,
@@ -187,22 +380,13 @@ se adjuntan a un borrador de *release*.
   - el papel y la orientación se cambian en el panel y los detalles se recolocan;
   - `ExportPDF` con una lámina abierta imprime esa lámina o todas (opción `Sheets`) en un PDF de
     varias páginas, con los grosores y tipos de línea de cada capa.
-- Abrir e importar DXF (ASCII, de R12 a 2018): `Open` abre un `.dxf` como modelo nuevo e `Import`
-  lo añade al actual, convertido a sus unidades. Se leen:
-  - las capas con su color (también color verdadero), tipo de línea, grosor, apagadas y
-    bloqueadas, y las unidades (`$INSUNITS`; sin unidades se toman milímetros o las del modelo);
-  - líneas, polilíneas con arcos, círculos y arcos (también en planos inclinados), elipses,
-    splines, caras 3D y `SOLID`;
-  - textos y textos de varias líneas (sin formato, con `%%c`, `%%d`, `%%p` y acentos);
-  - cotas lineales, alineadas, de radio, diámetro y ángulo, que se convierten en cotas de
-    ArchiOpen que siguen midiendo;
-  - directrices, sombreados (con huecos; los patrones de AutoCAD se aproximan con los de
-    ArchiOpen) y bloques, que siguen siendo bloques (con escala, giro, matrices y bloques
-    anidados).
-  - Multilíneas, multidirectrices, sólidos ACIS, imágenes y tablas aún no se cargan y se
-    avisa de cuántos hay. Los DXF binarios y los DWG no se leen: guárdalos como DXF ASCII desde
-    el programa de origen (o conviértelos con ODA File Converter, gratuito). Las caras 3D
-    (`3DFACE`) se juntan en una malla por capa.
+
+</details>
+
+<details>
+<summary><b>🧱&nbsp; Bloques, grupos y organización</b></summary>
+<br>
+
 - Bloques: `Block` (alias `B`) convierte la selección en un bloque con nombre y punto base;
   `Insert` (alias `I`) coloca copias con escala y giro (en el plano de construcción de la vista);
   `BlockEdit` edita un bloque en su sitio (el resto del modelo se atenúa y no se puede tocar) y al
@@ -229,33 +413,13 @@ se adjuntan a un borrador de *release*.
     `SelBlockInstance`, `SelAnnotation`, `SelDim`, `SelText`, `SelHatch`, `SelLayer` (por nombre
     de capa), `SelDup` (duplicados exactos, dejando sin seleccionar el primero de cada grupo),
     `SelLast` (lo último creado), `SelPrev` (la selección anterior) e `Invert`.
-- Visualización:
-  - Modos por vista: `Wireframe`, `Shaded`, `Ghosted` (superficies translúcidas) y `X-Ray`
-    (las aristas ocultas se ven a través), desde el menú de la vista o con `SetDisplayMode`.
-  - `CPlane` cambia el plano de construcción de la vista activa: nuevo origen con un clic,
-    `3Point` (origen, eje X y lado del eje Y), `Elevation` (lo sube o baja) y `World`. Lo que se
-    dibuja después (rectángulos, círculos, coordenadas escritas…) queda en ese plano.
-  - `NamedView` y `NamedCPlane` guardan, recuperan y borran vistas y planos de construcción con
-    nombre; la pestaña *Views* los lista y los recupera con un clic. Se guardan en el `.archi`.
-- Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
-  `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
-  `ExportSTEP`.
-- Alias: `M`, `RO`, `SC`, `MI`, `AR`, `AP`, `TR`, `J`, `X`, `OF`, `F`, `REC`, `A`, `U`, `Z`, `ZE`,
-  `ZEA`, `ZS`, `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
-- Coordenadas escritas: absolutas `x,y,z`, relativas `r dx,dy`, y longitud fija escribiendo un
-  número antes de hacer clic.
-- Selección por clic, ventana (izquierda a derecha) y captura (derecha a izquierda). El clic, la
-  ventana y las referencias a objetos buscan en un índice espacial (un árbol de cajas por
-  geometría y otro de objetos), así que siguen siendo inmediatos en modelos de miles de objetos o
-  con mallas muy densas.
-- Gumball sobre la selección: flechas para mover, arcos para girar (Mayús: pasos de 15°), cajas
-  para escalar en un eje (Mayús: uniforme) y centro para mover en el plano. Un clic en una
-  flecha, arco o caja sin arrastrar pide el valor exacto.
-- Arrastrar un objeto o un punto de control seleccionado lo mueve (con referencias a objetos).
-- Puntos de control: `PointsOn` (F10) y `PointsOff` (F11) en polilíneas y curvas; se seleccionan,
-  arrastran, mueven con el gumball o se borran con Supr.
-- Referencias a objetos: End, Near, Mid, Cen, Quad. Ortho (F8), forzado a rejilla (F9).
-- Capas con color, visibilidad y bloqueo; panel de propiedades del objeto seleccionado.
+
+</details>
+
+<details>
+<summary><b>💾&nbsp; Archivos: .archi, Rhino, STEP y DXF</b></summary>
+<br>
+
 - Archivos `.archi` (JSON) con Abrir/Guardar; la sesión se recupera sola si la app se cierra.
 - Archivos de Rhino `.3dm` (con [rhino3dm](https://github.com/mcneel/rhino3dm), MIT):
   - `Open` abre `.archi` o `.3dm`. De un `.3dm` se cargan las curvas (líneas, polilíneas, arcos,
@@ -280,8 +444,161 @@ se adjuntan a un borrador de *release*.
     unidades del modelo.
   - `ImportSTEP` añade los sólidos, superficies y curvas de un STEP a la capa actual, convertidos
     a las unidades del modelo. Líneas, círculos y arcos llegan exactos; otras curvas, ajustadas.
+- Abrir e importar DXF (ASCII, de R12 a 2018): `Open` abre un `.dxf` como modelo nuevo e `Import`
+  lo añade al actual, convertido a sus unidades. Se leen:
+  - las capas con su color (también color verdadero), tipo de línea, grosor, apagadas y
+    bloqueadas, y las unidades (`$INSUNITS`; sin unidades se toman milímetros o las del modelo);
+  - líneas, polilíneas con arcos, círculos y arcos (también en planos inclinados), elipses,
+    splines, caras 3D y `SOLID`;
+  - textos y textos de varias líneas (sin formato, con `%%c`, `%%d`, `%%p` y acentos);
+  - cotas lineales, alineadas, de radio, diámetro y ángulo, que se convierten en cotas de
+    ArchiOpen que siguen midiendo;
+  - directrices, sombreados (con huecos; los patrones de AutoCAD se aproximan con los de
+    ArchiOpen) y bloques, que siguen siendo bloques (con escala, giro, matrices y bloques
+    anidados).
+  - Multilíneas, multidirectrices, sólidos ACIS, imágenes y tablas aún no se cargan y se
+    avisa de cuántos hay. Los DXF binarios y los DWG no se leen: guárdalos como DXF ASCII desde
+    el programa de origen (o conviértelos con ODA File Converter, gratuito). Las caras 3D
+    (`3DFACE`) se juntan en una malla por capa.
 
-## Desarrollo
+</details>
+
+<details>
+<summary><b>⌨️&nbsp; Otros comandos y alias</b></summary>
+<br>
+
+- Otros: `PointsOn`, `PointsOff`, `Delete`, `SelAll`, `SelNone`, `Undo`, `Redo`, `Zoom`, `MaxViewport`, `Snap`, `Ortho`,
+  `Osnap`, `Units`, `New`, `Open`, `Save`, `SaveAs`, `Import`, `Export`, `ImportSTEP`,
+  `ExportSTEP`.
+- Alias: `M`, `RO`, `SC`, `MI`, `AR`, `AP`, `TR`, `J`, `X`, `OF`, `F`, `REC`, `A`, `U`, `Z`, `ZE`,
+  `ZEA`, `ZS`, `EXT`, `REV`, `BU`, `BD`, `BI`, `FE`.
+
+</details>
+
+<a id="como-funciona"></a>
+
+## ⚙️ Cómo funciona
+
+```mermaid
+flowchart LR
+    subgraph win["Ventana de la aplicación (Tauri + WebView2)"]
+        direction TB
+        ui["Interfaz<br/>menús, línea de comandos, paneles"]
+        doc["Documento<br/>objetos, capas, bloques, deshacer"]
+        view["Vistas Three.js<br/>GPU, instancias, índice espacial"]
+        io["Archivos<br/>.archi · .3dm · DXF · STEP · PDF"]
+        ui --> doc --> view
+        doc <--> io
+    end
+    subgraph worker["Web Worker (segundo plano)"]
+        occt["Open CASCADE<br/>WebAssembly"]
+    end
+    doc -- "trabajos: booleanas, empalmes,<br/>barridos, Make2D, exportar" --> occt
+    occt -- "geometría exacta + mallas para verla" --> doc
+```
+
+- **Comandos.** Cada comando es una pequeña función asíncrona que pide puntos, objetos u opciones
+  y modifica el documento. Todo lo que hace se deshace en un paso.
+- **Documento.** Las curvas son NURBS calculadas en TypeScript. Las superficies y sólidos se
+  guardan en el formato exacto de Open CASCADE, junto con una malla que solo sirve para verlos.
+- **Núcleo en segundo plano.** Las operaciones pesadas se mandan a un Web Worker con Open CASCADE
+  compilado a WebAssembly: la ventana sigue respondiendo mientras calcula y `Esc` lo detiene.
+  Cada operación libera la memoria que ha usado, y si el núcleo crece demasiado se sustituye por
+  uno nuevo sin que se note.
+- **Vistas.** Three.js dibuja en la GPU. Un árbol de cajas por objeto hace que el clic, la
+  selección por ventana y las referencias a objetos solo miren lo que está cerca del cursor.
+- **Aplicación de escritorio.** [Tauri](https://tauri.app) empaqueta todo en un ejecutable nativo
+  que usa el motor web del sistema (WebView2 en Windows), por eso ocupa decenas de megas y no
+  cientos.
+
+<a id="formatos"></a>
+
+## 📁 Formatos de archivo
+
+| Formato | Abrir / importar | Guardar / exportar | Notas |
+| --- | :---: | :---: | --- |
+| `.archi` | ✅ | ✅ | Formato propio (JSON): todo el modelo, láminas, materiales e historial |
+| Rhino `.3dm` | ✅ | ✅ | Superficies y sólidos exactos en los dos sentidos; SubD, textos y bloques aún no se leen |
+| STEP `.step` `.stp` | ✅ | ✅ | AP242, B-rep exacto, con capas, colores y unidades |
+| DXF | ✅ | ✅ | ASCII R12–2018: capas, bloques, cotas, textos, sombreados |
+| STL / OBJ | ✅ | ✅ | Mallas; las superficies se exportan trianguladas |
+| PDF | — | ✅ | Vectorial, con grosores y tipos de línea; láminas en varias páginas |
+| PNG | — | ✅ | `Render` y `ViewCaptureToFile` |
+
+<a id="hoja-de-ruta"></a>
+
+## 🗺️ Hoja de ruta
+
+- [x] Referencias `Int`, `Perp`, `Tan` y `Knot`
+- [ ] Planos de corte en vivo (`ClippingPlane`)
+- [ ] `Orient`, `Orient3Pt`, `Align` y `Distribute`
+- [ ] Leer textos y bloques de `.3dm` y exportar bloques como bloques
+- [ ] Copiar y pegar entre archivos
+- [ ] Superficies: `FilletSrf`, `ChamferEdge`, `MatchSrf`, `RailRevolve`, `Untrim`, `UnrollSrf`
+- [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
+- [ ] Modelado SubD
+- [ ] Herramientas de arquitectura: muros, forjados, huecos y niveles
+- [ ] Instaladores firmados y actualizaciones automáticas
+
+<a id="preguntas"></a>
+
+## ❓ Preguntas frecuentes
+
+<details id="instalador">
+<summary><b>¿El instalador solo instala un .exe? ¿No faltan archivos?</b></summary>
+<br>
+
+No falta nada. Tauri mete dentro del ejecutable la interfaz, el núcleo Open CASCADE (unos 23 MB
+de WebAssembly) y el lector de `.3dm`. Lo único que usa de fuera es el motor web del sistema:
+WebView2 en Windows 10 y 11, que ya viene instalado (si faltara, el instalador lo descarga). Tus
+modelos son los `.archi` que guardes donde quieras.
+
+</details>
+
+<details>
+<summary><b>Windows no me deja abrir el programa</b></summary>
+<br>
+
+El ejecutable todavía no está firmado. En casa, Windows SmartScreen puede avisar: pulsa *Más
+información* → *Ejecutar de todas formas*. En ordenadores de empresa, las políticas (AppLocker)
+suelen bloquear programas sin firmar instalados en la carpeta del usuario; ahí hace falta que lo
+autorice el administrador.
+
+</details>
+
+<details>
+<summary><b>¿Puedo abrir mis archivos de Rhino y volver a Rhino?</b></summary>
+<br>
+
+Sí. `Open` e `Import` leen `.3dm` con curvas, superficies, polisuperficies, extrusiones, mallas y
+capas, y `Export` escribe un `.3dm` con las superficies y sólidos exactos (no como mallas). Lo que
+aún no se lee (SubD, textos, bloques) se avisa al abrir, y `Save` nunca sobrescribe el `.3dm`
+original.
+
+</details>
+
+<details>
+<summary><b>¿Necesita internet?</b></summary>
+<br>
+
+No. Todo funciona sin conexión; no hay cuentas ni telemetría.
+
+</details>
+
+<details>
+<summary><b>¿Está relacionado con Rhino o McNeel?</b></summary>
+<br>
+
+No. ArchiOpen es un proyecto independiente. Sigue la forma de trabajar y los nombres de comandos
+habituales en los modeladores NURBS para que resulte familiar, pero no usa código, iconos ni
+recursos de ningún otro programa. Los `.3dm` se leen con [rhino3dm](https://github.com/mcneel/rhino3dm)
+(MIT) y se escriben siguiendo el formato documentado en el código abierto de openNURBS.
+
+</details>
+
+<a id="desarrollo"></a>
+
+## 🛠️ Desarrollo
 
 Requisitos: Node 22 y, para la app de escritorio, Rust y las
 [dependencias de Tauri](https://tauri.app/start/prerequisites/) de tu sistema.
@@ -292,17 +609,37 @@ npm run dev        # interfaz en el navegador, http://localhost:5173
 npm run app:dev    # aplicación de escritorio con recarga en caliente
 npm run app:build  # instaladores en src-tauri/target/release/bundle
 npm run typecheck
-npm test           # pruebas de la geometría
+npm test           # pruebas de la geometría y el núcleo
 ```
 
-## Créditos
+<details>
+<summary><b>Estructura del código</b></summary>
+<br>
 
+| Carpeta | Qué hay |
+| --- | --- |
+| `src/core` | Documento, geometría (curvas, mallas, cotas, sombreados, bloques), índice de selección, referencias a objetos |
+| `src/math` | NURBS: evaluación, nudos, pesos |
+| `src/kernel` | Open CASCADE: carga, Web Worker, trabajos, memoria, exportación exacta a `.3dm` |
+| `src/commands` | Los comandos, agrupados por tema |
+| `src/input` | Ratón, teclado, peticiones de puntos y referencias a objetos |
+| `src/view` | Vistas Three.js, gumball, modos de visualización, render |
+| `src/io` | `.archi`, `.3dm`, DXF, STEP, STL, OBJ, PDF y láminas |
+| `src/ui` | Menús, barras, paneles y línea de comandos |
+| `src-tauri` | Aplicación de escritorio |
+
+</details>
+
+## 🙏 Créditos
+
+- [Open CASCADE Technology](https://dev.opencascade.org) (LGPL 2.1 con excepción) a través de
+  [replicad](https://replicad.xyz) (MIT), [Three.js](https://threejs.org) (MIT),
+  [rhino3dm](https://github.com/mcneel/rhino3dm) (MIT) y [Tauri](https://tauri.app) (MIT/Apache 2.0).
 - El archivo de prueba `src/io/fixtures/ezdxf-sample.dxf` está generado con
   [ezdxf](https://github.com/mozman/ezdxf) (MIT).
-
 - Tipografía de los textos: fuentes Hershey (A. V. Hershey, U.S. National Bureau of Standards), en
   la conversión de [hersheytext](https://github.com/techninja/hersheytextjs) (MIT).
 
-## Licencia
+## 📜 Licencia
 
 Por decidir.
