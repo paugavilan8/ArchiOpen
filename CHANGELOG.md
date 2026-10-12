@@ -5,6 +5,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Scripts** (`RunScript`): JavaScript files that run commands, read and add geometry through the
+  `archi` API, with examples in `examples/scripts`.
 - **Curtain walls** (`CurtainWall`): mullions, transoms and glass along a line, following it.
 - **Wall layers** (`WallType`, `Wall` > `Type`): build-ups of brick, insulation, concrete, plaster or
   timber, drawn layer by layer in plans and sections and measured by material.

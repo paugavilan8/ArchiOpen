@@ -1,6 +1,7 @@
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
 import { Autosaver, desktopFolder, setAutosaver } from './app/autosave'
+import { setScriptHost } from './app/scripting'
 import { HistoryManager } from './app/historyManager'
 import { copyObjects, readClipboard, rememberCopied } from './app/clipboard'
 import { pasteNext } from './commands/clipboard'
@@ -40,6 +41,7 @@ const history = new HistoryManager(doc, settings, (text) => commandLine.log(text
 const ctx: CommandContext = { doc, display, input, settings, files, history, log: (text) => commandLine.log(text) }
 const runner = new CommandRunner(ctx)
 registerCommands(runner)
+setScriptHost(ctx, runner)
 
 const commandLine = new CommandLine(runner, input)
 const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, settings)

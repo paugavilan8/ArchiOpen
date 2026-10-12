@@ -455,6 +455,29 @@ Expand a section for details.
 </details>
 
 <details>
+<summary><b>Scripts</b></summary>
+<br>
+
+`RunScript` (*File* menu) runs a JavaScript file that drives the modeler, to automate repetitive
+work; `Last` runs the last one again. A script runs as the body of an async function, with
+`archi` and `Vector3` in scope:
+
+| | |
+| --- | --- |
+| `await archi.command(name, ...answers)` | Runs a command with its answers in order (`''` is Enter; when they run out, Enter until it ends). Resolves to the ids it left selected (what it made); a command error stops the script. |
+| `archi.add(geometry, layer?)`, `archi.remove(ids)` | Adds geometry (a curve, mesh or point) to a layer by name, or deletes objects. |
+| `archi.objects(filter?)` | The objects: id, type, layer, and the command and parameters of those with history. |
+| `archi.select(ids)` | Selects objects, for commands that act on the selection. |
+| `archi.levels()`, `archi.setLevel(name)` | The levels, and the current one. |
+| `await archi.step(edits)` | Several edits as one undo step. |
+| `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | A point, a line in the history, and the document itself. |
+
+Examples are in [examples/scripts](examples/scripts): a grid of columns and a tower of several
+levels. Scripts have the same access as the application: run only those you trust.
+
+</details>
+
+<details>
 <summary><b>Other commands and aliases</b></summary>
 <br>
 
@@ -550,6 +573,7 @@ flowchart LR
 - [x] Terrain from contour lines and survey points
 - [x] Walls with layers (build-ups)
 - [x] Curtain walls
+- [x] Scripts (`RunScript`)
 - [ ] Signed installers and automatic updates
 
 ## FAQ
