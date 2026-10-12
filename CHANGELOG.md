@@ -5,6 +5,14 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- IFC: walls drawn as a ring (`Close`) or along several segments are exported as one wall for each
+  side, mitred at the corners, so BIM tools (and ArchiOpen, opening the file again) see straight
+  walls.
+- IFC: walls whose doors and windows have rebates (as ArchiCAD draws them) open as editable walls,
+  and the message on opening says why any walls or slabs stay meshes (sloping tops, not flat, ...).
+  Checked with ArchiCAD's FZK-Haus and a Revit sample: 9 of 13 and 16 of 17 walls come in editable;
+  the rest are gables and sloping walls.
+
 - **Stretching surfaces and solids**: `Scale1D` and `Scale2D`, and the gumball's scale along one
   axis, now stretch surfaces and solids too, exactly (their NURBS are stretched with them), and
   they export exactly to `.3dm` and STEP.

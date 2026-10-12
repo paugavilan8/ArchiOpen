@@ -42,6 +42,8 @@ export interface Recognized {
   slabs: RecognizedSlab[]
   /** Elements taken in (walls, slabs, and the doors and windows placed in walls). */
   used: Set<number>
+  /** Why each wall or slab left as a mesh was not taken in. */
+  rejected: Map<number, string>
 }
 
 const WALLS = new Set(['IFCWALL', 'IFCWALLSTANDARDCASE'])
@@ -188,7 +190,8 @@ function simplify(loop: [number, number][]): [number, number][] {
 
 export function recognize(elements: MeshElement[]): Recognized {
   const used = new Set<number>()
-  const walls: (RecognizedWall & { frame: Frame; volume: number; base: number })[] = []
+  const rejected = new Map<number, string>()
+  const walls: (RecognizedWall & { frame: Frame; volume: number; base: number; inside: Vector3[] })[] = []
   elements.forEach((e, index) => {
     if (!WALLS.has(e.type) || e.vertices.length < 24) return
     const points = pointsOf(e.vertices)
@@ -196,9 +199,10 @@ export function recognize(elements: MeshElement[]): Recognized {
     const frame = frameOf(points, tris)
     const thickness = frame.v[1] - frame.v[0]
     const length = frame.u[1] - frame.u[0]
-    if (!(thickness >= 20 && thickness <= 1500 && length > thickness)) return
-    // Every point on one face or the other: an even, straight wall.
-    if (!points.every((p) => Math.min(Math.abs(p.dot(frame.perp) - frame.v[0]), Math.abs(p.dot(frame.perp) - frame.v[1])) < ON_FACE)) return
+    if (!(thickness >= 20 && thickness <= 1500 && length > thickness)) return void rejected.set(index, `not wall-like (${Math.round(thickness)} thick, ${Math.round(length)} long)`)
+    // Every point on one face or the other: an even, straight wall. Points inside it are only
+    // allowed round its doors and windows (rebates, where an opening is wider part of the way).
+    const inside = points.filter((p) => Math.min(Math.abs(p.dot(frame.perp) - frame.v[0]), Math.abs(p.dot(frame.perp) - frame.v[1])) >= ON_FACE)
     // The centre line ends halfway between the ends of the two faces: at the middle of a square
     // end, and at the corner of the centre lines where walls meet at a mitre.
     const face = (side: number) => {
@@ -212,7 +216,7 @@ export function recognize(elements: MeshElement[]): Recognized {
     const end = frame.dir.clone().multiplyScalar(u1).addScaledVector(frame.perp, mid).setZ(frame.z[0])
     // Its footprint: the bigger of its bottom and top faces (a door cuts the bottom one).
     const base = Math.max(levelArea(points, tris, frame.z[0]), levelArea(points, tris, frame.z[1]))
-    walls.push({ index, path: [start, end], thickness, height: frame.z[1] - frame.z[0], openings: [], frame, volume: meshVolume(e.vertices, tris), base })
+    walls.push({ index, path: [start, end], thickness, height: frame.z[1] - frame.z[0], openings: [], frame, volume: meshVolume(e.vertices, tris), base, inside })
   })
 
   // Doors and windows into the walls holding them.
@@ -241,9 +245,20 @@ export function recognize(elements: MeshElement[]): Recognized {
   // Kept where the wall's volume is that of a straight wall less its openings.
   // Kept where its volume is its footprint raised by its height, less its openings: flat on top.
   const keptWalls = walls.filter((w) => {
+    const f = w.frame
+    const nearOpening = (p: Vector3) => {
+      const [u, z] = [p.dot(f.dir) - f.u[0], p.z - f.z[0]]
+      return w.openings.some((o) => Math.abs(u - o.at) <= o.width / 2 + w.thickness && z >= o.sill - w.thickness && z <= o.sill + o.height + w.thickness)
+    }
+    if (!w.inside.every(nearOpening)) {
+      rejected.set(w.index, 'not straight and even')
+      return false
+    }
     const solid = w.base * w.height
     const holes = w.openings.reduce((s, o) => s + o.width * o.height * w.thickness, 0)
-    return solid > 0 && Math.abs(w.volume - (solid - holes)) <= VOLUME * solid
+    const ok = solid > 0 && Math.abs(w.volume - (solid - holes)) <= VOLUME * solid
+    if (!ok) rejected.set(w.index, `not flat on top or bottom (volume ${Math.round(w.volume / 1e6)} dm³, as a straight wall ${Math.round((solid - holes) / 1e6)} dm³)`)
+    return ok
   })
   const keptIds = new Set(keptWalls.map((w) => w.index))
   for (const w of keptWalls) used.add(w.index)
@@ -256,17 +271,17 @@ export function recognize(elements: MeshElement[]): Recognized {
     const zs = points.map((p) => p.z)
     const [bottom, top] = [Math.min(...zs), Math.max(...zs)]
     const thickness = top - bottom
-    if (!(thickness >= 20 && thickness <= 2000)) return
-    if (!zs.every((z) => Math.abs(z - top) < ON_FACE || Math.abs(z - bottom) < ON_FACE)) return
+    if (!(thickness >= 20 && thickness <= 2000)) return void rejected.set(index, `not slab-like (${Math.round(thickness)} thick)`)
+    if (!zs.every((z) => Math.abs(z - top) < ON_FACE || Math.abs(z - bottom) < ON_FACE)) return void rejected.set(index, 'not flat')
     const tris = triangles(e.faces)
     const loops = levelLoops(points, tris, top)
-    if (loops.length === 0) return
+    if (loops.length === 0) return void rejected.set(index, 'no outline on top')
     const [outer, ...holes] = loops
     const area = planArea(outer) - holes.reduce((s, h) => s + planArea(h), 0)
-    if (Math.abs(meshVolume(e.vertices, tris) - area * thickness) > VOLUME * planArea(outer) * thickness) return
+    if (Math.abs(meshVolume(e.vertices, tris) - area * thickness) > VOLUME * planArea(outer) * thickness) return void rejected.set(index, 'not of even thickness')
     slabs.push({ index, outline: outer.map(([x, y]) => new Vector3(x, y, top)), thickness, holes: holes.map((points) => ({ points })) })
     used.add(index)
   })
 
-  return { walls: keptWalls.map(({ index, path, thickness, height, openings }) => ({ index, path, thickness, height, openings })), slabs, used }
+  return { walls: keptWalls.map(({ index, path, thickness, height, openings }) => ({ index, path, thickness, height, openings })), slabs, used, rejected }
 }

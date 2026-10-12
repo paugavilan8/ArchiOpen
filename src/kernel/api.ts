@@ -30,7 +30,7 @@ import {
 import { shapeFromRhino } from './fromRhino'
 import { filletSurfaces } from './filletSrf'
 import { make2DWithMeshes } from './make2d'
-import { roomRegion } from './architecture'
+import { roomRegion, wallSegments } from './architecture'
 import { curveRegions } from './curveBoolean'
 import { extendSurface } from './extendSrf'
 import { matchSurface } from './matchSrf'
@@ -71,6 +71,7 @@ function cuttersFor(target: AnyShape, curves: AnyCurve[], shapes: AnyShape[], di
 
 export const api = {
   curveRegions,
+  wallSegments,
   extendSurface,
   box,
   cylinder,

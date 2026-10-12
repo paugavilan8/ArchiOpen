@@ -2,7 +2,7 @@ import type { CommandContext, CommandRunner } from '../commands/runner'
 import type { Display } from '../view/display'
 import type { ViewKind } from '../view/viewport'
 import { runScript, scriptApi } from './scripting'
-import { framesFor } from './ifcNative'
+import { framesFor, wallPieces } from './ifcNative'
 import { ifcModel } from '../io/ifcModel'
 import { writeIfc } from '../io/ifc'
 import { writePdf } from '../io/pdf'
@@ -189,7 +189,7 @@ async function exportBytes(ctx: CommandContext, format: string): Promise<Uint8Ar
     case 'archi':
       return ctx.files.archiData()
     case 'ifc': {
-      const model = ifcModel(doc, ctx.files.name)
+      const model = ifcModel(doc, ctx.files.name, await wallPieces(doc))
       if (model.elements.length === 0 && model.spaces.length === 0) throw new Error('There is nothing to export to IFC')
       return text(writeIfc(model))
     }

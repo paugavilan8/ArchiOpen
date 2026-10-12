@@ -83,4 +83,28 @@ describe('IFC walls and slabs as editable elements', () => {
     // What was taken in is not also a mesh; the curved wall is.
     expect(Object.fromEntries(read.counts)).toEqual(curved ? { Wall: 1 } : {})
   })
+
+  it('takes in walls whose openings have rebates, and says why others stay meshes', () => {
+    // A wall 4 m long, 300 thick, 2.7 m high, along x; its window hole 1200 wide through it, and
+    // 1400 wide for the inner 130 (a rebate, as ArchiCAD draws them).
+    const wall = R.makeBaseBox(4000, 300, 2700)
+      .translate([2000, 150, 0])
+      .cut(R.makeBaseBox(1200, 400, 1200).translate([2000, 150, 900]))
+      .cut(R.makeBaseBox(1400, 130, 1300).translate([2000, 300 - 65 + 1e-3, 850]))
+    const window = R.makeBaseBox(1200, 80, 1200).translate([2000, 120, 900])
+    // A wall sloping on top (a gable) stays a mesh.
+    const gable = R.makeBaseBox(4000, 300, 2700).translate([2000, 5150, 0]).cut(R.makeBox([0, 4900, 1500], [4000, 5400, 3000]).rotate(20, [0, 5150, 1500], [0, 1, 0]))
+    const elements: IfcElement[] = [
+      { type: 'IfcWall', name: 'Wall 1', level: 'Ground', meshes: [mesh(toBrep(wall))] },
+      { type: 'IfcWindow', name: 'Window 1', level: 'Ground', meshes: [mesh(toBrep(window))], width: 1200, height: 1200 },
+      { type: 'IfcWall', name: 'Gable', level: 'Ground', meshes: [mesh(toBrep(gable))] },
+    ]
+    const text = writeIfc({ project: 'p', toMeters: 1e-3, levels: [{ name: 'Ground', elevation: 0, height: 3000 }], elements, spaces: [] })
+    const read = readIfc(api, new TextEncoder().encode(text))
+    expect(read.native.walls).toHaveLength(1)
+    expect(read.native.walls[0].thickness).toBeCloseTo(300, 0)
+    expect(read.native.walls[0].openings).toHaveLength(1)
+    expect(read.native.walls[0].openings[0].width).toBeCloseTo(1200, 0)
+    expect([...read.native.leftAsMeshes.keys()]).toEqual(['walls not flat on top or bottom'])
+  })
 })

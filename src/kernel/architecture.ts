@@ -283,3 +283,46 @@ export function skirtingShape(loops: AnyCurve[], height: number, thickness: numb
   const boxes = cuts.map((b) => box(new Vector3(b.origin.x, b.origin.y, b.origin.z), new Vector3(b.u.x, b.u.y, b.u.z), new Vector3(b.v.x, b.v.y, b.v.z), new Vector3(b.w.x, b.w.y, b.w.z)))
   return boxes.length > 0 ? boolean('difference', solid, boxes) : solid
 }
+
+/**
+ * A wall along a polyline of several segments, cut into one piece for each segment, mitred at the
+ * corners (on the bisector of each). For IFC, where a wall is one straight run: a ring of walls
+ * becomes walls end to end, as BIM tools draw them.
+ */
+export function wallSegments(wall: AnyShape, path: AnyCurve, thickness: number): AnyShape[] {
+  if (path.type !== 'polyline') return [wall]
+  const pts = path.points.map((p) => new Vector3(p.x, p.y, 0))
+  if (path.closed && pts.length > 2 && pts[0].distanceTo(pts[pts.length - 1]) < 1e-9) pts.pop()
+  const count = path.closed ? pts.length : pts.length - 1
+  if (count < 2) return [wall]
+  const [[, , z0], [, , z1]] = wall.boundingBox.bounds
+  // The left normal of each segment, in plan.
+  const normal = (i: number) => {
+    const a = pts[i % pts.length]
+    const b = pts[(i + 1) % pts.length]
+    const d = b.clone().sub(a).normalize()
+    return new Vector3(-d.y, d.x, 0)
+  }
+  // At each corner, the mitre line: halfway between the normals of the segments meeting there.
+  const mitre = (i: number, at: number) => {
+    const n = normal(i)
+    const open = !path.closed && ((at === 0 && i === 0) || (at === 1 && i === count - 1))
+    if (open) return { dir: n, reach: thickness * 2 }
+    const other = normal(at === 0 ? i - 1 + count : i + 1)
+    const m = n.clone().add(other)
+    if (m.lengthSq() < 1e-12) return { dir: n, reach: thickness * 2 }
+    m.normalize()
+    return { dir: m, reach: (thickness * 2) / Math.max(m.dot(n), 0.1) }
+  }
+  const pieces: AnyShape[] = []
+  for (let i = 0; i < count; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    const [ma, mb] = [mitre(i, 0), mitre(i, 1)]
+    const quad = [a.clone().addScaledVector(ma.dir, ma.reach), b.clone().addScaledVector(mb.dir, mb.reach), b.clone().addScaledVector(mb.dir, -mb.reach), a.clone().addScaledVector(ma.dir, -ma.reach)].map((p) => p.setZ(z0 - 1))
+    const block = extrudeCurve({ type: 'polyline', points: quad, closed: true }, new Vector3(0, 0, z1 - z0 + 2), true)
+    const piece = boolean('intersection', wall, [block])
+    if (piece.faces.length > 0) pieces.push(piece)
+  }
+  return pieces.length > 0 ? pieces : [wall]
+}

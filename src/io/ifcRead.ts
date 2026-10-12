@@ -84,7 +84,10 @@ export interface IfcImport extends RhinoImport {
   /** How many elements were read as meshes, by layer. */
   counts: Map<string, number>
   /** Walls (with their doors and windows) and slabs to make as ArchiOpen's own elements. */
-  native: Pick<Recognized, 'walls' | 'slabs'>
+  native: Pick<Recognized, 'walls' | 'slabs'> & {
+    /** Why walls and slabs were left as meshes: each reason with how many. */
+    leftAsMeshes: Map<string, number>
+  }
 }
 
 /** Reads an IFC file's elements as meshes. */
@@ -132,7 +135,7 @@ export function readIfc(api: IfcAPI, bytes: Uint8Array, options: { native?: bool
     api.StreamAllMeshesWithTypes(model, [IFCSPACE], onMesh)
 
     // Walls, slabs, doors and windows that ArchiOpen can make itself come in as its own elements.
-    const native = options.native === false ? { walls: [], slabs: [], used: new Set<number>() } : recognize(elements)
+    const native = options.native === false ? { walls: [], slabs: [], used: new Set<number>(), rejected: new Map<number, string>() } : recognize(elements)
     elements.forEach((e, i) => {
       if (native.used.has(i)) return
       const name = layerName(e.type)
@@ -146,6 +149,13 @@ export function readIfc(api: IfcAPI, bytes: Uint8Array, options: { native?: bool
       objects.push({ layer, geometry: { type: 'mesh', vertices: e.vertices, faces: e.faces } satisfies MeshGeometry })
       counts.set(name, (counts.get(name) ?? 0) + 1)
     })
+
+    // Why: the reason (without its figures) and its element's kind.
+    const leftAsMeshes = new Map<string, number>()
+    for (const [i, why] of native.rejected) {
+      const key = `${elements[i].type.startsWith('IFCSLAB') ? 'slabs' : 'walls'} ${why.replace(/ \(.*$/, '')}`
+      leftAsMeshes.set(key, (leftAsMeshes.get(key) ?? 0) + 1)
+    }
 
     // Storeys as levels, each up to the next (the last as high as the one under it).
     const unit = lengthUnit(api, model) * MM
@@ -169,7 +179,7 @@ export function readIfc(api: IfcAPI, bytes: Uint8Array, options: { native?: bool
       for (let n = 2; seen.has(name); n++) name = `${l.name} (${n})`
       seen.add((l.name = name))
     }
-    return { units: 'Millimeters', layers, objects, breps: [], tolerance: 0, skipped: new Map(), levels, counts, native: { walls: native.walls, slabs: native.slabs } }
+    return { units: 'Millimeters', layers, objects, breps: [], tolerance: 0, skipped: new Map(), levels, counts, native: { walls: native.walls, slabs: native.slabs, leftAsMeshes } }
   } finally {
     api.CloseModel(model)
   }

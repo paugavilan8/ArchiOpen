@@ -3,7 +3,7 @@ import { writeIfc } from '../io/ifc'
 import { ifcModel } from '../io/ifcModel'
 import { autosaver } from '../app/autosave'
 import { isOption, valueOption, yesNo } from './helpers'
-import { framesFor } from '../app/ifcNative'
+import { framesFor, wallPieces } from '../app/ifcNative'
 import type { Command } from './runner'
 
 const newFile: Command = {
@@ -121,7 +121,8 @@ const exportIfc: Command = {
   history: false,
   repeat: false,
   async run({ doc, files, log }) {
-    const model = ifcModel(doc, files.name)
+    // Walls along several segments go as one wall for each.
+    const model = ifcModel(doc, files.name, await wallPieces(doc))
     if (model.elements.length === 0 && model.spaces.length === 0) throw new Error('There is nothing to export: the model has no solids, surfaces or meshes')
     const fileName = await files.exportFile(IFC, () => new TextEncoder().encode(writeIfc(model)))
     if (!fileName) return

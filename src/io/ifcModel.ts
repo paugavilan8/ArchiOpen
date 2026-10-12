@@ -56,7 +56,8 @@ function loopArea(pts: [number, number][]): number {
   return a / 2
 }
 
-export function ifcModel(doc: Document, project: string): IfcModel {
+/** `wallPieces`: walls along several segments, as one piece for each (see wallPieces in app/ifcNative). */
+export function ifcModel(doc: Document, project: string, wallPieces: Map<number, IfcMesh[]> = new Map()): IfcModel {
   const levelOf = (z: number) => levelAt(doc.levels, z + 1e-3)?.name ?? doc.levels[0]?.name ?? 'Level 0'
   const elements: IfcElement[] = []
   const openings = new Map<string, { element: IfcElement; meshes: IfcMesh[] }>()
@@ -115,6 +116,11 @@ export function ifcModel(doc: Document, project: string): IfcModel {
     if (obj.geometry.type === 'instance') {
       const meshes = flatten(obj.geometry).flatMap((g) => meshOf(g) ?? [])
       if (meshes.length > 0) elements.push({ type: 'IfcFurniture', name: obj.geometry.definition.name, level: levelOf(lowest(meshes)), meshes, predefined: 'NOTDEFINED' })
+      continue
+    }
+    const pieces = wallPieces.get(obj.id)
+    if (pieces && known) {
+      for (const piece of pieces) elements.push({ type: known.type, name: named(known.name), level: levelOf(lowest([piece])), meshes: [piece] })
       continue
     }
     const mesh = meshOf(obj.geometry)
