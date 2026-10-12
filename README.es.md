@@ -246,7 +246,10 @@ Despliega cada apartado para ver los detalles.
   actual. Una línea recta da un tramo; cada quiebro de la línea es un rellano cuadrado entre tramos
   (una escalera en L tiene uno; una en U, dos juntos, dibujada como una línea que sube, cruza y
   vuelve). Se crea con `Width` (ancho) y `Risers` (contrahuellas; automático: unos 175 de tabica), y
-  avisa si los peldaños no son cómodos (dos tabicas y una huella entre 600 y 650).
+  avisa si los peldaños no son cómodos (dos tabicas y una huella entre 600 y 650). Con `Opening`
+  (activo por defecto) abre su hueco en el forjado al que llega: sus tramos y rellanos, 50 más
+  grandes por cada lado. `StairOpening` lo vuelve a abrir para las escaleras elegidas, y al editar
+  la altura de un nivel sus escaleras se rehacen para salvarla, con sus huecos.
 - `Column` coloca pilares rectangulares o circulares, de la altura del nivel actual.
 - `Railing` coloca barandillas a lo largo de una línea dibujada punto a punto (bordes de forjado,
   balcones) o, con la opción `Stair`, en escaleras: siguiendo los bordes de los peldaños de cada
@@ -539,6 +542,7 @@ flowchart LR
 - [x] Tablas de carpintería y de superficies (`Schedule`)
 - [x] Varios niveles en el juego de planos, con una planta para cada uno
 - [x] Exportación e importación IFC
+- [x] Escaleras que siguen la altura de su nivel, con su hueco en el forjado de encima
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

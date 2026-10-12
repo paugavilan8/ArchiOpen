@@ -6,6 +6,7 @@ import {
   DEFAULT_WALL,
   lengthAtPoint,
   paramAtLength,
+  slabParams,
   openingBox,
   wallOutline,
   wallParams,
@@ -13,18 +14,19 @@ import {
   type Level,
   type Opening,
   type SavedJoin,
+  type SlabHole,
   type WallParams,
 } from '../core/architecture'
 import { formatValue, isOption, valueOption, yesNo } from './helpers'
 import { nextOpeningId } from '../app/openingParts'
-import { AnyCurve, isClosed, isCurve, pointAt, tangentAt, tessellate } from '../core/geometry'
+import { AnyCurve, isClosed, isCurve, pointAt, startPoint, tangentAt, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
 import { LINE_SPACING, textShape } from '../text/strokeFont'
 import { wallDimensions, type DimensionedWall } from '../core/autoDimensions'
 import { MATERIAL_PRESETS } from '../core/materials'
 import { DEFAULT_RAILING, type RailingSides, type RailingStyle } from '../core/railings'
-import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairOutlines, stairPlan, type RoofType } from '../core/buildingParts'
+import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairFootprint, stairOutlines, stairParams, stairPlan, type RoofType } from '../core/buildingParts'
 import { layerNamed } from './drawing'
 import { kernel, readable } from './solids'
 import type { Command, CommandContext } from './runner'
@@ -43,7 +45,7 @@ const memory = {
   frame: true,
   hinge: 'start' as 'start' | 'end',
   roof: { ...DEFAULT_ROOF },
-  stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers },
+  stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers, opening: true },
   column: { ...DEFAULT_COLUMN },
   railing: { ...DEFAULT_RAILING },
   dimensions: { offset: 800, height: 200 },
@@ -123,6 +125,20 @@ const level: Command = {
           if (typeof elevation !== 'number' || typeof height !== 'number' || !(height > 0)) continue
           doc.setLevels(doc.levels.map((l) => (l === chosen ? { ...l, elevation, height } : l)))
           if (doc.currentLevel === chosen.name) goToLevel(ctx, doc.level)
+          // Stairs from this level climb the new height, and their openings follow.
+          if (height !== chosen.height) {
+            const stairs = [...doc.objects.values()].filter((o) => {
+              const line = o.history?.command === 'Stair' ? doc.objects.get(o.history.inputs[0])?.geometry : undefined
+              return line && isCurve(line) && Math.abs(startPoint(line).z - chosen.elevation) < 1 && Math.abs(stairParams(o.history!.params).height - chosen.height) < 1
+            })
+            if (stairs.length > 0) {
+              doc.begin()
+              for (const o of stairs) await remake(ctx, o.id, { ...o.history!, params: { ...o.history!.params, height } })
+              await cutStairwells(ctx, stairs.map((o) => o.id))
+              doc.commit()
+              log(`${stairs.length} stair${stairs.length === 1 ? '' : 's'} made again to climb ${formatValue(height)}`)
+            }
+          }
         } else if (doc.levels.length === 1) log('A building keeps at least one level')
         else {
           doc.setLevels(doc.levels.filter((l) => l !== chosen))
@@ -407,13 +423,13 @@ const stair: Command = {
     const { doc, input, log } = ctx
     const m = memory.stair
     const height = () => doc.level.height
-    const options = () => [valueOption('Width', m.width), m.risers > 0 ? valueOption('Risers', m.risers) : 'Risers=Auto']
+    const options = () => [valueOption('Width', m.width), m.risers > 0 ? valueOption('Risers', m.risers) : 'Risers=Auto', yesNo('Opening', m.opening)]
     const handle = async (option: string) => {
       if (isOption(option, 'Width')) m.width = await askPositive(ctx, 'Stair width', m.width)
       else if (isOption(option, 'Risers')) {
         const v = await input.getNumber('Number of risers (0 for comfortable steps)', m.risers)
         if (typeof v === 'number' && v >= 0) m.risers = Math.round(v)
-      }
+      } else if (isOption(option, 'Opening')) m.opening = !m.opening
     }
     let start: Vector3 | null = null
     while (!start) {
@@ -447,14 +463,66 @@ const stair: Command = {
     const line: AnyCurve = { type: 'polyline', points, closed: false }
     const plan = stairPlan(line, params())
     const id = await addRecorded(ctx, line, null, { command: 'Stair', params: params() }, stairsLayer(ctx).id, 'make the stair')
+    const cut = m.opening ? await cutStairwells(ctx, [id]) : 0
     doc.select([id])
     const treads = plan.flights.map((f) => f.tread)
     const [lo, hi] = [Math.min(...treads), Math.max(...treads)]
     const flights = plan.flights.length > 1 ? ` in ${plan.flights.length} flights with ${plan.landings.length} landing${plan.landings.length === 1 ? '' : 's'}` : ''
     log(
       `Stair made${flights}: ${plan.risers} risers of ${formatValue(plan.riser)}, treads of ${formatValue(lo)}${hi - lo > 0.5 ? ` to ${formatValue(hi)}` : ''}` +
-        (treads.every((t) => comfortable(plan.riser, t)) ? '' : ' (steeper or shallower than comfortable: 2 risers + 1 tread should be 600 to 650)'),
+        (treads.every((t) => comfortable(plan.riser, t)) ? '' : ' (steeper or shallower than comfortable: 2 risers + 1 tread should be 600 to 650)') +
+        (cut > 0 ? `. Opening cut in the slab above` : ''),
     )
+  },
+}
+
+/** How far a stairwell reaches past the stair all round. */
+const STAIRWELL_MARGIN = 50
+
+/**
+ * Cuts the openings for stairs through the slabs they climb to: each slab whose top is at the top
+ * of a stair and over it gets the stair's footprint as a hole (in place of the one it had for that
+ * stair, if any). Resolves to how many slabs were cut.
+ */
+async function cutStairwells(ctx: CommandContext, stairIds: number[]): Promise<number> {
+  const { doc } = ctx
+  const changes = new Map<number, HistoryRecord>()
+  for (const stairId of stairIds) {
+    const record = doc.objects.get(stairId)?.history
+    const line = record && doc.objects.get(record.inputs[0])?.geometry
+    if (record?.command !== 'Stair' || !line || !isCurve(line)) continue
+    const params = stairParams(record.params)
+    const footprint = stairFootprint(stairPlan(line, params), STAIRWELL_MARGIN)
+    const top = startPoint(line).z + params.height
+    const xs = footprint.flat().map((p) => p[0])
+    const ys = footprint.flat().map((p) => p[1])
+    for (const slab of doc.objects.values()) {
+      const r = changes.get(slab.id) ?? slab.history
+      if (r?.command !== 'Slab') continue
+      const outline = doc.objects.get(r.inputs[0])?.geometry
+      if (!outline || !isCurve(outline) || Math.abs(startPoint(outline).z - top) > 1) continue
+      const pts = tessellate(outline)
+      const over = Math.min(...xs) < Math.max(...pts.map((p) => p.x)) && Math.max(...xs) > Math.min(...pts.map((p) => p.x)) && Math.min(...ys) < Math.max(...pts.map((p) => p.y)) && Math.max(...ys) > Math.min(...pts.map((p) => p.y))
+      const p = slabParams(r.params)
+      const kept = (p.holes ?? []).filter((h) => h.stair !== stairId)
+      if (!over && kept.length === (p.holes ?? []).length) continue
+      const holes: SlabHole[] = [...kept, ...(over ? footprint.map((points) => ({ points, stair: stairId })) : [])]
+      changes.set(slab.id, { ...r, params: { ...r.params, holes } })
+    }
+  }
+  for (const [id, record] of changes) await remake(ctx, id, record)
+  return changes.size
+}
+
+/** StairOpening: cuts (or cuts again) the openings for the stairs picked through the slabs above them. */
+const stairOpening: Command = {
+  name: 'StairOpening',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = (await input.getObjects('Select stairs to cut their openings in the slabs above')).filter((id) => doc.objects.get(id)?.history?.command === 'Stair')
+    if (ids.length === 0) throw new Error('Select stairs (made with the Stair command)')
+    const cut = await cutStairwells(ctx, ids)
+    log(cut > 0 ? `Openings cut in ${cut} slab${cut === 1 ? '' : 's'}` : 'There is no slab at the top of those stairs (a slab whose top is at the floor they reach)')
   },
 }
 
@@ -847,4 +915,4 @@ const skirtingLayer = (ctx: CommandContext) => {
   return layer
 }
 
-export const architectureCommands: Command[] = [wallDimensionsCommand, room, floor, skirting, level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]
+export const architectureCommands: Command[] = [wallDimensionsCommand, room, floor, skirting, level, wall, slab, roof, stair, stairOpening, column, railing, openingCommand('window'), openingCommand('door')]

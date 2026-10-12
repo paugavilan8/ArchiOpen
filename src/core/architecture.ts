@@ -42,8 +42,16 @@ export interface WallParams {
   openings: Opening[]
 }
 
+/** An opening through a slab: its outline in plan, and the stair it was made for, if any. */
+export interface SlabHole {
+  points: [number, number][]
+  stair?: number
+}
+
 export interface SlabParams {
   thickness: number
+  /** Openings through the slab (stairwells). */
+  holes?: SlabHole[]
 }
 
 export interface Level {
@@ -426,7 +434,10 @@ export function wallParams(p: Record<string, unknown> | undefined, fallbackHeigh
   }
 }
 
-export const slabParams = (p: Record<string, unknown> | undefined): SlabParams => ({ thickness: Number(p?.thickness ?? DEFAULT_SLAB.thickness) })
+export const slabParams = (p: Record<string, unknown> | undefined): SlabParams => {
+  const holes = Array.isArray(p?.holes) ? (p.holes as SlabHole[]).filter((h) => Array.isArray(h?.points) && h.points.length >= 3) : []
+  return { thickness: Number(p?.thickness ?? DEFAULT_SLAB.thickness), ...(holes.length > 0 ? { holes } : {}) }
+}
 
 /** The level a height belongs to: the highest one at or below it. */
 export function levelAt(levels: readonly Level[], z: number): Level | null {

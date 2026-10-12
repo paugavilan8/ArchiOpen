@@ -239,7 +239,10 @@ Expand a section for details.
   A straight line gives one flight; each bend of the line is a square landing between flights (an
   L stair has one, a U stair two side by side, drawn as a line going up, across and back). Options:
   `Width` and `Risers` (automatic: steps of about 175, shared among the flights by their length).
-  It says whether the steps are comfortable (two risers and a tread between 600 and 650).
+  It says whether the steps are comfortable (two risers and a tread between 600 and 650). With
+  `Opening` (on by default) it cuts its stairwell through the slab it climbs to: its flights and
+  landings, 50 larger all round. `StairOpening` cuts it again for stairs picked, and editing a
+  level's height makes its stairs again to climb it, with their openings.
 - `Column` places rectangular or round columns, as high as the current level.
 - `Railing` puts railings along a line drawn point by point (slab edges, balconies) or, with the
   `Stair` option, on stairs: up the steps' noses of each flight (`Sides` `Both`, `Left` or
@@ -524,6 +527,7 @@ flowchart LR
 - [x] Door and window and room area schedules (`Schedule`)
 - [x] Several levels in the drawing set, with a plan for each
 - [x] IFC export and import
+- [x] Stairs that follow their level's height, with stairwells cut in the slab above
 - [ ] Signed installers and automatic updates
 
 ## FAQ
