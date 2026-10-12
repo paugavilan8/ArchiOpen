@@ -211,4 +211,37 @@ describe('construction history', () => {
     await history.settled
     expect(doc.objects.get(a.wall)!.history).toBeDefined()
   })
+
+  it('raises walls to a roof resting on them, and follows the roof', async () => {
+    const doc = new Document()
+    const history = new HistoryManager(doc, new Settings(), vi.fn())
+    const room = (z: number) => ({ type: 'polyline' as const, points: [v(0, 0, z), v(8000, 0, z), v(8000, 6000, z), v(0, 6000, z)], closed: true })
+    doc.begin()
+    const path = doc.add(room(0)).id
+    const wall = doc.add(room(0)).id
+    await history.remake(wall, { command: 'Wall', inputs: [path], params: { thickness: 200, height: 3000 } })
+    doc.commit()
+    await history.settled
+    const top = (id: number) => shapeBounds(shapeOf(doc.objects.get(id)!.geometry as BrepGeometry)).max.z
+    expect(top(wall)).toBeCloseTo(3000, 6)
+    // A gable roof over it, resting at its top: the gable walls go up to the ridge.
+    doc.begin()
+    const outline = doc.add(room(3000)).id
+    const roof = doc.add(room(0)).id
+    await history.remake(roof, { command: 'Roof', inputs: [outline], params: { type: 'gable', pitch: 30, overhang: 500, thickness: 250 } })
+    doc.commit()
+    await history.settled
+    const tan = (deg: number) => Math.tan((deg * Math.PI) / 180)
+    expect(doc.objects.get(wall)!.history!.params!.roofs).toHaveLength(1)
+    expect(top(wall)).toBeCloseTo(3000 + 3000 * tan(30), 3)
+    // Steeper roof: the walls follow.
+    await history.remakeStep(roof, { ...doc.objects.get(roof)!.history!, params: { ...doc.objects.get(roof)!.history!.params, pitch: 40 } })
+    await history.settled
+    expect(top(wall)).toBeCloseTo(3000 + 3000 * tan(40), 3)
+    // Roof deleted: back to their own height.
+    doc.remove(roof)
+    await history.settled
+    expect(top(wall)).toBeCloseTo(3000, 6)
+    expect(doc.objects.get(wall)!.history!.params!.roofs).toBeUndefined()
+  })
 })
