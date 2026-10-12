@@ -23,6 +23,9 @@ export const ARCHI: FileType = { name: 'ArchiOpen model', extension: 'archi', mi
 export const RHINO: FileType = { name: 'Rhino 3D model', extension: '3dm', mime: 'application/octet-stream' }
 export const PDF: FileType = { name: 'PDF drawing', extension: 'pdf', mime: 'application/pdf' }
 export const DXF: FileType = { name: 'DXF drawing', extension: 'dxf', mime: 'application/dxf' }
+export const DWG: FileType = { name: 'DWG drawing', extension: 'dwg', mime: 'application/acad' }
+/** Where to get the free ODA File Converter, which opens DWG files. */
+export const ODA_CONVERTER_URL = 'https://www.opendesign.com/guestfiles/oda_file_converter'
 export const STEP: FileType = { name: 'STEP model', extension: 'step', extensions: ['step', 'stp'], mime: 'model/step' }
 export const STL: FileType = { name: 'STL mesh', extension: 'stl', mime: 'model/stl' }
 export const PNG: FileType = { name: 'PNG image', extension: 'png', mime: 'image/png' }
@@ -107,6 +110,21 @@ function fromBase64(text: string): Uint8Array {
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
   return bytes
+}
+
+/**
+ * A DWG drawing as DXF, converted by the ODA File Converter (free, installed apart; the desktop app
+ * finds it and runs it). DWG is a closed format: this keeps ArchiOpen free of its licences.
+ */
+async function dwgToDxf(bytes: Uint8Array): Promise<Uint8Array> {
+  if (!isDesktop) throw new Error('DWG files open in the desktop app (through the free ODA File Converter). In the browser, save the drawing as DXF first')
+  const { invoke } = await import('@tauri-apps/api/core')
+  try {
+    return fromBase64(await invoke<string>('dwg_to_dxf', { base64: toBase64(bytes) }))
+  } catch (error) {
+    if (String(error).includes('ODA_NOT_FOUND')) throw new Error(`To open DWG files, install the free ODA File Converter (${ODA_CONVERTER_URL}), then open the drawing again`)
+    throw new Error(String(error))
+  }
 }
 
 const extensionsOf = (t: FileType) => t.extensions ?? [t.extension]
@@ -251,7 +269,7 @@ export class FileManager {
    */
   async open(): Promise<string | null> {
     if (!(await this.confirmDiscard())) return null
-    const file = await pickFile([ARCHI, RHINO, IFC, DXF, STL, OBJ])
+    const file = await pickFile([ARCHI, RHINO, IFC, DXF, DWG, STL, OBJ])
     if (!file) return null
     return this.openFile(file.fileName, await file.read(), file.location)
   }
@@ -260,8 +278,10 @@ export class FileManager {
    * Opens a file's contents in place of the current document (without asking about unsaved
    * changes). `location` is where Save writes, for an .archi file. Resolves to a message.
    */
-  async openFile(fileName: string, bytes: Uint8Array, location: Location | null = null): Promise<string> {
+  async openFile(fileName: string, given: Uint8Array, location: Location | null = null): Promise<string> {
     const file = { fileName, location }
+    const dwg = extensionOf(fileName) === DWG.extension
+    const bytes = dwg ? await dwgToDxf(given) : given
     if (isMeshFile(file.fileName)) {
       // STL and OBJ have no units; millimeters are the usual ones for 3D printing.
       const result = readMeshFile(file.fileName, bytes, 'Millimeters')
@@ -279,7 +299,7 @@ export class FileManager {
       this.setLocation(baseName(file.fileName), null)
       return `Opened ${file.fileName}: ${ifcSummary(result, native)}. Save stores it as an .archi file; use ExportIFC to write an IFC`
     }
-    if (extensionOf(file.fileName) === DXF.extension) {
+    if (dwg || extensionOf(file.fileName) === DXF.extension) {
       // DXF files without units are taken as millimeters.
       const result = readDxf(bytes, 'Millimeters')
       applyRhinoImport(this.doc, result)
@@ -327,11 +347,12 @@ export class FileManager {
     return true
   }
 
-  /** Adds the contents of a .3dm, .dxf, .stl or .obj file to the document. Resolves to the new object ids, or null. */
+  /** Adds the contents of a .3dm, .ifc, .dxf, .dwg, .stl or .obj file to the document. Resolves to the new object ids, or null. */
   async importModel(): Promise<{ ids: number[]; message: string } | null> {
-    const file = await pickFile([RHINO, IFC, DXF, STL, OBJ])
+    const file = await pickFile([RHINO, IFC, DXF, DWG, STL, OBJ])
     if (!file) return null
-    const bytes = await file.read()
+    const dwg = extensionOf(file.fileName) === DWG.extension
+    const bytes = dwg ? await dwgToDxf(await file.read()) : await file.read()
     if (extensionOf(file.fileName) === IFC.extension) {
       const result = readIfc(await loadIfc(), bytes)
       const { ids, scaledFrom } = mergeRhinoImport(this.doc, result)
@@ -344,7 +365,7 @@ export class FileManager {
     // Files without units (DXF without $INSUNITS, STL, OBJ) are taken to be in the model's units.
     const result = isMeshFile(file.fileName)
       ? readMeshFile(file.fileName, bytes, this.doc.units)
-      : extensionOf(file.fileName) === DXF.extension
+      : dwg || extensionOf(file.fileName) === DXF.extension
         ? readDxf(bytes, this.doc.units)
         : await this.readRhino(bytes)
     const { ids, scaledFrom } = mergeRhinoImport(this.doc, result)

@@ -21,7 +21,7 @@ const open: Command = {
   repeat: false,
   async run(ctx) {
     const { files, display, log, doc } = ctx
-    log('Choose a model: .archi, .3dm, .ifc, .dxf, .stl or .obj')
+    log('Choose a model: .archi, .3dm, .ifc, .dxf, .dwg, .stl or .obj')
     const message = await files.open()
     if (!message) return
     // Walls made from an IFC file get the frames and glass of their doors and windows.

@@ -471,7 +471,12 @@ Expand a section for details.
   and units; `ImportSTEP` reads them into the current layer, converted to the model's units.
 - **DXF** (ASCII, R12 to 2018): layers with color, linetype and lineweight; lines, polylines with
   arcs, circles, arcs, ellipses, splines, 3D faces, text, dimensions (kept associative), leaders,
-  hatches and blocks (kept as blocks). Binary DXF and DWG are not supported.
+  hatches and blocks (kept as blocks). Binary DXF is not supported.
+- **DWG** (desktop app): `Open` and `Import` read DWG drawings through the free
+  [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter), installed apart:
+  ArchiOpen finds it, turns the drawing into DXF in the background and reads that. DWG is a closed
+  format; this keeps ArchiOpen free of its licences. If the converter is installed somewhere else,
+  set `ARCHIOPEN_ODA_CONVERTER` to its path.
 - **STL** and **OBJ** import and export.
 - **glTF** (`.glb`) export with `ExportGLTF`: surfaces, solids, meshes and blocks with their render
   materials, in meters with Y up, for web viewers, Blender, Unreal, Unity, Twinmotion and AR.
@@ -592,6 +597,7 @@ flowchart LR
 | Rhino `.3dm` | Yes | Yes | Exact surfaces and solids both ways, blocks as blocks, text on import; SubD and dimensions not read yet |
 | STEP `.step` `.stp` | Yes | Yes | AP242, exact B-rep, with layers, colors and units |
 | DXF | Yes | Yes | ASCII R12–2018: layers, blocks, dimensions, text, hatches |
+| DWG | Yes | — | Desktop app, through the free ODA File Converter |
 | STL / OBJ | Yes | Yes | Meshes; surfaces are exported triangulated |
 | glTF `.glb` | — | Yes | Triangles with render materials, in meters |
 | PDF | — | Yes | Vector output with lineweights and linetypes; multi-page layouts |

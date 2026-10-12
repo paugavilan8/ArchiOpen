@@ -90,7 +90,8 @@ Asigna materiales a capas u objetos en el panel Materials, coloca el sol con `Su
 ## 9. Archivos
 
 - `Save` guarda el archivo propio `.archi`. `Autosave` guarda copias en una carpeta.
-- `Open` e `Import` leen `.3dm` (Rhino), `.ifc`, `.dxf`, `.step`, `.stl` y `.obj`.
+- `Open` e `Import` leen `.3dm` (Rhino), `.ifc`, `.dxf`, `.step`, `.stl` y `.obj`; también `.dwg` en la
+  aplicación de escritorio, con el ODA File Converter (gratuito) instalado.
 - `Export` escribe `.3dm` con superficies exactas; además `ExportIFC`, `ExportSTEP`, `ExportGLTF`,
   `ExportSTL`, `ExportOBJ`.
 
