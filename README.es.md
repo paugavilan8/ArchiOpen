@@ -223,6 +223,11 @@ Despliega cada apartado para ver los detalles.
 <summary><b>Elementos constructivos</b></summary>
 <br>
 
+- `WallType` (o la opción `Type` de `Wall`) da a los muros una composición por capas, de su cara
+  izquierda (mirando a lo largo de su línea) a la derecha: fachada de ladrillo con cámara (ladrillo
+  cara vista, aislamiento, ladrillo hueco, yeso), hormigón con aislamiento, tabique o entramado de
+  madera. El muro se divide en un sólido por capa, así que las plantas y secciones dibujan las líneas
+  entre ellas, y las mediciones cuentan cada capa por su material.
 - `Wall` dibuja muros punto a punto (`Close` para cerrar un recinto) o a lo largo de curvas ya
   dibujadas (`Curve`), con `Thickness` (espesor) y `Justification` (`Center`, `Left` o `Right`
   respecto a la línea). Las esquinas se ingletean y las líneas curvas dan muros curvos. Los muros
@@ -554,6 +559,7 @@ flowchart LR
 - [x] Escaleras que siguen la altura de su nivel, con su hueco en el forjado de encima
 - [x] Mediciones por elemento, nivel y material, exportables a CSV
 - [x] Terreno a partir de curvas de nivel y puntos topográficos
+- [x] Muros multicapa
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

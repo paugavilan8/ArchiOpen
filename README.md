@@ -220,6 +220,11 @@ Expand a section for details.
 <summary><b>Building elements</b></summary>
 <br>
 
+- `WallType` (or the `Type` option of `Wall`) gives walls a build-up of layers, from their left face
+  (looking along their line) to their right one: brick cavity (facing brick, insulation, hollow
+  brick, plaster), insulated concrete, partition or timber frame. The wall is split into one solid
+  per layer, so plans and sections draw the lines between them, and the quantities measure each
+  layer by its material.
 - `Wall` draws walls point by point (`Close` for a room) or along curves already drawn (`Curve`),
   with `Thickness` and `Justification` (`Center`, `Left` or `Right` of the line). Corners are
   mitred and curved lines give curved walls. Walls take the height of the current level.
@@ -539,6 +544,7 @@ flowchart LR
 - [x] Stairs that follow their level's height, with stairwells cut in the slab above
 - [x] Quantities by element, level and material, with CSV export
 - [x] Terrain from contour lines and survey points
+- [x] Walls with layers (build-ups)
 - [ ] Signed installers and automatic updates
 
 ## FAQ

@@ -68,7 +68,10 @@ export function quantityItems(ctx: CommandContext): QuantityItem[] {
         const path = curve(record.inputs[0])
         const p = wallParams(record.params)
         const run = path ? length(path) : 0
-        add('Wall', run * m, Math.max(0, run * p.height - p.openings.reduce((s, o) => s + o.width * o.height, 0)) * m2)
+        const face = Math.max(0, run * p.height - p.openings.reduce((s, o) => s + o.width * o.height, 0)) * m2
+        add('Wall', run * m, face)
+        // Its layers, each over the wall's face.
+        for (const layer of p.layers ?? []) items.push({ element: 'Wall layer', level, material: layer.material ? `${layer.name} (${layer.material})` : layer.name, length: 0, area: face, volume: face * layer.thickness * m })
         break
       }
       case 'Slab': {
