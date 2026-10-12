@@ -38,26 +38,67 @@ describe('roof plans', () => {
 })
 
 describe('stairs', () => {
-  it('picks comfortable risers and equal treads along the run', () => {
-    const plan = stairPlan({ type: 'polyline', points: [v(0, 0), v(4500, 0)], closed: false }, stairParams({ width: 1000 }, 3000))
+  const line = (...points: Vector3[]): AnyCurve => ({ type: 'polyline', points, closed: false })
+
+  it('picks comfortable risers and equal treads along a straight run', () => {
+    const plan = stairPlan(line(v(0, 0), v(4500, 0)), stairParams({ width: 1000 }, 3000))
+    expect(plan.flights).toHaveLength(1)
+    expect(plan.landings).toHaveLength(0)
+    const [f] = plan.flights
     expect(plan.risers).toBe(17)
-    expect(plan.riser * plan.risers).toBeCloseTo(3000, 9)
-    expect(plan.tread * plan.risers).toBeCloseTo(4500, 9)
-    expect(comfortable(plan.riser, plan.tread)).toBe(true)
+    expect(f.riser * f.risers).toBeCloseTo(3000, 9)
+    expect(f.tread * f.risers).toBeCloseTo(4500, 9)
+    expect(comfortable(f.riser, f.tread)).toBe(true)
     // Centred on the line, across its width.
-    const ys = plan.profile.points.map((p) => p.y)
+    const ys = f.profile.points.map((p) => p.y)
     expect(Math.min(...ys)).toBeCloseTo(-500, 9)
-    expect(plan.across.length()).toBeCloseTo(1000, 9)
-    const zs = plan.profile.points.map((p) => p.z)
+    expect(f.across.length()).toBeCloseTo(1000, 9)
+    const zs = f.profile.points.map((p) => p.z)
     expect(Math.max(...zs)).toBeCloseTo(3000, 9)
     expect(Math.min(...zs)).toBeCloseTo(0, 9)
   })
 
   it('takes a given number of risers', () => {
-    const plan = stairPlan({ type: 'polyline', points: [v(0, 0, 3000), v(0, 3000, 3000)], closed: false }, stairParams({ risers: 12, height: 2400 }))
+    const plan = stairPlan(line(v(0, 0, 3000), v(0, 3000, 3000)), stairParams({ risers: 12, height: 2400 }))
     expect(plan.risers).toBe(12)
     expect(plan.riser).toBeCloseTo(200, 9)
-    expect(Math.min(...plan.profile.points.map((p) => p.z))).toBeCloseTo(3000, 9)
+    expect(Math.min(...plan.flights[0].profile.points.map((p) => p.z))).toBeCloseTo(3000, 9)
+  })
+
+  it('turns an L stair round a square landing, sharing the risers by length', () => {
+    // 3000 up y, turning to run 2000 along x; 1000 wide.
+    const plan = stairPlan(line(v(0, 0), v(0, 3500), v(2500, 3500)), stairParams({ width: 1000, risers: 16 }, 2800))
+    expect(plan.flights).toHaveLength(2)
+    expect(plan.landings).toHaveLength(1)
+    const [a, b] = plan.flights
+    expect(a.risers + b.risers).toBe(16)
+    // Runs of 3000 and 2000 (half the width taken off at the landing).
+    expect(a.tread * a.risers).toBeCloseTo(3000, 9)
+    expect(b.tread * b.risers).toBeCloseTo(2000, 9)
+    expect(a.risers).toBe(10)
+    // The landing: centred on the bend, at the top of the first flight.
+    const l = plan.landings[0]
+    const centre = l.origin.clone().addScaledVector(l.u, 0.5).addScaledVector(l.v, 0.5)
+    expect(centre.x).toBeCloseTo(0, 9)
+    expect(centre.y).toBeCloseTo(3500, 9)
+    expect(l.origin.z + l.w.z).toBeCloseTo(10 * plan.riser, 9)
+    // The second flight starts there (its slab meeting the landing's, 150 thick) and ends at the
+    // full height.
+    expect(Math.min(...b.profile.points.map((p) => p.z))).toBeCloseTo(10 * plan.riser - 150, 9)
+    expect(b.profile.points[0].z).toBeCloseTo(10 * plan.riser, 9)
+    expect(Math.max(...b.profile.points.map((p) => p.z))).toBeCloseTo(2800, 9)
+  })
+
+  it('makes a U stair with two landings side by side and no flight between them', () => {
+    const plan = stairPlan(line(v(0, 0), v(0, 3000), v(1000, 3000), v(1000, 0)), stairParams({ width: 1000 }, 3000))
+    expect(plan.flights).toHaveLength(2)
+    expect(plan.landings).toHaveLength(2)
+    expect(plan.landings[0].origin.z).toBeCloseTo(plan.landings[1].origin.z, 9)
+    expect(plan.flights[0].risers + plan.flights[1].risers).toBe(plan.risers)
+  })
+
+  it('refuses stairs too short for their landings', () => {
+    expect(() => stairPlan(line(v(0, 0), v(0, 400), v(400, 400)), stairParams({ width: 1000 }, 3000))).toThrow()
   })
 })
 

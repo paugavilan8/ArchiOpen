@@ -18,7 +18,7 @@ import { nextOpeningId } from '../app/openingParts'
 import { AnyCurve, isClosed, isCurve, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
-import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairPlan, type RoofType } from '../core/buildingParts'
+import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairOutlines, stairPlan, type RoofType } from '../core/buildingParts'
 import { layerNamed } from './drawing'
 import { kernel, readable } from './solids'
 import type { Command, CommandContext } from './runner'
@@ -387,23 +387,38 @@ const stair: Command = {
       else if (r.kind === 'option') await handle(r.option)
       else return
     }
+    const params = () => ({ width: m.width, height: height(), risers: m.risers, waist: DEFAULT_STAIR.waist })
+    const points = [start]
     const preview = (p: Vector3) => {
       try {
-        return [tessellate(stairPlan({ type: 'polyline', points: [start!, p], closed: false }, { ...m, height: height(), waist: DEFAULT_STAIR.waist }).profile)]
+        return stairOutlines(stairPlan({ type: 'polyline', points: [...points, p], closed: false }, params()))
       } catch {
-        return []
+        return [[...points, p]]
       }
     }
-    const r = await input.getPoint({ prompt: 'End of stair run (top step)', base: start, preview })
-    if (r.kind !== 'point') return
-    const line: AnyCurve = { type: 'polyline', points: [start, r.point], closed: false }
-    const params = { width: m.width, height: height(), risers: m.risers, waist: DEFAULT_STAIR.waist }
-    const plan = stairPlan(line, params)
-    const id = await addRecorded(ctx, line, null, { command: 'Stair', params }, stairsLayer(ctx).id, 'make the stair')
+    // Each further point bends the stair round a landing; Enter ends it.
+    for (;;) {
+      const r = await input.getPoint({
+        prompt: points.length === 1 ? 'End of stair run (top step), or where it turns' : 'Next point (the stair turns round a landing). Press Enter when done',
+        base: points[points.length - 1],
+        options: points.length >= 2 ? ['Undo'] : [],
+        preview,
+      })
+      if (r.kind === 'point') points.push(r.point)
+      else if (r.kind === 'option' && r.option === 'Undo') points.pop()
+      else break
+    }
+    if (points.length < 2) return
+    const line: AnyCurve = { type: 'polyline', points, closed: false }
+    const plan = stairPlan(line, params())
+    const id = await addRecorded(ctx, line, null, { command: 'Stair', params: params() }, stairsLayer(ctx).id, 'make the stair')
     doc.select([id])
+    const treads = plan.flights.map((f) => f.tread)
+    const [lo, hi] = [Math.min(...treads), Math.max(...treads)]
+    const flights = plan.flights.length > 1 ? ` in ${plan.flights.length} flights with ${plan.landings.length} landing${plan.landings.length === 1 ? '' : 's'}` : ''
     log(
-      `Stair made: ${plan.risers} risers of ${formatValue(plan.riser)}, treads of ${formatValue(plan.tread)}` +
-        (comfortable(plan.riser, plan.tread) ? '' : ' (steeper or shallower than comfortable: 2 risers + 1 tread should be 600 to 650)'),
+      `Stair made${flights}: ${plan.risers} risers of ${formatValue(plan.riser)}, treads of ${formatValue(lo)}${hi - lo > 0.5 ? ` to ${formatValue(hi)}` : ''}` +
+        (treads.every((t) => comfortable(plan.riser, t)) ? '' : ' (steeper or shallower than comfortable: 2 risers + 1 tread should be 600 to 650)'),
     )
   },
 }

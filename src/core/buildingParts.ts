@@ -156,33 +156,41 @@ export function stairParams(p: Record<string, unknown> | undefined, fallbackHeig
   }
 }
 
-export interface StairPlan {
-  /** The stair's side profile (steps and the slab under them), a closed polyline standing on the line. */
+/** One straight flight of a stair: its side profile, swept across its width. */
+export interface Flight {
   profile: PolylineGeometry
-  /** The profile is swept along this to make the stair (its width). */
   across: Vector3
   risers: number
   riser: number
   tread: number
 }
 
+/** A landing: a box (corner and edges). */
+export interface Landing {
+  origin: Vector3
+  u: Vector3
+  v: Vector3
+  w: Vector3
+}
+
+export interface StairPlan {
+  flights: Flight[]
+  landings: Landing[]
+  risers: number
+  riser: number
+}
+
 /**
- * A straight stair along a line (its run, from the bottom step to the top), centred on the line:
- * as many risers as asked (or as make steps about 175 high), equal treads along the run, and a
- * sloping slab under the steps.
+ * A flight from `start` to `end` (its run), rising `n` risers of `riser` from `base` above the
+ * start: equal treads along the run and a sloping slab under the steps, centred on the line.
  */
-export function stairPlan(line: AnyCurve, params: StairParams): StairPlan {
-  if (line.type !== 'polyline' || line.points.length !== 2) throw new Error('A stair runs along a straight line')
-  const [start, end] = line.points
+function flight(start: Vector3, end: Vector3, base: number, n: number, riser: number, width: number, waist: number, fromLanding = false): Flight {
   const run = flat(end).sub(flat(start))
   const length = run.length()
-  if (length < 1e-9) throw new Error('The stair line has no length')
-  if (!(params.height > 0) || !(params.width > 0) || !(params.waist > 0)) throw new Error('The stair needs a height, a width and a waist')
   const dir = run.clone().normalize()
-  const n = params.risers > 0 ? params.risers : Math.max(2, Math.round(params.height / COMFORTABLE_RISER))
-  const riser = params.height / n
+  const height = n * riser
   const tread = length / n
-  const at = (s: number, z: number) => start.clone().addScaledVector(dir, s).addScaledVector(UP, z)
+  const at = (s: number, z: number) => start.clone().addScaledVector(dir, s).addScaledVector(UP, base + z)
   // The steps, from the bottom: up a riser, along a tread, and so on to the top.
   const points: Vector3[] = [at(0, 0)]
   for (let i = 0; i < n; i++) {
@@ -190,20 +198,98 @@ export function stairPlan(line: AnyCurve, params: StairParams): StairPlan {
     points.push(at((i + 1) * tread, (i + 1) * riser))
   }
   // The slab under them, parallel to the line of the steps' inner corners, `waist` below it.
-  const slope = params.height / length
-  const below = params.waist * Math.sqrt(1 + slope * slope)
-  points.push(at(length, params.height - below))
-  points.push(at(Math.min(below / slope, length), 0))
+  const slope = height / length
+  const below = waist * Math.sqrt(1 + slope * slope)
+  points.push(at(length, height - below))
+  if (fromLanding) {
+    // Off a landing, the slab under the steps meets the landing's own slab (its thickness `waist`).
+    points.push(at(Math.min((below - waist) / slope, length), -waist))
+    points.push(at(0, -waist))
+  } else points.push(at(Math.min(below / slope, length), 0))
   const clean = points.filter((p, i) => i === 0 || p.distanceTo(points[i - 1]) > 1e-9)
   const left = UP.clone().cross(dir).normalize()
-  const shift = left.clone().multiplyScalar(-params.width / 2)
-  return {
-    profile: { type: 'polyline', points: clean.map((p) => p.add(shift)), closed: true },
-    across: left.multiplyScalar(params.width),
-    risers: n,
-    riser,
-    tread,
+  const shift = left.clone().multiplyScalar(-width / 2)
+  return { profile: { type: 'polyline', points: clean.map((p) => p.add(shift)), closed: true }, across: left.multiplyScalar(width), risers: n, riser, tread }
+}
+
+/** Shares `total` risers among flights by their runs (largest remainders), at least one each. */
+function shareRisers(runs: number[], total: number): number[] {
+  const sum = runs.reduce((a, b) => a + b, 0)
+  const exact = runs.map((r) => (r / sum) * total)
+  const counts = exact.map((e) => Math.max(1, Math.floor(e)))
+  let left = total - counts.reduce((a, b) => a + b, 0)
+  const order = exact.map((e, i) => [e - Math.floor(e), i]).sort((a, b) => b[0] - a[0])
+  for (let k = 0; left > 0; k = (k + 1) % order.length, left--) counts[order[k][1]]++
+  for (let k = counts.length - 1; left < 0 && k >= 0; k--) {
+    while (left < 0 && counts[k] > 1) {
+      counts[k]--
+      left++
+    }
   }
+  return counts
+}
+
+/**
+ * A stair along a line from its bottom step to its top one, centred on it. A straight line makes
+ * one flight; each bend of the line is a square landing as wide as the stair, between flights
+ * (an L stair has one, a U stair two side by side, drawn as a line going up, across and back).
+ * The risers (as many as asked, or as make steps about 175 high) are shared among the flights by
+ * their length; each landing is at the height of the flight below it.
+ */
+export function stairPlan(line: AnyCurve, params: StairParams): StairPlan {
+  if (line.type !== 'polyline' || line.closed || line.points.length < 2) throw new Error('A stair runs along a line of straight segments')
+  if (!(params.height > 0) || !(params.width > 0) || !(params.waist > 0)) throw new Error('The stair needs a height, a width and a waist')
+  const pts = line.points.filter((p, i, all) => i === 0 || flat(p).distanceTo(flat(all[i - 1])) > 1e-9)
+  if (pts.length < 2) throw new Error('The stair line has no length')
+  const half = params.width / 2
+  // Each segment's flight runs between the landings at its ends (half a width in from a bend).
+  const runs = pts.slice(1).map((b, i) => {
+    const a = pts[i]
+    const dir = flat(b).sub(flat(a)).normalize()
+    const from = i > 0 ? half : 0
+    const to = i < pts.length - 2 ? half : 0
+    const length = flat(b).distanceTo(flat(a)) - from - to
+    return { start: a.clone().addScaledVector(dir, from), end: b.clone().addScaledVector(dir, -to), length: Math.max(0, length), dir }
+  })
+  const climbing = runs.filter((r) => r.length > 1e-6)
+  if (climbing.length === 0) throw new Error('The stair is too short for its width')
+  const total = params.risers > 0 ? params.risers : Math.max(2 * climbing.length, Math.round(params.height / COMFORTABLE_RISER))
+  if (total < climbing.length) throw new Error('A stair needs at least one riser per flight')
+  const riser = params.height / total
+  const shares = shareRisers(climbing.map((r) => r.length), total)
+  const flights: Flight[] = []
+  const landings: Landing[] = []
+  let climbed = 0
+  let k = 0
+  runs.forEach((r, i) => {
+    if (r.length > 1e-6) {
+      flights.push(flight(r.start, r.end, climbed * riser, shares[k], riser, params.width, params.waist, k > 0 && climbed * riser >= params.waist))
+      climbed += shares[k++]
+    }
+    // The landing at the bend after this segment, square to it, at the height reached.
+    if (i < runs.length - 1) {
+      const c = pts[i + 1]
+      const left = UP.clone().cross(r.dir).normalize()
+      const top = climbed * riser
+      const thick = Math.min(params.waist, top)
+      landings.push({
+        origin: c.clone().addScaledVector(r.dir, -half).addScaledVector(left, -half).addScaledVector(UP, top - thick),
+        u: r.dir.clone().multiplyScalar(params.width),
+        v: left.multiplyScalar(params.width),
+        w: UP.clone().multiplyScalar(thick),
+      })
+    }
+  })
+  return { flights, landings, risers: total, riser }
+}
+
+/** The plan outlines of a stair (its flights' profiles and its landings' tops), for previews. */
+export function stairOutlines(plan: StairPlan): Vector3[][] {
+  const landing = (l: Landing) => {
+    const top = l.origin.clone().add(l.w)
+    return [top, top.clone().add(l.u), top.clone().add(l.u).add(l.v), top.clone().add(l.v), top.clone()]
+  }
+  return [...plan.flights.map((f) => [...f.profile.points, f.profile.points[0]]), ...plan.landings.map(landing)]
 }
 
 /** Is a step comfortable? (Two risers and a tread between 600 and 650, the usual rule.) */
