@@ -5,6 +5,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Autosave to a folder** (`Autosave`, desktop app): copies of the model every few minutes while
+  it has unsaved changes, the newest of each kept, and `Recover` to open one.
 - **Drawing set** (`DrawingSet`): a plan of each level, the elevations and the sections laid out on
   A3 sheets in one go, each with its title block and the largest standard scale that fits. Each
   plan is cut above its level's floor and leaves out the levels under it.
