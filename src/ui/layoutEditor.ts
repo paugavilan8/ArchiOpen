@@ -267,7 +267,7 @@ export class LayoutEditor {
       const content = svg('g', { 'clip-path': `url(#${clipId})` })
       const hidden = usesHiddenLines(detail) ? cachedHiddenLines(this.doc, detail) : null
       if (usesHiddenLines(detail) && !hidden) this.computeLater(detail)
-      const drawing = wireframeDrawing(this.doc, detail, hidden ? (geo) => geo.type === 'annotation' || geo.type === 'hatch' : undefined)
+      const drawing = wireframeDrawing(this.doc, detail, hidden !== null)
       if (hidden) {
         if (hidden.fills.length) content.append(svg('path', { d: fillData(hidden.fills, height), fill: SECTION_FILL, 'fill-rule': 'evenodd' }))
         content.append(svg('path', { class: 'detail-lines', d: pathData(hidden.lines, height), stroke: '#000', 'stroke-width': 0.25 }))

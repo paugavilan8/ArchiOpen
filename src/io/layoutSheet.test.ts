@@ -181,4 +181,46 @@ describe('layout sheets', () => {
     doc.setState(plane, { hidden: 'user' })
     expect(extent(wireframeDrawing(doc, { ...cut, hidden: false }).layers.get(1)!.lines).maxY - wire.minY).toBeCloseTo(3000 * k, 6)
   })
+
+  it('draws the plan of an upper level with its own planes: cut above its floor, without the level under it', async () => {
+    const doc = new Document()
+    // Level 0 (0 to 3 m) is 4 × 1 m; level 1 (3 to 6 m) is 2 × 3 m.
+    doc.add(toBrep(box(v(0, 0), v(4000, 0), v(0, 1000), v(0, 0, 3000))))
+    doc.add(toBrep(box(v(0, 0, 3000), v(2000, 0), v(0, 3000), v(0, 0, 3000))))
+    const cut = (z: number, keepBelow: boolean) =>
+      doc.add({ type: 'clipping', center: v(2000, 1500, z), xaxis: v(1, 0), yaxis: v(0, keepBelow ? -1 : 1), width: 6000, height: 6000, views: [] }).id
+    const ground = cut(1200, true)
+    const upper = [cut(4200, true), cut(3001, false)]
+    // A section mark at ground level, drafting shown on every plan.
+    const marks = doc.addLayer()
+    doc.updateLayer(marks.id, { name: 'Section Marks' })
+    doc.add({ type: 'polyline', points: [v(-1000, 500), v(5000, 500)], closed: false }, marks.id)
+    const layout = newLayout(doc, 1, 'Plans')
+    const detail = fitDetail(doc, { ...layout.details[0], view: view('Top'), hidden: true, clipping: true })
+    const k = 1 / detail.scale
+    const area = (loop: [number, number][]) => Math.abs(loop.reduce((sum, p, i) => sum + p[0] * loop[(i + 1) % loop.length][1] - loop[(i + 1) % loop.length][0] * p[1], 0)) / 2
+    const length = (ls: [number, number][][]) => ls.reduce((sum, l) => sum + l.slice(1).reduce((s2, p, i) => s2 + Math.hypot(p[0] - l[i][0], p[1] - l[i][1]), 0), 0)
+
+    const first = await hiddenLineDrawing(doc, { ...detail, clipPlanes: upper })
+    // Only the upper level is cut and filled; the plane under its floor draws no cut lines.
+    expect(first.fills).toHaveLength(1)
+    expect(area(first.fills[0][0])).toBeCloseTo(2000 * 3000 * k * k, 3)
+    expect(length(first.section)).toBeCloseTo(10000 * k, 3)
+    // The level under it is left out: nothing reaches to x = 4 m.
+    expect(extent([...first.lines, ...first.section]).maxX - extent([...first.lines, ...first.section]).minX).toBeCloseTo(2000 * k, 3)
+
+    const ground0 = await hiddenLineDrawing(doc, { ...detail, clipPlanes: [ground] })
+    expect(ground0.fills).toHaveLength(1)
+    expect(area(ground0.fills[0][0])).toBeCloseTo(4000 * 1000 * k * k, 3)
+
+    // The section mark is drawn whole on the upper plan, in wireframe as over hidden lines.
+    for (const drafting of [false, true]) {
+      const wire = wireframeDrawing(doc, { ...detail, hidden: false, clipPlanes: upper }, drafting)
+      expect(extent(wire.layers.get(marks.id)!.lines).maxX - extent(wire.layers.get(marks.id)!.lines).minX).toBeCloseTo(6000 * k, 6)
+    }
+    // Its planes cut the detail even when hidden; planes that are gone are left out.
+    for (const id of [...upper, ground]) doc.setState(id, { hidden: 'user' })
+    expect((await hiddenLineDrawing(doc, { ...detail, clipPlanes: upper })).fills).toHaveLength(1)
+    expect((await hiddenLineDrawing(doc, { ...detail, clipPlanes: [999] })).fills).toHaveLength(0)
+  })
 })

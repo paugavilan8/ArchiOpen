@@ -1,7 +1,7 @@
 import { Box3, Vector3 } from 'three'
 import { annotationLines } from './annotation'
 import { flatten } from './blocks'
-import { clipPolyline, drawingClipPlanes } from './clipPlanes'
+import { clipPlaneOf, clipPolyline, drawingClipPlanes, type ClipPlane } from './clipPlanes'
 import type { CadObject, Document } from './document'
 import { AnnotationGeometry, Geometry, tessellate, wireframe } from './geometry'
 import { millimetersPer } from './units'
@@ -41,6 +41,11 @@ export interface Detail {
   title: string
   /** Cut by the model's clipping planes (every visible one), for plans and sections. */
   clipping?: boolean
+  /**
+   * With `clipping`, only these clipping planes (by object id, shown or not) cut the detail, as for
+   * the plan of one level among several.
+   */
+  clipPlanes?: number[]
 }
 
 export interface TitleBlock {
@@ -135,27 +140,51 @@ export function detailObjects(doc: Document): { layerId: number; geometry: Geome
   return out
 }
 
+/** The clipping planes that cut a detail. */
+export function detailClipPlanes(doc: Document, detail: Detail): ClipPlane[] {
+  if (!detail.clipping) return []
+  if (!detail.clipPlanes) return drawingClipPlanes(doc)
+  return detail.clipPlanes.flatMap((id) => {
+    const g = doc.objects.get(id)?.geometry
+    return g?.type === 'clipping' ? [clipPlaneOf(g)] : []
+  })
+}
+
 export interface DetailDrawing {
   /** Polylines and filled regions on the sheet, by layer. */
   layers: Map<number, { lines: Point[][]; fills: Point[][][] }>
 }
 
-/** The model as a detail shows it in wireframe: every object's lines, and solid hatches filled. */
-export function wireframeDrawing(doc: Document, detail: Detail, only?: (g: Geometry) => boolean): DetailDrawing {
+/** Layers of drafting drawn in plan whatever the level: section marks show on every plan. */
+const DRAFTING_LAYERS = new Set(['Section Marks'])
+
+/**
+ * Drafting on the sheet rather than the model: texts, dimensions, hatches and section marks. Clipping
+ * planes leave them whole, and hidden line drawings draw them on top as they are.
+ */
+export function isDrafting(doc: Document, layerId: number, g: Geometry): boolean {
+  return g.type === 'annotation' || g.type === 'hatch' || DRAFTING_LAYERS.has(doc.layers.find((l) => l.id === layerId)?.name ?? '')
+}
+
+/**
+ * The model as a detail shows it in wireframe: every object's lines, and solid hatches filled (only
+ * the drafting with `draftingOnly`, for over a hidden line drawing).
+ */
+export function wireframeDrawing(doc: Document, detail: Detail, draftingOnly = false): DetailDrawing {
   const project = detailProjector(doc, detail)
   const layers: DetailDrawing['layers'] = new Map()
-  // Texts, dimensions and hatches are drafting on the sheet: clipping planes leave them whole.
-  const planes = detail.clipping ? drawingClipPlanes(doc) : []
-  const cut = (g: Geometry, line: Vector3[]) => (planes.length > 0 && g.type !== 'annotation' && g.type !== 'hatch' ? clipPolyline(line, planes) : [line])
+  const planes = detailClipPlanes(doc, detail)
   for (const { layerId, geometry: g } of detailObjects(doc)) {
-    if (only && !only(g)) continue
+    const drafting = isDrafting(doc, layerId, g)
+    if (draftingOnly && !drafting) continue
+    const cut = (line: Vector3[]) => (planes.length > 0 && !drafting ? clipPolyline(line, planes) : [line])
     let entry = layers.get(layerId)
     if (!entry) layers.set(layerId, (entry = { lines: [], fills: [] }))
     if (g.type === 'hatch' && g.pattern === 'Solid') {
       entry.fills.push(g.loops.map((loop) => tessellate(loop).map(project).filter((p): p is Point => p !== null)))
       continue
     }
-    for (const line of wireframe(g).flatMap((l) => cut(g, l))) {
+    for (const line of wireframe(g).flatMap(cut)) {
       let run: Point[] = []
       for (const p of line) {
         const q = project(p)

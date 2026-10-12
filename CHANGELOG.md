@@ -5,8 +5,11 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
-- **Drawing set** (`DrawingSet`): the plan of the current level, the elevations and the sections laid
-  out on A3 sheets in one go, each with its title block and the largest standard scale that fits.
+- **Drawing set** (`DrawingSet`): a plan of each level, the elevations and the sections laid out on
+  A3 sheets in one go, each with its title block and the largest standard scale that fits. Each
+  plan is cut above its level's floor and leaves out the levels under it.
+- Layout details can be cut by chosen clipping planes only, and section marks are drawn whole on
+  every plan.
 - **Update drawings** (`UpdateDrawings`): elevations and sections are drawn again from the model,
   each in its place, so the sheets show the changes.
 - Clipping planes are no longer drawn on sheets.

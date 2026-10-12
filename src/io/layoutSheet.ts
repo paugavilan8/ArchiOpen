@@ -1,9 +1,9 @@
 import { Vector3 } from 'three'
 import type { Document } from '../core/document'
 import { Geometry, isCurve, tessellate } from '../core/geometry'
-import { Detail, detailObjects, Layout, Point, paperFactor, sheetFrame, sheetSize, viewAxes, wireframeDrawing } from '../core/layout'
+import { Detail, detailClipPlanes, detailObjects, isDrafting, Layout, Point, paperFactor, sheetFrame, sheetSize, viewAxes, wireframeDrawing } from '../core/layout'
 import { dashesOf, DEFAULT_PRINT_WIDTH } from '../core/linetypes'
-import { type ClipPlane, drawingClipPlanes } from '../core/clipPlanes'
+import type { ClipPlane } from '../core/clipPlanes'
 import { kernelJob } from '../kernel/client'
 import { shapeRef } from '../kernel/wire'
 import type { Sheet, SheetItem } from './pdf'
@@ -28,6 +28,7 @@ export const SECTION_FILL = '#5a5a5a'
 /** What a hidden line drawing is made of: the surfaces, solids, meshes and curves the details show. */
 function drawnGeometry(doc: Document): Geometry[] {
   return detailObjects(doc)
+    .filter((o) => !isDrafting(doc, o.layerId, o.geometry))
     .map((o) => o.geometry)
     .filter((g) => g.type === 'brep' || g.type === 'mesh' || isCurve(g))
 }
@@ -48,7 +49,7 @@ interface ViewDrawing {
 const drawings = new Map<string, ViewDrawing & { geometry: Geometry[] }>()
 
 /** The clipping planes that cut a detail. */
-const detailPlanes = (doc: Document, detail: Detail): ClipPlane[] => (detail.clipping ? drawingClipPlanes(doc) : [])
+const detailPlanes = (doc: Document, detail: Detail): ClipPlane[] => detailClipPlanes(doc, detail)
 
 /** A drawing depends on the view direction and on the planes that cut it. */
 const viewKey = (doc: Document, detail: Detail) => {
@@ -130,8 +131,8 @@ export function layoutSheet(doc: Document, layout: Layout, options: { black: boo
       if (hiddenLines.fills.length > 0) items.push({ lines: [], fills: hiddenLines.fills, color: options.black ? '#000000' : SECTION_FILL, width: 0, dashes: [], clip })
       items.push({ lines: hiddenLines.lines, fills: [], color: '#000000', width: 0.25, dashes: [], clip })
       if (hiddenLines.section.length > 0) items.push({ lines: hiddenLines.section, fills: [], color: '#000000', width: SECTION_WIDTH, dashes: [], clip })
-      // Texts, dimensions and hatches go on top as they are; everything else came through hidden lines.
-      const flat = wireframeDrawing(doc, detail, (g) => g.type === 'annotation' || g.type === 'hatch')
+      // Drafting goes on top as it is; everything else came through hidden lines.
+      const flat = wireframeDrawing(doc, detail, true)
       for (const layer of doc.layers) {
         const entry = flat.layers.get(layer.id)
         if (!entry) continue
