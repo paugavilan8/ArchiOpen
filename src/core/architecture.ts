@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { chain, closestPoint, reverse } from './curves'
 import { offset } from './offset'
-import { AnyCurve, endPoint, isClosed, pointAt, samples, startPoint, tangentAt } from './geometry'
+import { AnyCurve, endPoint, isClosed, pointAt, PolylineGeometry, samples, startPoint, tangentAt } from './geometry'
 
 /**
  * Architectural objects: walls along a path curve, slabs on an outline, and openings (windows and
@@ -89,19 +89,167 @@ function offsetLeft(g: AnyCurve, distance: number): AnyCurve | null {
  * The plan outline of a wall: for an open path, one closed curve around it; for a closed path
  * (a room), the outer and inner curves of the ring between them.
  */
-export function wallOutline(path: AnyCurve, params: Pick<WallParams, 'thickness' | 'justification'>): AnyCurve[] {
+export function wallOutline(path: AnyCurve, params: Pick<WallParams, 'thickness' | 'justification'>, joins: ResolvedJoin[] = []): AnyCurve[] {
   if (!(params.thickness > 0)) throw new Error('The wall thickness must be positive')
   const { left, right } = wallSides(params)
-  const a = offsetLeft(path, left)
-  const b = offsetLeft(path, -right)
+  let a = offsetLeft(path, left)
+  let b = offsetLeft(path, -right)
   if (!a || !b) throw new Error('The wall is too thick for the bends of its path')
   // Around a room, the outer curve is the one enclosing more (which side is left depends on the
   // way the path runs).
   if (isClosed(path)) return planArea(a) >= planArea(b) ? [a, b] : [b, a]
+  if (path.type === 'polyline' && a.type === 'polyline' && b.type === 'polyline') {
+    for (const join of joins) [a, b] = joinedEnds(path, a, b, join)
+  }
   const line = (p: Vector3, q: Vector3): AnyCurve => ({ type: 'polyline', points: [p.clone(), q.clone()], closed: false })
   const loop = chain([a, line(endPoint(a), endPoint(b)), reverse(b), line(startPoint(b), startPoint(a))])
   if (!loop) throw new Error('The wall outline could not be made')
   return [loop.type === 'polyline' ? { ...loop, closed: true } : loop]
+}
+
+// --- Joins between walls ---------------------------------------------------------------
+
+/**
+ * How one end of a wall meets another wall:
+ * - 'L': at the other's end; both are cut on the mitre between them;
+ * - 'T': on the other's side; this one stops at the other's face.
+ * Only straight ends (of walls along polylines) join.
+ */
+export interface WallJoin {
+  end: 'start' | 'end'
+  kind: 'L' | 'T'
+}
+
+/** A wall as joins see it: its path and how thick it is to each side. */
+export interface WallRef {
+  path: AnyCurve
+  params: Pick<WallParams, 'thickness' | 'justification'>
+}
+
+export interface ResolvedJoin extends WallJoin {
+  other: WallRef
+}
+
+/** A join as saved in a wall's record: the other wall's path is the record's input `input`. */
+export interface SavedJoin extends WallJoin {
+  input: number
+  thickness: number
+  justification: Justification
+}
+
+const flat = (v: Vector3) => new Vector3(v.x, v.y, 0)
+const leftOf = (d: Vector3) => UP.clone().cross(d).normalize()
+
+/** Where two flat lines (point and direction) cross, at the height of the first; null if parallel. */
+function crossing(p: Vector3, d: Vector3, q: Vector3, e: Vector3): Vector3 | null {
+  const denom = d.x * e.y - d.y * e.x
+  if (Math.abs(denom) < 1e-9) return null
+  const t = ((q.x - p.x) * e.y - (q.y - p.y) * e.x) / denom
+  return p.clone().addScaledVector(d, t)
+}
+
+/** An end of an open polyline: its point, and the direction arriving at it along its last segment. */
+function endOf(path: PolylineGeometry, end: 'start' | 'end'): { point: Vector3; arriving: Vector3 } {
+  const n = path.points.length
+  const [p, q] = end === 'end' ? [path.points[n - 1], path.points[n - 2]] : [path.points[0], path.points[1]]
+  return { point: p.clone(), arriving: flat(p.clone().sub(q)).normalize() }
+}
+
+/** The ends of a wall's two sides moved to meet another wall (see WallJoin). */
+function joinedEnds(path: PolylineGeometry, a: PolylineGeometry, b: PolylineGeometry, join: ResolvedJoin): [PolylineGeometry, PolylineGeometry] {
+  const other = join.other
+  if (other.path.type !== 'polyline') return [a, b]
+  const { point: P, arriving: d } = endOf(path, join.end)
+  // The side to the left of the way the wall arrives at its end: its left side at its end, its
+  // right side at its start.
+  const [toLeft, toRight] = join.end === 'end' ? [a, b] : [b, a]
+  const sides = wallSides(other.params)
+  let leftLine: [Vector3, Vector3]
+  let rightLine: [Vector3, Vector3]
+  if (join.kind === 'L') {
+    // The other wall's sides, seen going away from the corner: they meet this wall's sides on
+    // the same hand, as the sides of a bent wall would.
+    const atStart = other.path.points[0].distanceTo(P) <= other.path.points[other.path.points.length - 1].distanceTo(P)
+    const away = endOf(other.path, atStart ? 'start' : 'end').arriving.negate()
+    const n = leftOf(away)
+    const [l, r] = atStart ? [sides.left, sides.right] : [sides.right, sides.left]
+    leftLine = [P.clone().addScaledVector(n, l), away]
+    rightLine = [P.clone().addScaledVector(n, -r), away]
+  } else {
+    // The face of the other wall on this wall's side.
+    const near = closestOnPolyline(other.path, P)
+    const n = leftOf(near.direction)
+    const back = P.clone().addScaledVector(d, -Math.max(other.params.thickness, 1))
+    const side = n.dot(back.clone().sub(near.point)) >= 0 ? 1 : -1
+    const face = near.point.clone().addScaledVector(n, side * (side > 0 ? sides.left : sides.right))
+    leftLine = [face, near.direction]
+    rightLine = [face, near.direction]
+  }
+  const moved = (side: PolylineGeometry, line: [Vector3, Vector3]): PolylineGeometry => {
+    const points = side.points.map((p) => p.clone())
+    const i = join.end === 'end' ? points.length - 1 : 0
+    const hit = crossing(points[i], d, line[0], line[1])
+    if (!hit) return side
+    points[i] = new Vector3(hit.x, hit.y, points[i].z)
+    return { ...side, points }
+  }
+  const newLeft = moved(toLeft, leftLine)
+  const newRight = moved(toRight, rightLine)
+  return join.end === 'end' ? [newLeft, newRight] : [newRight, newLeft]
+}
+
+/** The closest point of a polyline to a point (seen from above), and its segment's direction. */
+function closestOnPolyline(path: PolylineGeometry, p: Vector3): { point: Vector3; direction: Vector3; distance: number; vertex: boolean } {
+  const pts = path.closed ? [...path.points, path.points[0]] : path.points
+  let best = { point: pts[0].clone(), direction: new Vector3(1, 0, 0), distance: Infinity, vertex: true }
+  for (let i = 1; i < pts.length; i++) {
+    const a = flat(pts[i - 1])
+    const seg = flat(pts[i]).sub(a)
+    const len2 = seg.lengthSq()
+    if (len2 < 1e-18) continue
+    const t = Math.min(Math.max(flat(p).sub(a).dot(seg) / len2, 0), 1)
+    const q = a.clone().addScaledVector(seg, t)
+    const distance = q.distanceTo(flat(p))
+    if (distance < best.distance) {
+      const length = Math.sqrt(len2)
+      const fromEnd = Math.min(t, 1 - t) * length
+      best = { point: new Vector3(q.x, q.y, pts[i - 1].z), direction: seg.clone().normalize(), distance, vertex: fromEnd < 1e-6 * Math.max(1, length) }
+    }
+  }
+  return best
+}
+
+/**
+ * The joins of a wall with others: each of its straight ends that is at another wall's end (L) or
+ * on another wall's line, or within its thickness of it (T). Returns, for each, the other wall's
+ * index in `others`.
+ */
+export function findJoins(self: WallRef, others: readonly WallRef[]): (WallJoin & { other: number })[] {
+  const path = self.path
+  if (path.type !== 'polyline' || path.closed || path.points.length < 2) return []
+  const out: (WallJoin & { other: number })[] = []
+  for (const end of ['start', 'end'] as const) {
+    const P = endOf(path, end).point
+    const tol = Math.max(self.params.thickness, 1) * 1e-3
+    for (let i = 0; i < others.length; i++) {
+      const o = others[i]
+      if (o.path.type !== 'polyline' || o.path.points.length < 2) continue
+      // Walls at different heights do not join.
+      if (Math.abs(o.path.points[0].z - P.z) > tol) continue
+      const ends = o.path.closed ? [] : [o.path.points[0], o.path.points[o.path.points.length - 1]]
+      if (ends.some((e) => flat(e).distanceTo(flat(P)) <= tol)) {
+        out.push({ end, kind: 'L', other: i })
+        break
+      }
+      const near = closestOnPolyline(o.path, P)
+      const reach = Math.max(...Object.values(wallSides(o.params))) + tol
+      if (near.distance <= reach && !ends.some((e) => flat(e).distanceTo(near.point) <= tol)) {
+        out.push({ end, kind: 'T', other: i })
+        break
+      }
+    }
+  }
+  return out
 }
 
 /** The area a closed flat curve encloses, seen from above. */

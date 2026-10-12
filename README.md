@@ -13,7 +13,7 @@ interoperability, in a lightweight desktop application driven by a command line.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Desktop build](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=installers)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Version](https://img.shields.io/badge/version-0.1.0-2f81f7?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.2.0-2f81f7?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
 
@@ -75,16 +75,19 @@ exported to Rhino or STEP therefore arrive as surfaces, not meshes.
 > The installer is self-contained: the user interface, the geometry kernel and the Rhino file
 > reader are all bundled into the executable. See [What does the installer include?](#installer)
 
-Installers are built by GitHub Actions:
+**[Download the latest version](https://github.com/paugavilan8/ArchiOpen/releases/latest)** from the
+Releases page (no GitHub account needed):
 
-1. Open the [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-   workflow in the **Actions** tab.
-2. Click **Run workflow**, or open the latest completed run.
-3. Download the artifact for your platform, for example `ArchiOpen-Windows`, which contains the
-   `.msi` and `.exe` installers.
+| System | File |
+| --- | --- |
+| Windows | `ArchiOpen_x.y.z_x64-setup.exe` (or the `.msi`) |
+| macOS | `ArchiOpen_x.y.z_aarch64.dmg` |
+| Linux | `ArchiOpen_x.y.z_amd64.AppImage` (or the `.deb`) |
 
-Pushing a version tag (`git tag v0.1.0 && git push --tags`) also attaches the installers to a draft
-release.
+Releases are built by GitHub Actions when a version tag is pushed
+(`git tag v0.2.0 && git push origin v0.2.0`). Builds of the latest code can also be run by hand
+from the [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
+workflow (**Run workflow**); they appear as artifacts of the run, which need a GitHub account.
 
 ## Features
 
@@ -217,6 +220,9 @@ Expand a section for details.
 - `Wall` draws walls point by point (`Close` for a room) or along curves already drawn (`Curve`),
   with `Thickness` and `Justification` (`Center`, `Left` or `Right` of the line). Corners are
   mitred and curved lines give curved walls. Walls take the height of the current level.
+- Walls join by themselves: two walls whose ends meet are mitred into a clean corner (L), and a
+  wall ending on another one (on its line or at its face) stops at that face (T), whatever their
+  thickness and justification. Joins follow when either wall moves or changes, and undo with it.
 - `Slab` makes a floor or roof slab from corner points or closed curves, with its top on the
   outline and the `Thickness` below it.
 - `Window` and `Door` cut openings where a wall is clicked, with `Width`, `Height` and `Sill`, and
@@ -422,7 +428,8 @@ flowchart LR
 - [ ] SubD modeling
 - [x] Building elements: walls, slabs, windows, doors and levels
 - [x] Window and door frames, glass and leaves
-- [ ] More building elements: wall joins, roofs, stairs and columns
+- [x] Wall joins (L and T)
+- [ ] More building elements: roofs, stairs and columns
 - [ ] Signed installers and automatic updates
 
 ## FAQ

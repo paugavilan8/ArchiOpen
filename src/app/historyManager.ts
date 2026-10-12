@@ -4,6 +4,7 @@ import type { Settings } from '../core/settings'
 import type { BrepGeometry } from '../core/geometry'
 import { kernelJob } from '../kernel/client'
 import { orphanedParts, planOpeningParts, withOpeningIds } from './openingParts'
+import { ownInputOnly, withJoins } from './wallJoins'
 
 /**
  * Construction history, as in Rhino: an object made from curves with history recorded is made again
@@ -47,24 +48,43 @@ export class HistoryManager {
       else if (action.type === 'remove') removed.add(action.obj.id)
       else if (action.type === 'add') removed.delete(action.obj.id)
     }
-    if (changed.size === 0 && removed.size === 0) return
+    // Walls added or remade can change how others join, even when nothing else changed.
+    const walls = [...doc.objects.values()].some((o) => o.history?.command === 'Wall')
+    if (changed.size === 0 && removed.size === 0 && !(walls && remade.size > 0)) return
 
     const breaks: number[] = []
-    const rebuild: number[] = []
+    let rebuild: number[] = []
     for (const obj of doc.objects.values()) {
       const record = obj.history
       if (!record) continue
+      // Walls and their pieces are tied to their own line only; the lines of the walls they join
+      // come and go.
+      const tied = ownInputOnly(record) ? record.inputs.slice(0, 1) : record.inputs
       if (changed.has(obj.id)) breaks.push(obj.id) // Edited by hand.
-      else if (record.inputs.some((id) => removed.has(id) || !doc.objects.has(id))) breaks.push(obj.id)
+      else if (tied.some((id) => removed.has(id) || !doc.objects.has(id))) breaks.push(obj.id)
       else if (record.inputs.some((id) => changed.has(id))) rebuild.push(obj.id)
     }
     // The frames and glass of a wall that is gone, or no longer made from its line, stay as they are.
     const orphans = orphanedParts(doc, new Set([...breaks, ...removed]))
     for (const id of orphans) if (!breaks.includes(id) && !removed.has(id)) breaks.push(id)
-    if (orphans.length > 0) rebuild.splice(0, rebuild.length, ...rebuild.filter((id) => !orphans.includes(id)))
-    if (breaks.length === 0 && rebuild.length === 0) return
+    rebuild = rebuild.filter((id) => !orphans.includes(id))
+
+    // Walls whose joins changed are made again with them (their pieces with them).
+    const remakes = new Map<number, HistoryRecord>()
+    const skip = new Set(breaks)
+    for (const obj of doc.objects.values()) {
+      if (obj.history?.command !== 'Wall' || skip.has(obj.id)) continue
+      const wanted = withJoins(doc, obj.id, obj.history, skip)
+      if (JSON.stringify(wanted) !== JSON.stringify(obj.history)) remakes.set(obj.id, wanted)
+    }
+    rebuild = rebuild.filter((id) => {
+      const record = doc.objects.get(id)!.history!
+      return !remakes.has(id) && !(record.command === 'OpeningPart' && remakes.has(Number(record.params?.wall)))
+    })
+    if (breaks.length === 0 && rebuild.length === 0 && remakes.size === 0) return
 
     const results = new Map<number, BrepGeometry>()
+    const applies: (() => void)[] = []
     const failed: number[] = []
     for (const id of rebuild) {
       try {
@@ -74,12 +94,21 @@ export class HistoryManager {
         failed.push(id)
       }
     }
+    for (const [id, record] of remakes) {
+      try {
+        applies.push(await this.prepare(id, record, skip))
+      } catch (error) {
+        console.warn('History could not join a wall', error)
+        failed.push(id)
+      }
+    }
 
     this.busy = true
     try {
       doc.beginAmend(step)
       for (const id of breaks) doc.setHistory(id, undefined)
       for (const [id, geometry] of results) if (doc.objects.has(id)) doc.setGeometry(id, geometry)
+      for (const apply of applies) apply()
       doc.commit()
     } finally {
       this.busy = false
@@ -118,8 +147,8 @@ export class HistoryManager {
    * Builds what remaking an object needs (for a wall, also the frames and glass of its openings) and
    * returns the function that makes the changes.
    */
-  private async prepare(id: number, given: HistoryRecord): Promise<() => void> {
-    const record = given.command === 'Wall' ? withOpeningIds(given) : given
+  private async prepare(id: number, given: HistoryRecord, skip?: Set<number>): Promise<() => void> {
+    const record = given.command === 'Wall' ? withJoins(this.doc, id, withOpeningIds(given), skip) : given
     const geometry = await this.build(record)
     const parts = record.command === 'Wall' ? await planOpeningParts(this.doc, id, record, (r) => this.build(r)) : () => {}
     return () => {

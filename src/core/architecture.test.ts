@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { checkOpening, lengthAtPoint, levelAt, openingBox, paramAtLength, pathLength, wallOutline, wallParams, wallSides } from './architecture'
+import { checkOpening, findJoins, lengthAtPoint, levelAt, openingBox, paramAtLength, pathLength, wallOutline, wallParams, wallSides } from './architecture'
 import { length } from './curves'
 import { Document } from './document'
 import { pointAt, tessellate, type AnyCurve } from './geometry'
@@ -108,5 +108,61 @@ describe('levels', () => {
     expect(copy.level.elevation).toBe(3000)
     copy.load({})
     expect(copy.levels).toHaveLength(1)
+  })
+})
+
+describe('wall joins', () => {
+  const wall = (points: Vector3[], thickness = 200, justification: 'center' | 'left' | 'right' = 'center') => ({
+    path: { type: 'polyline', points, closed: false } as AnyCurve,
+    params: { thickness, justification },
+  })
+  const outlineOf = (w: ReturnType<typeof wall>, others: ReturnType<typeof wall>[]) => {
+    const joins = findJoins(w, others).map((j) => ({ ...j, other: others[j.other] }))
+    return wallOutline(w.path, w.params, joins)[0]
+  }
+
+  it('finds L and T joins, and nothing for walls apart', () => {
+    const a = wall([v(0, 0), v(4000, 0)])
+    const b = wall([v(4000, 0), v(4000, 3000)])
+    const c = wall([v(2000, 0), v(2000, -2000)])
+    const far = wall([v(9000, 0), v(9000, 3000)])
+    expect(findJoins(a, [b, far])).toEqual([{ end: 'end', kind: 'L', other: 0 }])
+    expect(findJoins(c, [a])).toEqual([{ end: 'start', kind: 'T', other: 0 }])
+    expect(findJoins(far, [a, b])).toEqual([])
+  })
+
+  it('mitres an L corner so the two walls meet on the diagonal without overlapping', () => {
+    const a = wall([v(0, 0), v(4000, 0)])
+    const b = wall([v(4000, 0), v(4000, 3000)])
+    const oa = outlineOf(a, [b])
+    const ob = outlineOf(b, [a])
+    // Together exactly the L (no overlap, no gap): 4100 × 200 along x plus 2900 × 200 up.
+    expect(area(oa) + area(ob)).toBeCloseTo(4100 * 200 + 2900 * 200, 3)
+    expect(Math.max(...tessellate(oa).map((p) => p.x))).toBeCloseTo(4100, 6)
+    expect(Math.max(...tessellate(ob).map((p) => p.y))).toBeCloseTo(3000, 6)
+  })
+
+  it('mitres walls of different thickness and justification', () => {
+    const a = wall([v(0, 0), v(4000, 0)], 300, 'left')
+    // b arrives at the corner (its end there) rather than leaving it.
+    const b = wall([v(4000, 3000), v(4000, 0)], 200, 'right')
+    const oa = outlineOf(a, [b])
+    const ob = outlineOf(b, [a])
+    const total = area(oa) + area(ob)
+    // a covers y 0..300 from x 0 to 4000; b, to the right of its path going down (x 3800..4000),
+    // the rest up to y 3000: together exactly that L.
+    expect(total).toBeCloseTo(4000 * 300 + 200 * 2700, 3)
+    expect(Math.max(...tessellate(oa).map((p) => p.x))).toBeCloseTo(4000, 6)
+  })
+
+  it('stops a wall at the face of the wall it meets in a T', () => {
+    const a = wall([v(0, 0), v(4000, 0)])
+    const c = wall([v(2000, 0), v(2000, -2000)])
+    const oc = outlineOf(c, [a])
+    expect(Math.max(...tessellate(oc).map((p) => p.y))).toBeCloseTo(-100, 6)
+    expect(area(oc)).toBeCloseTo(1900 * 200, 3)
+    // Drawn to the near face instead of the line: the same.
+    const c2 = wall([v(2000, -100), v(2000, -2000)])
+    expect(area(outlineOf(c2, [a]))).toBeCloseTo(1900 * 200, 3)
   })
 })
