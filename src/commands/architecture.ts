@@ -48,6 +48,8 @@ const memory = {
   railing: { ...DEFAULT_RAILING },
   dimensions: { offset: 800, height: 200 },
   room: { height: 250 },
+  floor: { thickness: 20, material: 'Wood' as (typeof FLOOR_MATERIALS)[number] },
+  skirting: { height: 80, thickness: 15 },
 }
 
 const JUSTIFICATIONS: Justification[] = ['center', 'left', 'right']
@@ -578,6 +580,35 @@ function dimensionedWall(ctx: CommandContext, id: number): DimensionedWall | nul
   return { path, params, outline: wallOutline(path, params, joins) }
 }
 
+/**
+ * The room around a point, between the walls (and around the columns) at its height, worked out
+ * in the kernel; null (with the reason logged) if the walls do not enclose it.
+ */
+async function regionAt(ctx: CommandContext, point: Vector3): Promise<{ loops: AnyCurve[]; area: number } | null> {
+  const { doc, log } = ctx
+  const z = point.z
+  const near = (c: AnyCurve) => Math.abs(tessellate(c)[0].z - z) <= Math.max(1, doc.level.height)
+  const outlines: AnyCurve[][] = []
+  for (const obj of doc.objects.values()) {
+    const command = obj.history?.command
+    if (command === 'Wall') {
+      const w = dimensionedWall(ctx, obj.id)
+      if (w && near(w.path) && tessellate(w.path)[0].z <= z + 1) outlines.push(w.outline)
+    } else if (command === 'Column') {
+      const c = doc.objects.get(obj.history!.inputs[0])?.geometry
+      if (c && isCurve(c) && isClosed(c) && near(c)) outlines.push([c])
+    }
+  }
+  await kernel(ctx)
+  try {
+    return await kernelJob('roomRegion', outlines, point)
+  } catch (error) {
+    // Say why (open room, inside a wall), so another room can be tried.
+    log(error instanceof Error ? error.message : String(error))
+    return null
+  }
+}
+
 /** Square units of area for a document's units, and how many of them a square model unit is. */
 function areaUnits(units: string): { name: string; factor: number } {
   const table: Record<string, { name: string; factor: number }> = {
@@ -608,29 +639,8 @@ const room: Command = {
         continue
       }
       if (r.kind !== 'point') break
-      // The walls (and columns) at this height bound the room.
-      const z = r.point.z
-      const near = (c: AnyCurve) => Math.abs(tessellate(c)[0].z - z) <= Math.max(1, doc.level.height)
-      const outlines: AnyCurve[][] = []
-      for (const obj of doc.objects.values()) {
-        const command = obj.history?.command
-        if (command === 'Wall') {
-          const w = dimensionedWall(ctx, obj.id)
-          if (w && near(w.path) && tessellate(w.path)[0].z <= z + 1) outlines.push(w.outline)
-        } else if (command === 'Column') {
-          const c = doc.objects.get(obj.history!.inputs[0])?.geometry
-          if (c && isCurve(c) && isClosed(c) && near(c)) outlines.push([c])
-        }
-      }
-      await kernel(ctx)
-      let region: { loops: AnyCurve[]; area: number }
-      try {
-        region = await kernelJob('roomRegion', outlines, r.point)
-      } catch (error) {
-        // Say why (open room, inside a wall) and let another room be tried.
-        log(error instanceof Error ? error.message : String(error))
-        continue
-      }
+      const region = await regionAt(ctx, r.point)
+      if (!region) continue
       const name = (await input.getString(`Room name <Room ${made + 1}>`))?.trim() || `Room ${made + 1}`
       const units = areaUnits(doc.units)
       const label = `${name}\n${(region.area * units.factor).toFixed(2)} ${units.name}`
@@ -642,7 +652,7 @@ const room: Command = {
       const lines = shape.widths.length
       const block = ((lines - 1) * LINE_SPACING + 1) * m.height
       // The text sits on the baseline of its last line; its block reaches up from there.
-      const at = new Vector3(r.point.x - width / 2, r.point.y - block / 2, z)
+      const at = new Vector3(r.point.x - width / 2, r.point.y - block / 2, r.point.z)
       ids.push(
         doc.add(
           { type: 'annotation', kind: 'text', points: [at], xaxis: new Vector3(1, 0, 0), yaxis: new Vector3(0, 1, 0), text: label, height: m.height, arrow: 'arrow', precision: 0 },
@@ -702,4 +712,139 @@ const wallDimensionsCommand: Command = {
   },
 }
 
-export const architectureCommands: Command[] = [wallDimensionsCommand, room, level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]
+const FLOOR_MATERIALS = ['Wood', 'Ceramic tiles', 'Marble', 'Concrete'] as const
+
+/** A preset material, added to the document if it is not there yet; returns its name. */
+function presetMaterial(ctx: CommandContext, name: string): string {
+  if (!ctx.doc.materials.some((m) => m.name === name)) {
+    const preset = MATERIAL_PRESETS.find((m) => m.name === name)
+    if (preset) ctx.doc.setMaterials([...ctx.doc.materials, { ...preset }])
+  }
+  return name
+}
+
+/**
+ * The rooms a finishing command works on: clicked inside (their outlines worked out between the
+ * walls), or closed curves picked with the Curve option. Calls `make` with each room's loops (outer
+ * first, then holes round columns) and the ids of those loops if they are curves already drawn.
+ */
+async function eachRoom(ctx: CommandContext, prompt: string, options: () => string[], handle: (option: string) => Promise<void>, make: (loops: AnyCurve[], ids: number[] | null) => Promise<void>): Promise<number> {
+  const { doc, input } = ctx
+  let made = 0
+  for (;;) {
+    const r = await input.getPoint({ prompt: made ? `${prompt}. Press Enter when done` : prompt, options: [...options(), 'Curve'] })
+    if (r.kind === 'option' && isOption(r.option, 'Curve')) {
+      const ids = (await input.getObjects('Select closed outlines')).filter((id) => {
+        const g = doc.objects.get(id)!.geometry
+        return isCurve(g) && isClosed(g)
+      })
+      for (const id of ids) {
+        await make([doc.objects.get(id)!.geometry as AnyCurve], [id])
+        made++
+      }
+      return made
+    }
+    if (r.kind === 'option') {
+      await handle(r.option)
+      continue
+    }
+    if (r.kind !== 'point') return made
+    const region = await regionAt(ctx, r.point)
+    if (!region) continue
+    await make(region.loops, null)
+    made++
+  }
+}
+
+/** Makes a solid from loops with a record, the loops kept on the Construction layer. */
+async function addFromLoops(ctx: CommandContext, loops: AnyCurve[], ids: number[] | null, record: Omit<HistoryRecord, 'inputs'>, layerId: number, what: string): Promise<number> {
+  const { doc } = ctx
+  await kernel(ctx)
+  const geometry = await readable(kernelJob('rebuild', record.command, loops, record.params ?? {}), what)
+  const inputs = ids ?? loops.map((loop) => doc.add(loop, construction(ctx).id).id)
+  const id = doc.add(geometry, layerId).id
+  doc.setHistory(id, { ...record, inputs })
+  return id
+}
+
+/** Floor finishes over rooms, of a thickness and a material, their top that much above the floor. */
+const floor: Command = {
+  name: 'Floor',
+  async run(ctx) {
+    const { doc, log } = ctx
+    const m = memory.floor
+    const made: number[] = []
+    const count = await eachRoom(
+      ctx,
+      'Click inside a room to floor',
+      () => [valueOption('Thickness', m.thickness), `Material=${m.material.replace(/\s+/g, '')}`],
+      async (option) => {
+        if (isOption(option, 'Thickness')) m.thickness = await askPositive(ctx, 'Floor finish thickness', m.thickness)
+        else if (isOption(option, 'Material')) m.material = FLOOR_MATERIALS[(FLOOR_MATERIALS.indexOf(m.material) + 1) % FLOOR_MATERIALS.length]
+      },
+      async (loops, ids) => {
+        const id = await addFromLoops(ctx, loops, ids, { command: 'Floor', params: { thickness: m.thickness } }, layerNamed(ctx, 'Floors', '#a07a52').id, 'make the floor')
+        doc.setState(id, { material: presetMaterial(ctx, m.material) })
+        made.push(id)
+      },
+    )
+    if (count > 0) {
+      doc.select(made)
+      log(`${count} floor${count === 1 ? '' : 's'} made in ${m.material.toLowerCase()}, ${formatValue(m.thickness)} thick`)
+    }
+  },
+}
+
+/** Skirting round rooms, along the walls and round columns, broken at doors. */
+const skirting: Command = {
+  name: 'Skirting',
+  async run(ctx) {
+    const { doc, log } = ctx
+    const m = memory.skirting
+    const made: number[] = []
+    const count = await eachRoom(
+      ctx,
+      'Click inside a room for skirting',
+      () => [valueOption('Height', m.height), valueOption('Thickness', m.thickness)],
+      async (option) => {
+        if (isOption(option, 'Height')) m.height = await askPositive(ctx, 'Skirting height', m.height)
+        else if (isOption(option, 'Thickness')) m.thickness = await askPositive(ctx, 'Skirting thickness', m.thickness)
+      },
+      async (loops, ids) => {
+        // Gaps at the doors of the walls on this floor.
+        const z = tessellate(loops[0])[0].z
+        const cuts: { origin: XYZ; u: XYZ; v: XYZ; w: XYZ }[] = []
+        for (const obj of doc.objects.values()) {
+          if (obj.history?.command !== 'Wall') continue
+          const path = doc.objects.get(obj.history.inputs[0])?.geometry
+          if (!path || !isCurve(path) || Math.abs(tessellate(path)[0].z - z) > 1) continue
+          const params = wallParams(obj.history.params)
+          for (const o of params.openings) {
+            if (o.kind !== 'door') continue
+            const b = openingBox(path, params, { ...o, sill: o.sill - 1, height: o.height + 1 })
+            cuts.push({ origin: xyz(b.origin), u: xyz(b.u), v: xyz(b.v), w: xyz(b.w) })
+          }
+        }
+        made.push(
+          await addFromLoops(ctx, loops, ids, { command: 'Skirting', params: { height: m.height, thickness: m.thickness, cuts } }, skirtingLayer(ctx).id, 'make the skirting'),
+        )
+      },
+    )
+    if (count > 0) {
+      doc.select(made)
+      log(`Skirting put round ${count} room${count === 1 ? '' : 's'}, ${formatValue(m.height)} high`)
+    }
+  },
+}
+
+type XYZ = { x: number; y: number; z: number }
+const xyz = (v: Vector3): XYZ => ({ x: v.x, y: v.y, z: v.z })
+
+/** Skirting goes on its own layer, white. */
+const skirtingLayer = (ctx: CommandContext) => {
+  const layer = layerNamed(ctx, 'Skirting', '#d8d4cc')
+  if (!layer.material) ctx.doc.updateLayer(layer.id, { material: presetMaterial(ctx, 'White plaster') })
+  return layer
+}
+
+export const architectureCommands: Command[] = [wallDimensionsCommand, room, floor, skirting, level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]

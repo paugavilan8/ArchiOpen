@@ -264,6 +264,11 @@ Expand a section for details.
   around any columns, ignoring openings) on a *Rooms* layer and a label with its name and floor
   area (m² or ft² by the document's units) centred where you clicked, grouped. The outline can
   make the room's floor with `Slab` (`Curve` option). Open rooms are reported.
+- `Floor` lays a floor finish in rooms clicked inside (or on closed curves): `Thickness` and
+  `Material` (`Wood`, `CeramicTiles`, `Marble`, `Concrete`), round any columns. `Skirting` runs a
+  skirting board round rooms, along the walls and round columns, broken at doors, with `Height` and
+  `Thickness`. Both keep their outline on the *Construction* layer and their parameters in the
+  Properties panel.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -469,7 +474,8 @@ flowchart LR
 - [x] Automatic plan dimensions for walls and openings
 - [x] Room labels with areas
 - [x] Door swings and window symbols in plan
-- [ ] Floor finishes and skirting from room outlines
+- [x] Floor finishes and skirting from room outlines
+- [ ] Furniture and fittings library (blocks)
 - [ ] Signed installers and automatic updates
 
 ## FAQ

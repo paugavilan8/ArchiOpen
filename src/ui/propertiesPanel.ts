@@ -166,7 +166,7 @@ export class PropertiesPanel {
         if (g.type === 'hatch') sections.push(this.hatchSection(selected[0].id, g))
         if (g.type === 'clipping') sections.push(this.clippingSection(selected[0].id, g))
         const command = selected[0].history?.command
-        if (command && ['Wall', 'Slab', 'Roof', 'Stair', 'Column', 'Railing'].includes(command)) sections.push(this.architectureSection(selected[0]))
+        if (command && ['Wall', 'Slab', 'Roof', 'Stair', 'Column', 'Railing', 'Floor', 'Skirting'].includes(command)) sections.push(this.architectureSection(selected[0]))
       }
     }
     this.body.replaceChildren(...sections)
@@ -292,6 +292,15 @@ export class PropertiesPanel {
     }
     if (record.command === 'Slab') {
       field('Thickness', number('thickness', slabParams(record.params).thickness, (thickness) => update({ thickness })))
+      return section
+    }
+    if (record.command === 'Floor') {
+      field('Thickness', number('thickness', Number(record.params?.thickness ?? 20), (thickness) => update({ thickness })))
+      return section
+    }
+    if (record.command === 'Skirting') {
+      field('Height', number('height', Number(record.params?.height ?? 80), (height) => update({ height })))
+      field('Thickness', number('thickness', Number(record.params?.thickness ?? 15), (thickness) => update({ thickness })))
       return section
     }
     if (record.command === 'Column') {

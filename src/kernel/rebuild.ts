@@ -4,7 +4,7 @@ import type { AnyCurve } from '../core/geometry'
 import { edgeSurface, networkSurface, patch, pipe, sweep2 } from './advancedSurfaces'
 import { extrudeCurve, loftCurves, planarFace, revolveCurve, sweep } from './brep'
 import { slabParams, wallParams, type Opening, type OpeningPart, type SavedJoin } from '../core/architecture'
-import { columnShape, openingPartShape, railingShape, roofShape, slabShape, stairShape, wallShape } from './architecture'
+import { columnShape, floorShape, openingPartShape, railingShape, roofShape, skirtingShape, slabShape, stairShape, wallShape } from './architecture'
 import { railingParams, stairRailingLines } from '../core/railings'
 import { tessellate } from '../core/geometry'
 import { columnParams, roofParams, stairParams } from '../core/buildingParts'
@@ -51,6 +51,9 @@ export const REBUILDERS: Record<string, (curves: AnyCurve[], p: Params) => AnySh
     const lines = p.stairParams ? stairRailingLines(line, stairParams(p.stairParams as Params), params.sides) : [tessellate(line)]
     return railingShape(lines, params)
   },
+  Floor: (loops, p) => floorShape(loops, num(p.thickness ?? 20)),
+  Skirting: (loops, p) =>
+    skirtingShape(loops, num(p.height ?? 80), num(p.thickness ?? 15), Array.isArray(p.cuts) ? (p.cuts as { origin: Vector3; u: Vector3; v: Vector3; w: Vector3 }[]) : []),
   Column: ([outline], p) => columnShape(outline, columnParams(p)),
   OpeningPart: ([path], p) => openingPartShape(path, wallParams(p), p.opening as Opening, p.part as OpeningPart),
 }
