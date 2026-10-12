@@ -13,11 +13,11 @@ interoperability, in a lightweight desktop application driven by a command line.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Desktop build](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=installers)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Version](https://img.shields.io/badge/version-0.7.0-2f81f7?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.8.0-2f81f7?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
 
-[Download](#download) · [Features](#features) · [Architecture](#architecture) ·
+[Download](#download) · [Getting started](docs/getting-started.md) · [Features](#features) · [Architecture](#architecture) ·
 [File formats](#file-formats) · [Roadmap](#roadmap) · [FAQ](#faq) · [Development](#development)
 
 <br>
@@ -500,6 +500,7 @@ work; `Last` runs the last one again. A script runs as the body of an async func
 | `archi.add(geometry, layer?)`, `archi.remove(ids)` | Adds geometry (a curve, mesh or point) to a layer by name, or deletes objects. |
 | `archi.objects(filter?)` | The objects: id, type, layer, and the command and parameters of those with history. |
 | `archi.select(ids)` | Selects objects, for commands that act on the selection. |
+| `archi.setParams(id, params)` | Changes the parameters of an object made with history (a wall's `openings`, `thickness` or `height`, ...); it is made again, as from Properties. |
 | `archi.levels()`, `archi.setLevel(name)` | The levels, and the current one: points typed in commands are measured from its floor (`w` before a point, as `w0,0,6400`, gives world coordinates). |
 | `await archi.step(edits)` | Several edits as one undo step. |
 | `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | A point, a line in the history, and the document itself. |
