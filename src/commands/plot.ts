@@ -1,4 +1,5 @@
 import type { CadObject } from '../core/document'
+import type { Layout } from '../core/layout'
 import { millimetersPer } from '../core/units'
 import { DXF, PDF } from '../app/files'
 import { writeDxf } from '../io/dxf'
@@ -60,6 +61,37 @@ const exportPdf: Command = {
 
 const layoutMemory = { all: false }
 
+/** Layouts as PDF sheets, their hidden line details worked out by the kernel. */
+export async function layoutSheets(ctx: CommandContext, layouts: Layout[], black: boolean): Promise<Sheet[]> {
+  const { doc, log } = ctx
+  const hidden: HiddenDrawings = new Map()
+  if (layouts.some((l) => l.details.some(usesHiddenLines))) {
+    await kernel(ctx)
+    log('Removing hidden lines…')
+  }
+  const sheets: Sheet[] = []
+  for (const layout of layouts) {
+    const sheetNumber = doc.layouts.indexOf(layout) + 1
+    for (const d of layout.details) if (usesHiddenLines(d)) hidden.set(d.id, cachedHiddenLines(doc, d) ?? (await computeHiddenLines(doc, d)))
+    sheets.push(layoutSheet(doc, layout, { black, sheetNumber, sheetCount: doc.layouts.length }, hidden))
+    hidden.clear()
+  }
+  return sheets
+}
+
+/** The model's objects as a DXF file. */
+export function dxfText(ctx: CommandContext, objects: CadObject[]): string {
+  const { doc } = ctx
+  return writeDxf({ units: doc.units, layers: doc.layers, objects, linetypeScale: memory.scale ?? 1, millimetersPerUnit: millimetersPer(doc.units) })
+}
+
+/** A view printed to one PDF sheet with the remembered print settings. */
+export function viewSheet(ctx: CommandContext, objects: CadObject[]): Sheet {
+  const sheet = plotSheet(ctx.doc, ctx.display.active, objects, memory)
+  sheet.title = ctx.files.name
+  return sheet
+}
+
 /** Prints the open layout, or all of them, to a PDF with one page per sheet. */
 async function printLayouts(ctx: CommandContext): Promise<void> {
   const { doc, display, input, files, log } = ctx
@@ -74,20 +106,7 @@ async function printLayouts(ctx: CommandContext): Promise<void> {
   }
   const layouts = layoutMemory.all ? doc.layouts : doc.layouts.filter((l) => l.id === display.activeLayout)
   if (layouts.length === 0) throw new Error('There is no layout to print')
-  // Details drawn with hidden lines need the geometry kernel.
-  const hidden: HiddenDrawings = new Map()
-  const needsKernel = layouts.some((l) => l.details.some(usesHiddenLines))
-  if (needsKernel) {
-    await kernel(ctx)
-    log('Removing hidden lines…')
-  }
-  const sheets: Sheet[] = []
-  for (const layout of layouts) {
-    const sheetNumber = doc.layouts.indexOf(layout) + 1
-    for (const d of layout.details) if (usesHiddenLines(d)) hidden.set(d.id, cachedHiddenLines(doc, d) ?? (await computeHiddenLines(doc, d)))
-    sheets.push(layoutSheet(doc, layout, { black: memory.black, sheetNumber, sheetCount: doc.layouts.length }, hidden))
-    hidden.clear()
-  }
+  const sheets = await layoutSheets(ctx, layouts, memory.black)
   const fileName = await files.exportFile(PDF, () => writePdf(sheets))
   if (fileName) log(`Saved ${fileName} (${sheets.length} sheet${sheets.length === 1 ? '' : 's'})`)
 }
@@ -99,17 +118,7 @@ const exportDxf: Command = {
   async run(ctx) {
     const { doc, files, log } = ctx
     const objects = chosenObjects(ctx)
-    const fileName = await files.exportFile(DXF, () =>
-      new TextEncoder().encode(
-        writeDxf({
-          units: doc.units,
-          layers: doc.layers,
-          objects,
-          linetypeScale: memory.scale ?? 1,
-          millimetersPerUnit: millimetersPer(doc.units),
-        }),
-      ),
-    )
+    const fileName = await files.exportFile(DXF, () => new TextEncoder().encode(dxfText(ctx, objects)))
     if (fileName) log(`Exported ${objects.length} object${objects.length === 1 ? '' : 's'} to ${fileName}`)
   },
 }

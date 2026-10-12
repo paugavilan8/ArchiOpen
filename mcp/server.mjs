@@ -7,6 +7,9 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, isAbsolute, resolve } from 'node:path'
 import { WebSocketServer } from 'ws'
 
 const PORT = Number(process.env.ARCHIOPEN_PORT ?? 47800)
@@ -134,6 +137,49 @@ const TOOLS = [
     },
   },
   {
+    name: 'export',
+    description:
+      'Writes the model to a file on this computer: archi (the native model, to save work), ifc (BIM), pdf (the layouts/sheets if there are any, otherwise the active view), dxf (2D/3D geometry for CAD) or csv (quantities). Give an absolute path; an existing file is only replaced with overwrite: true.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        format: { type: 'string', enum: ['archi', 'ifc', 'pdf', 'dxf', 'csv'] },
+        path: { type: 'string', description: 'Absolute path of the file to write' },
+        overwrite: { type: 'boolean' },
+      },
+      required: ['format', 'path'],
+    },
+  },
+  {
+    name: 'open_model',
+    description: 'Opens a file from this computer in place of the open model: .archi, .3dm, .ifc, .dxf, .stl or .obj (absolute path). Refused while the open model has unsaved changes unless discard_changes is true.',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' }, discard_changes: { type: 'boolean' } },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'new_model',
+    description: 'Starts an empty model. Refused while the open model has unsaved changes unless discard_changes is true.',
+    inputSchema: { type: 'object', properties: { discard_changes: { type: 'boolean' } } },
+  },
+  {
+    name: 'set_params',
+    description:
+      'Changes the parameters of an object made with history (see list_objects): for example a wall {thickness, height, justification}, a slab {thickness}, a roof {type, pitch, overhang, thickness}, a stair {width, height, risers}, a column {height}. The object is made again, with what depends on it (window frames, joins).',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'number' }, params: { type: 'object' } },
+      required: ['id', 'params'],
+    },
+  },
+  {
+    name: 'delete_objects',
+    description: 'Deletes objects by id, as one undo step.',
+    inputSchema: { type: 'object', properties: { ids: { type: 'array', items: { type: 'number' } } }, required: ['ids'] },
+  },
+  {
     name: 'undo',
     description: 'Undoes the last steps (default 1).',
     inputSchema: { type: 'object', properties: { steps: { type: 'number' } } },
@@ -145,7 +191,7 @@ const server = new Server(
   {
     capabilities: { tools: {} },
     instructions:
-      'ArchiOpen is an open-source 3D modeler for architecture, driven like Rhino by commands. Start with get_model to see the units and levels. Build with run_command (or run_script for repetition), then check the result with view. Lengths are in the model units (usually millimeters: a 3 m wall is 3000). Architecture commands: Level, Wall, CurtainWall, Slab, Roof, Stair, Column, Railing, Window, Door, Room, Floor, Skirting, Terrain; drawings: Elevations, Section, Schedule, DrawingSet. Everything can be undone.',
+      'ArchiOpen is an open-source 3D modeler for architecture, driven like Rhino by commands. Start with get_model to see the units and levels. Build with run_command (or run_script for repetition), then check the result with view. Lengths are in the model units (usually millimeters: a 3 m wall is 3000). Architecture commands: Level, Wall, CurtainWall, Slab, Roof, Stair, Column, Railing, Window, Door, Room, Floor, Skirting, Terrain; drawings: Elevations, Section, Schedule, DrawingSet. Everything can be undone; save work with export (format archi) to a path the user agrees to.',
   },
 )
 
@@ -154,7 +200,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params
   if (!TOOLS.some((t) => t.name === name)) return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true }
   try {
-    const answer = await callApp(name, args)
+    // Files are read and written here, on this computer; the app gets and gives their contents.
+    let appArgs = args
+    if (name === 'open_model') {
+      const path = String(args.path ?? '')
+      if (!isAbsolute(path)) throw new Error('Give an absolute path')
+      appArgs = { file_name: basename(path), data: (await readFile(path)).toString('base64'), discard_changes: args.discard_changes === true }
+    }
+    if (name === 'export') {
+      const path = resolve(String(args.path ?? ''))
+      if (!isAbsolute(String(args.path ?? ''))) throw new Error('Give an absolute path')
+      if (existsSync(path) && args.overwrite !== true) throw new Error(`${path} exists: pass overwrite: true to replace it`)
+      const format = String(args.format ?? extname(path).slice(1)).toLowerCase()
+      const answer = await callApp('export', { format })
+      if (answer.error) return { content: [{ type: 'text', text: answer.error }], isError: true }
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, Buffer.from(answer.result.data, 'base64'))
+      return { content: [{ type: 'text', text: `Wrote ${path} (${format}, ${answer.result.bytes} bytes)` }] }
+    }
+    const answer = await callApp(name, appArgs)
     if (answer.error) return { content: [{ type: 'text', text: answer.error }], isError: true }
     const content = []
     if (answer.image) content.push({ type: 'image', data: answer.image, mimeType: 'image/png' })

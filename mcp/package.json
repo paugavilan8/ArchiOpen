@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "description": "MCP server that lets Claude (or another MCP client) model in a running ArchiOpen",
   "license": "MIT",
+  "keywords": ["mcp", "model-context-protocol", "claude", "architecture", "cad", "bim", "3d"],
+  "homepage": "https://github.com/paugavilan8/ArchiOpen/tree/master/mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paugavilan8/ArchiOpen.git",
+    "directory": "mcp"
+  },
   "type": "module",
   "bin": {
     "archiopen-mcp": "server.mjs"

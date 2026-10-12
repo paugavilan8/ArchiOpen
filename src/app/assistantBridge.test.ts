@@ -54,4 +54,25 @@ describe('assistant tools', () => {
     expect(ran).toEqual(['Box 0,0 1,1'])
     expect(result.log).toEqual(['Command: Box', 'done'])
   })
+
+  it('change parameters through construction history, delete, and keep unsaved work', async () => {
+    const { doc, ctx, tools } = setup()
+    const remade: unknown[] = []
+    ;(ctx as { history?: unknown }).history = { remakeStep: async (id: number, record: unknown) => remade.push([id, record]) }
+    ;(ctx as { files?: unknown }).files = { restore: () => {}, archiData: () => new TextEncoder().encode('{}') }
+    const id = doc.add({ type: 'point', point: { x: 0, y: 0, z: 0 } } as never).id
+    doc.setHistory(id, { command: 'Wall', inputs: [], params: { thickness: 200, height: 3000 } })
+    await tools.set_params({ id, params: { thickness: 300 } })
+    expect(remade).toEqual([[id, { command: 'Wall', inputs: [], params: { thickness: 300, height: 3000 } }]])
+    await expect(tools.set_params({ id: 999, params: {} })).rejects.toThrow(/no parameters/)
+    // Unsaved changes are kept unless the assistant says to drop them.
+    doc.modified = true
+    await expect(tools.new_model({})).rejects.toThrow(/unsaved changes/)
+    expect(await tools.delete_objects({ ids: [id, 12345] })).toEqual({ deleted: [id], objects: 0 })
+    await expect(tools.delete_objects({ ids: [12345] })).rejects.toThrow()
+    expect(await tools.new_model({ discard_changes: true })).toEqual({ objects: 0 })
+    // Exports the model itself; unknown formats are refused.
+    expect(((await tools.export({ format: 'archi' })) as { data: string }).data).toBe(btoa('{}'))
+    await expect(tools.export({ format: 'dwg' })).rejects.toThrow(/format/)
+  })
 })

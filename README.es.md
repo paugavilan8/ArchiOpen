@@ -500,8 +500,9 @@ ArchiOpen se puede manejar desde Claude, o desde cualquier otro cliente
 ejecuta los comandos en tu modelo, mira una imagen del resultado y lo corrige. El
 [servidor MCP](mcp/README.md) funciona en tu ordenador; la conexión se activa en la app con
 `McpConnect` (menú *File > Connect AI Assistant*), y la barra de estado indica cuándo hay un
-asistente conectado. Sus herramientas describen el modelo, ejecutan comandos y scripts, capturan
-vistas y deshacen. Consulta [mcp/README.md](mcp/README.md) para configurarlo en Claude Desktop o
+asistente conectado. Sus herramientas describen el modelo, ejecutan comandos y scripts, cambian los
+parámetros de los elementos, capturan vistas, abren, guardan y exportan archivos (IFC, PDF, DXF,
+mediciones) y deshacen. Consulta [mcp/README.md](mcp/README.md) para configurarlo en Claude Desktop o
 Claude Code.
 
 </details>

@@ -2,6 +2,11 @@ import type { CommandContext, CommandRunner } from '../commands/runner'
 import type { Display } from '../view/display'
 import type { ViewKind } from '../view/viewport'
 import { runScript, scriptApi } from './scripting'
+import { ifcModel } from '../io/ifcModel'
+import { writeIfc } from '../io/ifc'
+import { writePdf } from '../io/pdf'
+import { quantitiesCsv, sumQuantities } from '../core/quantities'
+import { quantityItems } from '../commands/quantities'
 
 /**
  * The bridge to an AI assistant (Claude or any MCP client): the ArchiOpen MCP server (in `mcp/`)
@@ -110,6 +115,42 @@ export function toolHandlers(ctx: CommandContext, runner: CommandRunner, display
       })
       return { log, objects: doc.objects.size }
     },
+    export: async (args: Record<string, unknown>) => {
+      const format = String(args.format ?? '').toLowerCase()
+      const bytes = await exportBytes(ctx, format)
+      return { data: toBase64(bytes), format, bytes: bytes.length }
+    },
+    open_model: async (args: Record<string, unknown>) => {
+      if (doc.modified && args.discard_changes !== true) throw new Error('The open model has unsaved changes: save it first (export format "archi"), or pass discard_changes: true')
+      const fileName = String(args.file_name ?? 'model.archi')
+      const message = await ctx.files.openFile(fileName, fromBase64(String(args.data ?? '')))
+      ctx.display?.fit(ctx.display.viewports)
+      ctx.log(message)
+      return { message, objects: doc.objects.size }
+    },
+    new_model: async (args: Record<string, unknown>) => {
+      if (doc.modified && args.discard_changes !== true) throw new Error('The open model has unsaved changes: save it first (export format "archi"), or pass discard_changes: true')
+      doc.clear()
+      ctx.files.restore('Untitled', null)
+      return { objects: doc.objects.size }
+    },
+    set_params: async (args: Record<string, unknown>) => {
+      const id = Number(args.id)
+      const record = doc.objects.get(id)?.history
+      if (!record) throw new Error(`Object ${id} has no parameters to change (it was not made by an architecture command with history)`)
+      const params = { ...(record.params ?? {}), ...((args.params as Record<string, unknown>) ?? {}) }
+      if (!ctx.history) throw new Error('Construction history is not available here')
+      await ctx.history.remakeStep(id, { ...record, params })
+      return { id, command: record.command, params: doc.objects.get(id)?.history?.params ?? params }
+    },
+    delete_objects: async (args: Record<string, unknown>) => {
+      const ids = (Array.isArray(args.ids) ? args.ids : []).map(Number).filter((id) => doc.objects.has(id))
+      if (ids.length === 0) throw new Error('None of those objects exist')
+      doc.begin()
+      for (const id of ids) doc.remove(id)
+      doc.commit()
+      return { deleted: ids, objects: doc.objects.size }
+    },
     view: async (args: Record<string, unknown>) => {
       if (!display) throw new Error('There is no view to capture here')
       const kind = VIEWS.find((v) => v.toLowerCase() === String(args.view ?? 'Perspective').toLowerCase()) ?? 'Perspective'
@@ -123,6 +164,43 @@ export function toolHandlers(ctx: CommandContext, runner: CommandRunner, display
       const canvas = display.captureImage(vp, width, height, { grid: false, supersample: 1 })
       return { image: canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, ''), view: kind }
     },
+  }
+}
+
+const toBase64 = (bytes: Uint8Array) => {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
+}
+const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
+
+/** The model as a file of some format, as an export from the menus would write it. */
+async function exportBytes(ctx: CommandContext, format: string): Promise<Uint8Array> {
+  const { doc } = ctx
+  const text = (t: string) => new TextEncoder().encode(t)
+  const visible = [...doc.objects.values()].filter((o) => doc.isVisible(o))
+  switch (format) {
+    case 'archi':
+      return ctx.files.archiData()
+    case 'ifc': {
+      const model = ifcModel(doc, ctx.files.name)
+      if (model.elements.length === 0 && model.spaces.length === 0) throw new Error('There is nothing to export to IFC')
+      return text(writeIfc(model))
+    }
+    case 'csv': {
+      const rows = sumQuantities(quantityItems(ctx), doc.levels.map((l) => l.name))
+      if (rows.length === 0) throw new Error('There are no building elements to measure')
+      return text(quantitiesCsv(rows))
+    }
+    case 'dxf':
+      return text((await import('../commands/plot')).dxfText(ctx, visible))
+    case 'pdf': {
+      // The layouts (sheets) if there are any, else the active view on one sheet.
+      const { layoutSheets, viewSheet } = await import('../commands/plot')
+      return writePdf(doc.layouts.length > 0 ? await layoutSheets(ctx, doc.layouts, false) : viewSheet(ctx, visible))
+    }
+    default:
+      throw new Error('The format must be archi, ifc, pdf, dxf or csv')
   }
 }
 

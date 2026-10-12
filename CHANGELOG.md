@@ -6,7 +6,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 ## Unreleased
 
 - **AI assistant (MCP)**: an MCP server (`mcp/`) and `McpConnect` let Claude or another MCP client
-  model in the app: describe the model, run commands and scripts, capture views and undo.
+  model in the app: describe the model, run commands and scripts, change parameters, capture
+  views, open, save and export files, and undo. Ready to publish on npm as `archiopen-mcp`.
 
 ## 0.6.0
 

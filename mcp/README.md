@@ -25,11 +25,25 @@ typed it, and can be undone.
 | `run_command` | Runs a command with its answers (points, numbers, options, Enter). |
 | `run_script` | Runs JavaScript with the `archi` API, for loops and repetition. |
 | `view` | An image of a view (Perspective, Top, Front, Right), so the assistant sees what it made. |
+| `set_params` | Changes an element's parameters (a wall's thickness, a roof's pitch, ...); it is made again. |
+| `delete_objects` | Deletes objects. |
+| `export` | Writes the model to a file: `.archi`, IFC, PDF (the sheets, or the view), DXF or quantities CSV. |
+| `open_model`, `new_model` | Opens a file (.archi, .3dm, .ifc, .dxf, .stl, .obj) or starts an empty model; unsaved work is kept unless the assistant is told to drop it. |
 | `undo` | Undoes the last steps. |
 
 ## Setting it up
 
-You need [Node.js](https://nodejs.org) 18 or later and a copy of this repository.
+You need [Node.js](https://nodejs.org) 18 or later.
+
+**Once it is published on npm** (see *Publishing* below), nothing else is needed:
+
+```
+claude mcp add archiopen -- npx -y archiopen-mcp
+```
+
+In Claude Desktop, use `"command": "npx", "args": ["-y", "archiopen-mcp"]`.
+
+**From a copy of this repository:**
 
 ```
 cd mcp
@@ -76,3 +90,8 @@ the levels and windows on the south side, then make its drawing set."*
 The server accepts connections from your own computer only, and the app connects only while you
 have it on. A connected assistant can do in your model whatever you can, including running scripts,
 so connect it when you want it to work, keep your files saved, and undo what you do not want.
+
+## Publishing
+
+To publish it on npm (once, with an npm account): `npm login`, then from this folder `npm publish`.
+For a new version, raise `version` in `package.json` and publish again.
