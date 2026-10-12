@@ -1,7 +1,9 @@
 import type { Document } from '../core/document'
 import type { AnyCurve } from '../core/geometry'
 import type { Recognized } from '../core/ifcRecognize'
-import type { Opening } from '../core/architecture'
+import { wallParams, type Opening } from '../core/architecture'
+import type { IfcMesh } from '../io/ifc'
+import { shapeRef } from '../kernel/wire'
 import { kernelJob } from '../kernel/client'
 import type { CommandContext } from '../commands/runner'
 
@@ -94,4 +96,24 @@ export async function framesFor(ctx: Pick<CommandContext, 'doc' | 'history' | 'f
     else doc.setHistory(id, next)
   }
   ctx.files.nativeWalls = []
+}
+
+/**
+ * For IFC: each wall drawn along several segments (a ring made with Close, or a polyline) cut into
+ * one piece for each segment, as triangles, by wall id. BIM tools expect each wall straight.
+ */
+export async function wallPieces(doc: Document): Promise<Map<number, IfcMesh[]>> {
+  const out = new Map<number, IfcMesh[]>()
+  for (const obj of doc.objects.values()) {
+    if (obj.history?.command !== 'Wall' || obj.geometry.type !== 'brep' || !doc.isVisible(obj)) continue
+    const path = doc.objects.get(obj.history.inputs[0])?.geometry
+    if (!path || path.type !== 'polyline' || path.points.length < 3) continue
+    try {
+      const pieces = await kernelJob('wallSegments', shapeRef(obj.geometry), path, wallParams(obj.history.params).thickness)
+      if (pieces.length > 1) out.set(obj.id, pieces.map((g) => ({ vertices: g.display.vertices, triangles: g.display.triangles })))
+    } catch {
+      // Left whole.
+    }
+  }
+  return out
 }

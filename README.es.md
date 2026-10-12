@@ -483,14 +483,17 @@ Despliega cada apartado para ver los detalles.
     forjados, cubiertas, escaleras, pilares, barandillas, pavimentos y rodapiés pasan a su entidad
     IFC, y cada puerta y ventana a un IfcDoor o IfcWindow con sus medidas. El mobiliario pasa a
     IfcFurniture, las estancias a espacios con su superficie, y el resto a objetos genéricos. Las
-    formas se escriben como caras trianguladas, en metros.
+    formas se escriben como caras trianguladas, en metros. Un muro dibujado en anillo o en varios
+    tramos se escribe como un muro por cada lado, con las esquinas a inglete.
   - `Open` e `Import` leen archivos IFC (con [web-ifc](https://github.com/ThatOpen/engine_web-ifc)).
     Los muros rectos de grosor constante pasan a ser muros de ArchiOpen sobre su eje, unidos donde
     se encuentran, con sus puertas y ventanas como huecos (con marcos y vidrios); los forjados
     planos pasan a ser forjados sobre su contorno, con sus huecos. Todo se puede editar como si se
     hubiera dibujado aquí. El resto (muros curvos o inclinados, cubiertas, mobiliario...) entra
     como mallas en una capa por clase, con los colores del archivo y los espacios en una capa
-    oculta. `Open` toma además las plantas como niveles.
+    oculta. `Open` toma además las plantas como niveles. Al abrir, el mensaje dice por qué algún
+    muro o forjado se ha quedado como malla. Probado con el FZK-Haus de ArchiCAD (9 de sus 13
+    muros editables; el resto son hastiales) y un ejemplo de Revit (16 de 17).
 
 </details>
 

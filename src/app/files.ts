@@ -59,10 +59,12 @@ function surfacesIn(g: Geometry, seen = new Set<BlockDefinition>()): BrepGeometr
 function ifcSummary(result: IfcImport, native: { walls: number[]; slabs: number[] }): string {
   const count = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`
   const openings = result.native.walls.reduce((s, w) => s + w.openings.length, 0)
-  const own = [native.walls.length && count(native.walls.length, 'wall'), openings && count(openings, 'door and window').replace('door and windows', 'doors and windows'), native.slabs.length && count(native.slabs.length, 'slab')].filter(Boolean)
+  const own = [native.walls.length && count(native.walls.length, 'wall'), openings && (openings === 1 ? '1 door or window' : `${openings} doors and windows`), native.slabs.length && count(native.slabs.length, 'slab')].filter(Boolean)
   const meshes = [...result.counts].map(([layer, n]) => count(n, layer.toLowerCase()))
   const levels = result.levels.length > 0 ? ` on ${count(result.levels.length, 'level')}` : ''
-  return [own.length ? `${own.join(', ')} as editable elements` : '', meshes.length ? `${meshes.join(', ')} as meshes` : ''].filter(Boolean).join('; ') + levels || 'no elements'
+  const why = [...result.native.leftAsMeshes].map(([reason, n]) => `${n} ${reason}`)
+  const left = why.length > 0 ? ` (left as meshes: ${why.join(', ')})` : ''
+  return ([own.length ? `${own.join(', ')} as editable elements` : '', meshes.length ? `${meshes.join(', ')} as meshes` : ''].filter(Boolean).join('; ') + levels || 'no elements') + left
 }
 
 const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']

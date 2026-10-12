@@ -4,7 +4,7 @@ import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FRAME, findJoins, layerBoundaries, WALL_TYPES, wallOutline, wallParams, type Opening } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
-import { columnShape, floorShape, openingPartShape, railingShape, roofShape, roomRegion, skirtingShape, slabShape, stairShape, wallShape } from './architecture'
+import { columnShape, floorShape, openingPartShape, railingShape, roofShape, roomRegion, skirtingShape, slabShape, stairShape, wallSegments, wallShape } from './architecture'
 import { railingParams, railingPieces } from '../core/railings'
 import { columnOutline, roofParams, stairFootprint, stairParams, stairPlan } from '../core/buildingParts'
 
@@ -24,6 +24,19 @@ const profileArea = (pts: Vector3[]) => {
 const room: AnyCurve = { type: 'polyline', points: [v(0, 0), v(4000, 0), v(4000, 3000), v(0, 3000)], closed: true }
 
 describe('architectural solids', () => {
+  it('cuts a ring of walls into one wall for each side, mitred at the corners', () => {
+    const ring = wallShape(room, wallParams({ thickness: 200, height: 3000, openings: [{ id: 1, kind: 'door', at: 2000, width: 900, height: 2100, sill: 0 }] }))
+    const pieces = wallSegments(ring, room, 200)
+    expect(pieces).toHaveLength(4)
+    expect(pieces.reduce((s, p) => s + volume(p), 0)).toBeCloseTo(volume(ring), -3)
+    // Each side runs the length of its side of the room, plus the corners.
+    const lengths = pieces.map((p) => Math.round(Math.max(p.boundingBox.width, p.boundingBox.height))).sort()
+    expect(lengths).toEqual([3200, 3200, 4200, 4200])
+    // An open path of one segment is left whole.
+    const straight: AnyCurve = { type: 'polyline', points: [v(0, 0), v(5000, 0)], closed: false }
+    expect(wallSegments(wallShape(straight, wallParams({ thickness: 200, height: 3000 })), straight, 200)).toHaveLength(1)
+  })
+
   it('makes a straight wall', () => {
     const wall = wallShape({ type: 'polyline', points: [v(0, 0), v(5000, 0)], closed: false }, wallParams({ thickness: 200, height: 3000 }))
     expect(volume(wall)).toBeCloseTo(5000 * 200 * 3000, -3)

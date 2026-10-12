@@ -467,14 +467,17 @@ Expand a section for details.
     roofs, stairs, columns, railings, floor finishes and skirting become their IFC entities, and
     each door and window one IfcDoor or IfcWindow with its size. Furniture becomes IfcFurniture,
     rooms become spaces with their floor area, and anything else a proxy. Shapes are written as
-    triangulated faces, in meters.
+    triangulated faces, in meters. A wall drawn as a ring or along several segments is written as
+    one wall for each side, mitred at the corners.
   - `Open` and `Import` read IFC files (through [web-ifc](https://github.com/ThatOpen/engine_web-ifc)).
     Straight walls of even thickness become ArchiOpen walls on their centre lines, joined where
     they meet, with the doors and windows in them as their openings (frames and glass made
     again); flat slabs become slabs on their outlines, with their holes. All are editable as if
     drawn here. Anything else (curved or sloping walls, roofs, furniture, ...) comes in as meshes
     on a layer per class, colored as in the file, with spaces on a hidden layer. `Open` also takes
-    the storeys as levels.
+    the storeys as levels. The message on opening says why any walls or slabs stayed meshes.
+    Tested with ArchiCAD's FZK-Haus (9 of its 13 walls editable, the rest gables) and a Revit
+    sample (16 of 17).
 
 </details>
 
