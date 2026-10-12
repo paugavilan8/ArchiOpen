@@ -12,6 +12,7 @@ import { heightMarks, marksReach, type HeightsInView } from '../core/heightMarks
 import { isCurve } from '../core/geometry'
 import { millimetersPer } from '../core/units'
 import { boundsOf, layerNamed, SECTION_PEN, sectionFill } from './drawing'
+import { updateSchedules } from './schedules'
 import type { Command, CommandContext } from './runner'
 import { kernel, readable } from './solids'
 
@@ -275,8 +276,10 @@ const updateDrawings: Command = {
   async run(ctx) {
     const { doc, log } = ctx
     const titles = [...doc.objects.values()].filter((o) => o.history?.command === 'DrawingView')
+    const schedules = updateSchedules(ctx)
     if (titles.length === 0) {
-      log('There are no elevations or sections to update (draw them with Elevations or Section)')
+      if (schedules > 0) log(`${schedules} schedule${schedules === 1 ? '' : 's'} updated from the model`)
+      else log('There are no elevations, sections or schedules to update (draw them with Elevations, Section or Schedule)')
       return
     }
     const objects = buildingGeometry(ctx)
@@ -301,7 +304,8 @@ const updateDrawings: Command = {
       place(ctx, drawing, new Vector3(...record.offset), ground, record.name, record.kind === 'section' ? 'Sections' : 'Elevations', record.textHeight, record, seen)
       updated++
     }
-    log(`${updated} drawing${updated === 1 ? '' : 's'} updated from the model`)
+    const also = schedules > 0 ? ` and ${schedules} schedule${schedules === 1 ? '' : 's'}` : ''
+    log(`${updated} drawing${updated === 1 ? '' : 's'}${also} updated from the model`)
   },
 }
 

@@ -18,6 +18,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         'separator',
         item('Save', 'Save', `${mod}S`),
         item('Save As…', 'SaveAs', `${mod}Shift+S`),
+        item('Autosave and recover…', 'Autosave'),
         'separator',
         item('Import .3dm, .dxf, .stl or .obj…', 'Import'),
         item('Export .3dm…', 'Export'),
@@ -274,6 +275,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         'separator',
         item('Elevations', 'Elevations'),
         item('Section', 'Section'),
+        item('Schedules', 'Schedule'),
+        item('Update Drawings', 'UpdateDrawings'),
       ],
     ],
     [

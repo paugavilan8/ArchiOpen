@@ -610,7 +610,7 @@ async function regionAt(ctx: CommandContext, point: Vector3): Promise<{ loops: A
 }
 
 /** Square units of area for a document's units, and how many of them a square model unit is. */
-function areaUnits(units: string): { name: string; factor: number } {
+export function areaUnits(units: string): { name: string; factor: number } {
   const table: Record<string, { name: string; factor: number }> = {
     Millimeters: { name: 'm²', factor: 1e-6 },
     Centimeters: { name: 'm²', factor: 1e-4 },

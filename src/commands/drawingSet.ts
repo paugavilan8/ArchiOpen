@@ -6,12 +6,14 @@ import { drawingArea, STANDARD_SCALES, sheetSize, view, type Detail, type Layout
 import { millimetersPer } from '../core/units'
 import { buildingGeometry, drawElevations, modelBox } from './buildingViews'
 import { layerNamed } from './drawing'
+import { drawSchedules } from './schedules'
 import type { Command, CommandContext } from './runner'
 
 /**
  * DrawingSet: the building's drawings laid out on sheets in one go, each with its title block: a
  * plan of each level with something in it (cut 1.2 above its floor, without the levels under it),
- * the four elevations, and any sections drawn with Section. Elevations are drawn first if there are none. The sheets are ordinary layouts, to
+ * the four elevations, any sections drawn with Section, and the doors and windows and rooms
+ * schedules. Elevations are drawn first if there are none. The sheets are ordinary layouts, to
  * adjust, print or export to PDF.
  */
 
@@ -137,6 +139,8 @@ const drawingSet: Command = {
       log('Drawing the elevations first…')
       await drawElevations(ctx)
     }
+    if (drawingGroups(ctx, ['Schedules']).length === 0 && drawSchedules(ctx).length > 0) log('Drawing the schedules first…')
+    const schedules = drawingGroups(ctx, ['Schedules'])
     const elevations = drawingGroups(ctx, ['Elevations', 'Elevations Cut', 'Elevations Dimensions'])
     const sections = drawingGroups(ctx, ['Sections', 'Sections Cut', 'Sections Fill', 'Sections Dimensions'])
     // A plan for each level with something in it, the building cut above its floor. Each reaches out
@@ -166,6 +170,7 @@ const drawingSet: Command = {
       ...planSheets,
       { name: 'Elevations', details: gridDetails(ctx, elevations, null, []) },
       ...(sections.length > 0 ? [{ name: sections.length === 1 ? 'Section' : 'Sections', details: gridDetails(ctx, sections, null, []) }] : []),
+      ...(schedules.length > 0 ? [{ name: 'Schedules', details: gridDetails(ctx, schedules, null, []) }] : []),
     ]
     const made: Layout[] = sheets.map((s, i) => ({
       id: ++id,
