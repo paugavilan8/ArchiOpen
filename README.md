@@ -183,6 +183,8 @@ Expand a section for details.
   - `Patch`: a surface fitted to a closed boundary and the curves inside it;
   - `EdgeSrf` (from two to four edge curves) and `SrfPt` (from three or four corners);
   - `BlendSrf`: a transition surface between the edges of two surfaces, tangent to both;
+  - `FilletSrf`: a constant-radius fillet between two surfaces or faces, on the sides picked, with
+    an option to trim both back to it. The surfaces need not touch;
   - `Pipe`: a pipe along curves, with start and end radii and an option to cap it as a solid;
   - `RailRevolve`: a profile revolved about an axis while one of its ends follows a rail curve,
     for domes and roofs on oval or irregular plans.
@@ -386,7 +388,8 @@ flowchart LR
 - [x] Copy and paste between files
 - [x] `ChamferEdge` and `UnrollSrf`
 - [x] `Untrim` and `RailRevolve`
-- [ ] Surface tools: `FilletSrf`, `MatchSrf`
+- [x] `FilletSrf`
+- [ ] Surface tools: `MatchSrf`
 - [ ] Deformation tools: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] SubD modeling
 - [ ] Architectural tools: walls, slabs, openings and levels

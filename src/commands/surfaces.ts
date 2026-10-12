@@ -5,7 +5,7 @@ import { CancelError } from '../input/interaction'
 import { kernelJob } from '../kernel/client'
 import { shapeRef, ShapeRef } from '../kernel/wire'
 import { brepHooks } from './curveEdit'
-import { isOption, plural, yesNo } from './helpers'
+import { isOption, plural, valueOption, yesNo } from './helpers'
 import type { Command, CommandContext } from './runner'
 import { addShape, brepOf, curveOf, faceOutline, kernel, nearestEdge, readable, shapeOfId } from './solids'
 
@@ -345,4 +345,60 @@ const untrim: Command = {
   },
 }
 
-export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge, untrim]
+const filletSrfMemory = { radius: 1, trim: true }
+
+/**
+ * A constant-radius fillet between two surfaces (or faces of polysurfaces), on the sides picked;
+ * with `Trim`, both are cut back to the fillet.
+ */
+const filletSrf: Command = {
+  name: 'FilletSrf',
+  async run(ctx) {
+    const { doc, input, display, log } = ctx
+    await kernel(ctx)
+    const options = () => [valueOption('Radius', filletSrfMemory.radius), yesNo('Trim', filletSrfMemory.trim)]
+    const picks: { id: number; geometry: BrepGeometry; face: number; point: Vector3 }[] = []
+    while (picks.length < 2) {
+      const pick = await input.getPick(picks.length === 0 ? 'Select the first surface to fillet' : 'Select the second surface to fillet', options(), (id) => !!brepOf(ctx, id))
+      if (pick.kind === 'option') {
+        if (isOption(pick.option, 'Radius')) {
+          const r = await input.getNumber('Fillet radius', filletSrfMemory.radius)
+          if (typeof r === 'number' && r > 0) filletSrfMemory.radius = r
+        } else if (isOption(pick.option, 'Trim')) filletSrfMemory.trim = !filletSrfMemory.trim
+        continue
+      }
+      if (pick.kind !== 'pick') {
+        display.setPreview([])
+        return
+      }
+      const g = brepOf(ctx, pick.id)
+      if (!g) continue
+      const geometry = g.display.faceTriangles ? g : await readable(kernelJob('faces', shapeRef(g)), 'find the faces of that object')
+      const face = nearestFace(geometry, pick.point)
+      if (face < 0) continue
+      if (picks.some((p) => p.id === pick.id && p.face === face)) {
+        log('Pick a different surface')
+        continue
+      }
+      picks.push({ id: pick.id, geometry, face, point: pick.point })
+      display.setPreview(picks.flatMap((p) => faceOutline(p.geometry, p.face)), true)
+    }
+    const [a, b] = picks
+    // Two faces of one object cannot both be trimmed apart; FilletEdge rounds their shared edge.
+    const trim = filletSrfMemory.trim && a.id !== b.id
+    const result = await readable(
+      kernelJob('filletSurfaces', shapeRef(a.geometry), a.face, a.point, shapeRef(b.geometry), b.face, b.point, filletSrfMemory.radius, trim),
+      'fillet those surfaces (the radius may be too large, or the surfaces too far apart)',
+    )
+    display.setPreview([])
+    const id = doc.add(result.fillet, doc.objects.get(a.id)!.layerId).id
+    if (result.trimmed) {
+      doc.setGeometry(a.id, result.trimmed[0])
+      doc.setGeometry(b.id, result.trimmed[1])
+    }
+    doc.select([id])
+    log(trim ? 'Fillet created and surfaces trimmed' : 'Fillet created')
+  },
+}
+
+export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge, untrim, filletSrf]
