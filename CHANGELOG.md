@@ -5,6 +5,9 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- Scripts: `archi.setLevel` moves the construction planes to the level's floor, as `Level` > `Current`
+  does, so points typed in commands are measured from it; the tower example now stacks its floors
+  exactly.
 - **Parametric scripts** (`Parametric`, `archi.param`): sliders for a script's parameters that make
   its result again as they move, with a twisting tower example. Scripts' `archi.step` now takes in
   the commands run inside it as one undo step.

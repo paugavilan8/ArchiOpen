@@ -107,7 +107,7 @@ const TOOLS = [
   {
     name: 'run_command',
     description:
-      'Runs one command with its answers to its prompts, in order, as typed in the command line: points as "x,y" or "x,y,z" (model units, usually millimeters), numbers, option names (e.g. "Close", "Type", "Both"), or "" for Enter. When the answers run out the command gets Enter until it ends, so give every point it needs. Commands usually select what they make: the ids selected after it are returned, with the lines it wrote to the history. Example: name "Wall", answers ["0,0", "8000,0", "8000,5000", "0,5000", "Close"]. Walls, slabs, columns and stairs use the current level; Level ["New", "Level 1", "3000", "3000", ""] adds one.',
+      'Runs one command with its answers to its prompts, in order, as typed in the command line: points as "x,y" or "x,y,z" (model units, usually millimeters, measured from the floor of the current level; prefix "w" for world coordinates, as "w0,0,6400"), numbers, option names (e.g. "Close", "Type", "Both"), or "" for Enter. When the answers run out the command gets Enter until it ends, so give every point it needs. Commands usually select what they make: the ids selected after it are returned, with the lines it wrote to the history. Example: name "Wall", answers ["0,0", "8000,0", "8000,5000", "0,5000", "Close"]. Walls, slabs, columns and stairs use the current level; Level ["New", "Level 1", "3000", "3000", ""] adds one.',
     inputSchema: {
       type: 'object',
       properties: {

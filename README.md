@@ -468,7 +468,7 @@ work; `Last` runs the last one again. A script runs as the body of an async func
 | `archi.add(geometry, layer?)`, `archi.remove(ids)` | Adds geometry (a curve, mesh or point) to a layer by name, or deletes objects. |
 | `archi.objects(filter?)` | The objects: id, type, layer, and the command and parameters of those with history. |
 | `archi.select(ids)` | Selects objects, for commands that act on the selection. |
-| `archi.levels()`, `archi.setLevel(name)` | The levels, and the current one. |
+| `archi.levels()`, `archi.setLevel(name)` | The levels, and the current one: points typed in commands are measured from its floor (`w` before a point, as `w0,0,6400`, gives world coordinates). |
 | `await archi.step(edits)` | Several edits as one undo step. |
 | `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | A point, a line in the history, and the document itself. |
 | `archi.param(name, value, { min, max, step })` | A parameter, with a slider when run with `Parametric`. |
