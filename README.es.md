@@ -316,6 +316,11 @@ Despliega cada apartado para ver los detalles.
   de planta lo cortan solo los planos de corte de su nivel, que no cortan ninguna vista en
   pantalla. `UpdateDrawings` vuelve a dibujar los alzados, las secciones y las tablas a partir del
   modelo tal como está, cada uno en su sitio, para que las láminas muestren los cambios.
+- `Terrain` crea el terreno de la parcela a partir de puntos y curvas de nivel (curvas a su cota,
+  muestreadas cada `Spacing`), como una malla en la capa Terrain: la triangulación de Delaunay de
+  los puntos en planta, cada uno a su cota. `Boundary` la recorta a una curva cerrada, `MaxEdge`
+  quita los triángulos largos de los bordes cóncavos y `Base` le da laterales y fondo a una
+  profundidad bajo su punto más bajo, para que sea un sólido que las secciones cortan y rellenan.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -548,6 +553,7 @@ flowchart LR
 - [x] Exportación e importación IFC
 - [x] Escaleras que siguen la altura de su nivel, con su hueco en el forjado de encima
 - [x] Mediciones por elemento, nivel y material, exportables a CSV
+- [x] Terreno a partir de curvas de nivel y puntos topográficos
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes
