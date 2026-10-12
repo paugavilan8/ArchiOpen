@@ -13,6 +13,13 @@ beforeAll(async () => {
 
 const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
 const volume = (s: R.AnyShape) => R.measureShapeVolumeProperties(s as R.Shape3D).volume
+/** The area of a closed profile standing in a vertical plane (measured from its own corners). */
+const profileArea = (pts: Vector3[]) => {
+  const o = pts[0]
+  let sum = new Vector3()
+  for (let i = 1; i + 1 < pts.length; i++) sum = sum.add(pts[i].clone().sub(o).cross(pts[i + 1].clone().sub(o)))
+  return sum.length() / 2
+}
 const room: AnyCurve = { type: 'polyline', points: [v(0, 0), v(4000, 0), v(4000, 3000), v(0, 3000)], closed: true }
 
 describe('architectural solids', () => {
@@ -98,13 +105,21 @@ describe('architectural solids', () => {
   it('makes a stair whose volume is its profile across its width', () => {
     const line: AnyCurve = { type: 'polyline', points: [v(0, 0), v(4500, 0)], closed: false }
     const params = stairParams({ width: 1000 }, 3000)
-    const pts = stairPlan(line, params).profile.points
-    let area = 0
-    for (let i = 0; i < pts.length; i++) {
-      const q = pts[(i + 1) % pts.length]
-      area += pts[i].x * q.z - q.x * pts[i].z
-    }
-    expect(volume(stairShape(line, params))).toBeCloseTo((Math.abs(area) / 2) * 1000, -3)
+    expect(volume(stairShape(line, params))).toBeCloseTo(profileArea(stairPlan(line, params).flights[0].profile.points) * 1000, -3)
+  })
+
+  it('makes an L stair: its two flights and its landing, joined', () => {
+    const line: AnyCurve = { type: 'polyline', points: [v(0, 0), v(0, 3500), v(2500, 3500)], closed: false }
+    const params = stairParams({ width: 1000, risers: 16 }, 2800)
+    const plan = stairPlan(line, params)
+    const shape = stairShape(line, params)
+    expect((shape as R.Shape3D).solids?.length ?? 1).toBe(1)
+    const parts = plan.flights.reduce((sum, f) => sum + profileArea(f.profile.points) * 1000, 0) + 1000 * 1000 * params.waist
+    // The flights touch the landing; at most a sliver overlaps.
+    expect(volume(shape)).toBeLessThanOrEqual(parts + 1)
+    expect(volume(shape)).toBeGreaterThan(parts * 0.97)
+    expect(shape.boundingBox.bounds[1][2]).toBeCloseTo(2800, 6)
+    expect(shape.boundingBox.bounds[1][0]).toBeCloseTo(2500, 6)
   })
 
   it('makes columns', () => {

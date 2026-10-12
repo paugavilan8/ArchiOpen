@@ -97,10 +97,11 @@ function raisedTo(outline: AnyCurve[], base: number, roof: RoofPlan): AnyShape {
   return raised
 }
 
-/** A straight stair along a line: its side profile swept across its width. */
+/** A stair: its flights' profiles swept across its width, and its landings. */
 export function stairShape(line: AnyCurve, params: StairParams): AnyShape {
   const plan = stairPlan(line, params)
-  return prism2(plan.profile, plan.across)
+  const parts = [...plan.flights.map((f) => prism2(f.profile, f.across)), ...plan.landings.map((l) => box(l.origin, l.u, l.v, l.w))]
+  return parts.length === 1 ? parts[0] : boolean('union', parts[0], parts.slice(1))
 }
 
 /** A column: its outline raised by its height. */

@@ -236,8 +236,10 @@ Despliega cada apartado para ver los detalles.
   `Overhang` (vuelo del alero) y `Thickness` (espesor). La cubierta apoya sobre el contorno (su cara
   inferior queda ahí a la altura del alero), y los muros que quedan debajo con la coronación a esa
   altura suben hasta su cara inferior, cerrando los hastiales y siguiendo los cambios de la cubierta.
-- `Stair` crea una escalera recta desde el primer peldaño hasta el último, salvando la altura del
-  nivel actual, con `Width` (ancho) y `Risers` (contrahuellas; automático: unos 175 de tabica), y
+- `Stair` crea una escalera desde el primer peldaño hasta el último, salvando la altura del nivel
+  actual. Una línea recta da un tramo; cada quiebro de la línea es un rellano cuadrado entre tramos
+  (una escalera en L tiene uno; una en U, dos juntos, dibujada como una línea que sube, cruza y
+  vuelve). Se crea con `Width` (ancho) y `Risers` (contrahuellas; automático: unos 175 de tabica), y
   avisa si los peldaños no son cómodos (dos tabicas y una huella entre 600 y 650).
 - `Column` coloca pilares rectangulares o circulares, de la altura del nivel actual.
 - `Window` y `Door` abren huecos donde se hace clic en un muro, con `Width` (ancho), `Height`
@@ -450,7 +452,8 @@ flowchart LR
 - [x] Uniones de muros (L y T)
 - [x] Cubiertas (a cuatro, dos y un agua), escaleras rectas y pilares
 - [x] Muros hasta la cubierta
-- [ ] Escaleras con rellano y cubiertas sobre plantas en L
+- [x] Escaleras con rellano (en L y en U)
+- [ ] Cubiertas sobre plantas en L
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes
