@@ -178,6 +178,8 @@ Expand a section for details.
     to along a target curve, stretched to it or not). They work on curves, points, meshes,
     surfaces and solids; surfaces and solids keep their NURBS form, refined and fitted so they
     follow the deformation closely (a twisted or bent bar keeps its volume to within 1e-6).
+    `CageEdit` puts objects in a cage of points (2 to 6 a side): move the points and the objects
+    follow smoothly; delete the cage to leave them as they are.
 
   And tools to place objects relative to others (*Transform* menu):
   - `Orient`: moves a reference point onto a target point and, given a second pair, rotates the

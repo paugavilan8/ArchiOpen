@@ -179,7 +179,8 @@ Despliega cada apartado para ver los detalles.
     una curva base a lo largo de una curva destino, estirando o no). Funcionan con curvas, puntos,
     mallas, superficies y sólidos; las superficies y sólidos siguen siendo NURBS, refinadas y
     ajustadas para seguir la deformación de cerca (una barra torcida o doblada conserva su volumen
-    con un error menor de 1e-6).
+    con un error menor de 1e-6). `CageEdit` mete objetos en una jaula de puntos (de 2 a 6 por lado):
+    al mover los puntos, los objetos se deforman con suavidad; borrando la jaula se quedan como estén.
 
   Y herramientas para colocar objetos respecto a otros (menú *Transform*):
   - `Orient`: lleva un punto de referencia a un punto de destino y, con un segundo par, gira la

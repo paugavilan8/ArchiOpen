@@ -5,6 +5,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- `CageEdit`: objects held in a cage of points, reshaped smoothly as the points move.
+
 - **Linked files** (`Link`, `UpdateLinks`, `Unlink`): other models (.archi or .3dm) shown in this one
   as blocks tied to their files, read again when they change, to work on a project in parts.
 

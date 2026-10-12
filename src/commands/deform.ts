@@ -1,6 +1,7 @@
-import { Vector3 } from 'three'
+import { Box3, Vector3 } from 'three'
 import { deformGeometry, pointMap, type Deformation } from '../core/deformations'
-import { isCurve, wireframe } from '../core/geometry'
+import { geometryToJSON, isCurve, wireframe } from '../core/geometry'
+import { layerNamed } from './drawing'
 import { kernelJob } from '../kernel/client'
 import { shapeRef } from '../kernel/wire'
 import { isOption, plural, valueOption, yesNo } from './helpers'
@@ -160,4 +161,57 @@ const flow: Command = {
   },
 }
 
-export const deformCommands: Command[] = [twist, taper, bend, flow]
+const cageMemory = { points: 3 }
+
+/**
+ * CageEdit: puts objects in a cage of points (a grid over their bounding box). Moving the points (by
+ * dragging them, with the gumball, Move, ...) reshapes the objects smoothly; deleting the cage
+ * leaves them as they are.
+ */
+const cageEdit: Command = {
+  name: 'CageEdit',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = (await input.getObjects('Select objects to put in a cage')).filter((id) => {
+      const g = doc.objects.get(id)?.geometry
+      return !!g && g.type !== 'instance' && g.type !== 'annotation' && g.type !== 'hatch' && g.type !== 'clipping'
+    })
+    if (ids.length === 0) throw new Error('Select curves, points, meshes, surfaces or solids')
+    for (;;) {
+      const option = await input.getOption('Press Enter to make the cage', [valueOption('Points', cageMemory.points)])
+      if (option === null) break
+      const n = await input.getNumber('Points in each direction (2 to 6)', cageMemory.points)
+      if (typeof n === 'number' && Number.isInteger(n) && n >= 2 && n <= 6) cageMemory.points = n
+    }
+    const box = new Box3()
+    for (const id of ids) for (const line of wireframe(doc.objects.get(id)!.geometry)) for (const p of line) box.expandByPoint(p)
+    // A flat or straight set of objects still gets a cage with some depth.
+    const size = box.getSize(new Vector3())
+    const pad = Math.max(size.x, size.y, size.z, 1) * 0.05
+    for (const axis of ['x', 'y', 'z'] as const) {
+      if (size[axis] < pad) {
+        box.min[axis] -= pad
+        box.max[axis] += pad
+      }
+    }
+    const n = cageMemory.points
+    const counts: [number, number, number] = [n, n, n]
+    const layer = layerNamed(ctx, 'Cage', '#d4380d')
+    const points: number[] = []
+    for (let k = 0; k < n; k++)
+      for (let j = 0; j < n; j++)
+        for (let i = 0; i < n; i++) {
+          const f = (a: number) => a / (n - 1)
+          const p = new Vector3(box.min.x + (box.max.x - box.min.x) * f(i), box.min.y + (box.max.y - box.min.y) * f(j), box.min.z + (box.max.z - box.min.z) * f(k))
+          points.push(doc.add({ type: 'point', point: p }, layer.id).id)
+        }
+    doc.group(points)
+    for (const id of ids) {
+      doc.setHistory(id, { command: 'CageEdit', inputs: points, params: { original: geometryToJSON(doc.objects.get(id)!.geometry), min: box.min.toArray(), max: box.max.toArray(), counts } })
+    }
+    doc.select(points)
+    log(`${plural('object', ids.length)} in a cage of ${n}×${n}×${n} points (Cage layer). Move the points and the objects follow; delete the cage to leave them as they are`)
+  },
+}
+
+export const deformCommands: Command[] = [twist, taper, bend, flow, cageEdit]
