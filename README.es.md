@@ -40,6 +40,8 @@ superficies, no como mallas.
 - **Modelado:** curvas NURBS (también racionales), barridos, lofts, superficies por red de curvas,
   parches y transiciones; booleanas, empalmes y vaciados; historial de construcción que rehace las
   superficies al cambiar sus curvas.
+- **Elementos constructivos:** muros, forjados, ventanas y puertas paramétricos por niveles, que se
+  rehacen al cambiar sus líneas o sus parámetros.
 - **Dibujo preciso:** referencias a objetos (End, Mid, Cen, Int, Perp, Tan…), coordenadas escritas,
   ortogonal, planos de construcción y gumball.
 - **Planos:** `Make2D` con líneas ocultas, cotas asociativas, sombreados, tipos de línea y
@@ -208,6 +210,29 @@ Despliega cada apartado para ver los detalles.
   hechas con `ExtrudeCrv`, `Revolve`, `Loft`, `Sweep1`, `Sweep2`, `Pipe`, `PlanarSrf`, `EdgeSrf`,
   `NetworkSrf` y `Patch` se rehacen al mover o editar sus curvas, en el mismo paso de deshacer.
   También `SelChildren`, `SelParents` y `HistoryPurge`.
+
+</details>
+
+<details>
+<summary><b>Elementos constructivos</b></summary>
+<br>
+
+- `Wall` dibuja muros punto a punto (`Close` para cerrar un recinto) o a lo largo de curvas ya
+  dibujadas (`Curve`), con `Thickness` (espesor) y `Justification` (`Center`, `Left` o `Right`
+  respecto a la línea). Las esquinas se ingletean y las líneas curvas dan muros curvos. Los muros
+  toman la altura del nivel actual.
+- `Slab` crea un forjado o una cubierta plana a partir de esquinas o de curvas cerradas, con la cara
+  superior en el contorno y el espesor (`Thickness`) por debajo.
+- `Window` y `Door` abren huecos donde se hace clic en un muro, con `Width` (ancho), `Height`
+  (alto) y `Sill` (altura del alféizar).
+- Muros y forjados conservan su línea (en la capa *Construction*): al moverla o editarla se rehacen.
+  El espesor, la altura, la justificación y los huecos se cambian en el panel de propiedades, en un
+  solo paso de deshacer. Si se mueve el sólido directamente, pasa a ser un sólido normal, como con el
+  historial de construcción.
+- `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
+  que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
+- Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
+  con el corte relleno, y `Make2D`, las láminas, el render y la exportación funcionan igual.
 
 </details>
 
@@ -400,7 +425,8 @@ flowchart LR
 - [x] `FilletSrf` y `MatchSrf`
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] Modelado SubD
-- [ ] Herramientas de arquitectura: muros, forjados, huecos y niveles
+- [x] Elementos constructivos: muros, forjados, ventanas, puertas y niveles
+- [ ] Más elementos: cubiertas, escaleras, pilares y carpinterías
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

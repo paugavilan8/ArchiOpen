@@ -1,3 +1,4 @@
+import { DEFAULT_LEVELS, type Level } from './architecture'
 import { DEFAULT_RENDER_SETTINGS, layerMaterial, Material, materialFromJSON, RenderSettings, renderSettingsFromJSON } from './materials'
 import { controlPoints } from './curves'
 import { BlockDefinition, Geometry, geometryFromJSON, geometryToJSON } from './geometry'
@@ -112,6 +113,21 @@ export class Document {
   /** Saved views and construction planes (kept with the model, outside undo, as in Rhino). */
   namedViews: NamedView[] = []
   namedCPlanes: NamedCPlane[] = []
+  /** The building's levels, lowest first, and the one being drawn on (kept outside undo, like views). */
+  levels: Level[] = DEFAULT_LEVELS.map((l) => ({ ...l }))
+  currentLevel = DEFAULT_LEVELS[0].name
+
+  setLevels(levels: Level[], current = this.currentLevel): void {
+    this.levels = [...levels].sort((a, b) => a.elevation - b.elevation)
+    this.currentLevel = this.levels.some((l) => l.name === current) ? current : (this.levels[0]?.name ?? '')
+    this.modified = true
+    this.emit('layers')
+  }
+
+  /** The level being drawn on. */
+  get level(): Level {
+    return this.levels.find((l) => l.name === this.currentLevel) ?? this.levels[0] ?? DEFAULT_LEVELS[0]
+  }
 
   setNamedViews(views: NamedView[]): void {
     this.namedViews = views
@@ -604,6 +620,8 @@ export class Document {
       ...(this.layouts.length > 0 ? { layouts: this.layouts } : {}),
       ...(this.namedViews.length > 0 ? { namedViews: this.namedViews } : {}),
       ...(this.namedCPlanes.length > 0 ? { namedCPlanes: this.namedCPlanes } : {}),
+      levels: this.levels,
+      currentLevel: this.currentLevel,
       ...(this.materials.length > 0 ? { materials: this.materials } : {}),
       renderSettings: this.renderSettings,
       ...(this.blockEdit ? { blockEdit: this.blockEdit } : {}),
@@ -642,6 +660,11 @@ export class Document {
     this.layouts = Array.isArray(json.layouts) ? json.layouts : []
     this.namedViews = Array.isArray(json.namedViews) ? json.namedViews : []
     this.namedCPlanes = Array.isArray(json.namedCPlanes) ? json.namedCPlanes : []
+    const levels: Level[] = Array.isArray(json.levels)
+      ? json.levels.filter((l: any) => typeof l?.name === 'string' && Number.isFinite(l.elevation) && Number.isFinite(l.height))
+      : []
+    this.levels = levels.length > 0 ? levels.sort((a, b) => a.elevation - b.elevation) : DEFAULT_LEVELS.map((l) => ({ ...l }))
+    this.currentLevel = this.levels.some((l) => l.name === json.currentLevel) ? json.currentLevel : this.levels[0].name
     this.materials = Array.isArray(json.materials) ? json.materials.map(materialFromJSON).filter((m: Material | null): m is Material => m !== null) : []
     this.renderSettings = renderSettingsFromJSON(json.renderSettings)
     this.lastCreated = []

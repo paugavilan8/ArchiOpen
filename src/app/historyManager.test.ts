@@ -96,4 +96,34 @@ describe('construction history', () => {
     expect(doc.objects.get(loft)!.geometry).toBe(before)
     expect(log).toHaveBeenCalledWith(expect.stringContaining('could not update'))
   })
+
+  it('makes a wall again from new parameters, keeping its history, as one undo step', async () => {
+    const doc = new Document()
+    const history = new HistoryManager(doc, new Settings(), vi.fn())
+    const path = doc.add({ type: 'polyline', points: [v(0, 0), v(5000, 0)], closed: false }).id
+    const wall = doc.add({ type: 'polyline', points: [v(0, 0), v(1, 0)], closed: false }).id
+    doc.begin()
+    await history.remake(wall, { command: 'Wall', inputs: [path], params: { thickness: 200, height: 3000 } })
+    doc.commit()
+    await history.settled
+    const width = () => {
+      const b = shapeBounds(shapeOf(doc.objects.get(wall)!.geometry as BrepGeometry))
+      return b.max.y - b.min.y
+    }
+    expect(width()).toBeCloseTo(200, 6)
+    await history.remakeStep(wall, { command: 'Wall', inputs: [path], params: { thickness: 300, height: 3000 } })
+    await history.settled
+    expect(width()).toBeCloseTo(300, 6)
+    expect(doc.objects.get(wall)!.history?.params?.thickness).toBe(300)
+    // Still following its path, with the new thickness.
+    doc.setGeometry(path, { type: 'polyline', points: [v(0, 0), v(5000, 1000)], closed: false })
+    await history.settled
+    expect(doc.objects.get(wall)!.history).toBeDefined()
+    doc.undo()
+    await history.settled
+    doc.undo()
+    await history.settled
+    expect(width()).toBeCloseTo(200, 6)
+    expect(doc.objects.get(wall)!.history?.params?.thickness).toBe(200)
+  })
 })
