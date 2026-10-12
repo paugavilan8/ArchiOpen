@@ -274,6 +274,11 @@ Expand a section for details.
   `Washbasin`, `Bathtub` and `ShowerTray`. Each is made into a block the first time it is used and
   placed by the middle of its back (against a wall), then turned to face a point or an angle;
   bathroom fittings go on a *Sanitary* layer in ceramic.
+- `Elevations` draws the four elevations of the building (south, east, north and west) in a row
+  under the model, and `Section` draws a section along a line drawn in plan, looking to the side
+  picked, with its cut walls, slabs and roofs heavier and filled, beside the model. Each view gets
+  a ground line and a title and is grouped, ready for layout details; a section also gets its
+  mark in plan (the cut line, arrows and letters A, B, ...).
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -481,7 +486,8 @@ flowchart LR
 - [x] Door swings and window symbols in plan
 - [x] Floor finishes and skirting from room outlines
 - [x] Furniture and fittings library (blocks)
-- [ ] Section and elevation views of the building, ready for layouts
+- [x] Section and elevation views of the building, ready for layouts
+- [ ] A drawing set: plans, sections and elevations placed on layout sheets in one go
 - [ ] Signed installers and automatic updates
 
 ## FAQ
