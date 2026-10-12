@@ -81,7 +81,7 @@ const railingsLayer = (ctx: CommandContext) => {
 export const isWall = (ctx: CommandContext, id: number) => ctx.doc.objects.get(id)?.history?.command === 'Wall'
 
 /** Moves every view's construction plane to a level's height. */
-function goToLevel(ctx: CommandContext, level: Level): void {
+export function goToLevel(ctx: Pick<CommandContext, 'display'>, level: Level): void {
   for (const vp of ctx.display.viewports) {
     const o = vp.cplane.origin
     vp.setCPlane({ ...vp.cplane, origin: new Vector3(o.x, o.y, level.elevation) })

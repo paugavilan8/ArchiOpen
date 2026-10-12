@@ -482,7 +482,7 @@ función asíncrona, con `archi` y `Vector3` disponibles:
 | `archi.add(geometría, capa?)`, `archi.remove(ids)` | Añade geometría (una curva, malla o punto) a una capa por su nombre, o borra objetos. |
 | `archi.objects(filtro?)` | Los objetos: id, tipo, capa, y el comando y los parámetros de los que tienen historial. |
 | `archi.select(ids)` | Selecciona objetos, para los comandos que actúan sobre la selección. |
-| `archi.levels()`, `archi.setLevel(nombre)` | Los niveles, y el actual. |
+| `archi.levels()`, `archi.setLevel(nombre)` | Los niveles, y el actual: los puntos que se escriben en los comandos se miden desde su suelo (`w` delante de un punto, como `w0,0,6400`, da coordenadas absolutas). |
 | `await archi.step(cambios)` | Varios cambios como un solo paso de deshacer. |
 | `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | Un punto, una línea en el historial y el propio documento. |
 | `archi.param(nombre, valor, { min, max, step })` | Un parámetro, con su deslizador al ejecutarlo con `Parametric`. |

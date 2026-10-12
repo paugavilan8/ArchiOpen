@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import type { CadObject, Document } from '../core/document'
 import type { Geometry } from '../core/geometry'
 import type { CommandContext, CommandRunner } from '../commands/runner'
+import { goToLevel } from '../commands/architecture'
 
 /**
  * Scripts: JavaScript files that drive the modeler, to automate repetitive work. A script runs as
@@ -33,7 +34,7 @@ export interface ScriptApi {
   objects(filter?: (o: ObjectInfo) => boolean): ObjectInfo[]
   /** Selects objects (in place of the selection), for the commands that act on it. */
   select(ids: number[]): void
-  /** Levels, by name and elevation, and the current one. */
+  /** Levels, by name and elevation, and the current one (its floor is where typed points start). */
   levels(): { name: string; elevation: number; height: number }[]
   setLevel(name: string): void
   /** Runs several edits as one undo step. */
@@ -103,6 +104,8 @@ export function scriptApi(ctx: CommandContext, runner: CommandRunner, param: Scr
     setLevel: (name) => {
       if (!doc.levels.some((l) => l.name === name)) throw new Error(`There is no level called ${name}`)
       doc.setLevels(doc.levels, name)
+      // As Level > Current: the construction planes go to its floor, so points are typed from it.
+      if (ctx.display) goToLevel(ctx, doc.level)
     },
     async step(edits) {
       doc.beginGroup()

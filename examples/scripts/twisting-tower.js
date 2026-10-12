@@ -12,7 +12,8 @@ for (let n = 1; n <= floors; n++) {
   const z = n * height
   const points = corners.map(([sx, sy]) => {
     const [x, y] = [(sx * width) / 2, (sy * depth) / 2]
-    return `${Math.round(x * Math.cos(a) - y * Math.sin(a))},${Math.round(x * Math.sin(a) + y * Math.cos(a))},${z}`
+    // "w": world coordinates, whatever the current level.
+    return `w${Math.round(x * Math.cos(a) - y * Math.sin(a))},${Math.round(x * Math.sin(a) + y * Math.cos(a))},${z}`
   })
   await archi.command('Slab', ...points, '')
 }
