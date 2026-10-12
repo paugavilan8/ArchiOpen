@@ -185,6 +185,9 @@ Expand a section for details.
   - `BlendSrf`: a transition surface between the edges of two surfaces, tangent to both;
   - `FilletSrf`: a constant-radius fillet between two surfaces or faces, on the sides picked, with
     an option to trim both back to it. The surfaces need not touch;
+  - `MatchSrf`: changes a surface near one of its edges so that it meets an edge of another
+    surface with `Position`, `Tangency` or `Curvature` continuity (a trimmed face is matched over
+    its whole surface);
   - `Pipe`: a pipe along curves, with start and end radii and an option to cap it as a solid;
   - `RailRevolve`: a profile revolved about an axis while one of its ends follows a rail curve,
     for domes and roofs on oval or irregular plans.
@@ -388,8 +391,7 @@ flowchart LR
 - [x] Copy and paste between files
 - [x] `ChamferEdge` and `UnrollSrf`
 - [x] `Untrim` and `RailRevolve`
-- [x] `FilletSrf`
-- [ ] Surface tools: `MatchSrf`
+- [x] `FilletSrf` and `MatchSrf`
 - [ ] Deformation tools: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] SubD modeling
 - [ ] Architectural tools: walls, slabs, openings and levels

@@ -160,6 +160,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Patch', 'Patch'),
         item('Blend Surface', 'BlendSrf'),
         item('Fillet Surfaces', 'FilletSrf'),
+        item('Match Surface', 'MatchSrf'),
         'separator',
         item('Offset Surface', 'OffsetSrf'),
         item('Extrude Surface', 'ExtrudeSrf'),

@@ -186,6 +186,9 @@ Despliega cada apartado para ver los detalles.
   - `BlendSrf`: superficie de transición entre aristas de dos superficies, tangente a ambas;
   - `FilletSrf`: empalme de radio constante entre dos superficies o caras, del lado elegido, con
     opción de recortar ambas hasta él. No hace falta que se toquen;
+  - `MatchSrf`: modifica una superficie junto a uno de sus bordes para que encaje con el borde de
+    otra, con continuidad de posición, tangencia o curvatura (`Position`, `Tangency`, `Curvature`;
+    una cara recortada se ajusta sobre su superficie completa);
   - `Pipe`: tubo a lo largo de curvas, con radio inicial y final y opción de cerrarlo como sólido;
   - `RailRevolve`: un perfil girado alrededor de un eje mientras uno de sus extremos sigue una curva
     carril, para cúpulas y cubiertas sobre plantas ovaladas o irregulares.
@@ -394,8 +397,7 @@ flowchart LR
 - [x] Copiar y pegar entre archivos
 - [x] `ChamferEdge` y `UnrollSrf`
 - [x] `Untrim` y `RailRevolve`
-- [x] `FilletSrf`
-- [ ] Superficies: `MatchSrf`
+- [x] `FilletSrf` y `MatchSrf`
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] Modelado SubD
 - [ ] Herramientas de arquitectura: muros, forjados, huecos y niveles
