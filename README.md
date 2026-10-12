@@ -269,6 +269,11 @@ Expand a section for details.
   skirting board round rooms, along the walls and round columns, broken at doors, with `Height` and
   `Thickness`. Both keep their outline on the *Construction* layer and their parameters in the
   Properties panel.
+- `Furniture` places furniture and fittings from a small library: `DoubleBed`, `SingleBed`,
+  `Sofa`, `Armchair`, `DiningTable`, `Chair`, `Desk`, `Wardrobe`, `KitchenCounter`, `Fridge`, `WC`,
+  `Washbasin`, `Bathtub` and `ShowerTray`. Each is made into a block the first time it is used and
+  placed by the middle of its back (against a wall), then turned to face a point or an angle;
+  bathroom fittings go on a *Sanitary* layer in ceramic.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -475,7 +480,8 @@ flowchart LR
 - [x] Room labels with areas
 - [x] Door swings and window symbols in plan
 - [x] Floor finishes and skirting from room outlines
-- [ ] Furniture and fittings library (blocks)
+- [x] Furniture and fittings library (blocks)
+- [ ] Section and elevation views of the building, ready for layouts
 - [ ] Signed installers and automatic updates
 
 ## FAQ

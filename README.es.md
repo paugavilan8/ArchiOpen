@@ -281,6 +281,12 @@ Despliega cada apartado para ver los detalles.
   pilares. `Skirting` coloca el rodapié de las estancias, a lo largo de los muros y alrededor de los
   pilares, interrumpido en las puertas, con `Height` (altura) y `Thickness` (espesor). Ambos
   conservan su contorno en la capa *Construction* y sus parámetros en el panel de propiedades.
+- `Furniture` coloca mobiliario y equipamiento de una pequeña biblioteca: `DoubleBed` (cama doble),
+  `SingleBed` (individual), `Sofa`, `Armchair` (sillón), `DiningTable` (mesa de comedor), `Chair`,
+  `Desk` (escritorio), `Wardrobe` (armario), `KitchenCounter` (bancada de cocina), `Fridge`, `WC`,
+  `Washbasin` (lavabo), `Bathtub` (bañera) y `ShowerTray` (plato de ducha). Cada pieza se crea como
+  bloque la primera vez y se coloca por el centro de su parte trasera (contra la pared), girándola
+  después hacia un punto o un ángulo; los sanitarios van en la capa *Sanitary* en cerámica.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -489,7 +495,8 @@ flowchart LR
 - [x] Rótulos de estancias con superficie
 - [x] Abatimiento de puertas y símbolos de ventanas en planta
 - [x] Pavimentos y rodapiés a partir de los contornos de las estancias
-- [ ] Biblioteca de mobiliario y equipamiento (bloques)
+- [x] Biblioteca de mobiliario y equipamiento (bloques)
+- [ ] Secciones y alzados del edificio, listos para las láminas
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes
