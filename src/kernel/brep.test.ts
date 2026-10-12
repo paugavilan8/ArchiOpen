@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { transform } from '../core/curves'
 import type { AnyCurve, BrepGeometry } from '../core/geometry'
 import { clampedKnots } from '../math/nurbs'
-import { boolean, box, chamferEdges, cylinder, explodeShape, extrudeCurve, filletEdges, joinShapes, loftCurves, meshToShape, nearestFace, planarFace, revolveCurve, sectionCurves, shapeOf, shapeToMesh, shellSolid, sphere, sweep, toBrep } from './brep'
+import { boolean, box, chamferEdges, cone, cylinder, pyramid, torus, explodeShape, extrudeCurve, filletEdges, joinShapes, loftCurves, meshToShape, nearestFace, planarFace, revolveCurve, sectionCurves, shapeOf, shapeToMesh, shellSolid, sphere, sweep, toBrep } from './brep'
 import { faceCount, isClosedMesh, meshBox, meshVolume as polygonMeshVolume } from '../core/mesh'
 import { length } from '../core/curves'
 
@@ -123,9 +123,28 @@ describe('stored breps', () => {
     expect(volume(shapeOf(moved))).toBeCloseTo(8 * 8, 4)
   })
 
-  it('refuses a non-uniform scale on a solid', () => {
-    const g = transform(toBrep(box(v(0, 0), v(1, 0), v(0, 1), v(0, 0, 1))), new Matrix4().makeScale(2, 1, 1)) as BrepGeometry
-    expect(() => shapeOf(g)).toThrow()
+  it('stretches a solid along one axis (Scale1D), exactly', () => {
+    const g = transform(toBrep(cylinder(v(0, 0), 1, 2, Z)), new Matrix4().makeScale(3, 1, 1)) as BrepGeometry
+    const shape = shapeOf(g)
+    expect(volume(shape) / (Math.PI * 3 * 2)).toBeCloseTo(1, 3)
+    expect(shape.boundingBox.width).toBeCloseTo(6, 3)
+  })
+
+  it('stretches and mirrors a solid, still facing out', () => {
+    const g = transform(toBrep(box(v(0, 0), v(1, 0), v(0, 1), v(0, 0, 1))), new Matrix4().makeScale(-2, 1, 3)) as BrepGeometry
+    expect(volume(shapeOf(g))).toBeCloseTo(6, 4)
+  })
+})
+
+describe('primitives', () => {
+  it('makes cones, truncated cones, tori and pyramids', () => {
+    expect(volume(cone(v(0, 0), 2, 0, 3, Z, v(1, 0)))).toBeCloseTo((Math.PI * 4 * 3) / 3, 3)
+    // A frustum: pi h (R^2 + R r + r^2) / 3.
+    expect(volume(cone(v(0, 0), 2, 1, 3, Z, v(1, 0)))).toBeCloseTo((Math.PI * 3 * (4 + 2 + 1)) / 3, 3)
+    expect(volume(torus(v(0, 0), Z, 5, 1))).toBeCloseTo(2 * Math.PI * Math.PI * 5 * 1, 3)
+    const p = pyramid([v(0, 0), v(2, 0), v(2, 2), v(0, 2)], v(1, 1, 3))
+    expect((p as R.Shape3D).solids?.length ?? 1).toBe(1)
+    expect(volume(p)).toBeCloseTo(4, 4)
   })
 })
 

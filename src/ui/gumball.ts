@@ -266,15 +266,10 @@ export class Gumball {
         if (Math.abs(drag.startParam) < 1e-9) return null
         let f = this.axisParam(vp, origin, AXES[axis], x, y) / drag.startParam
         if (Math.abs(f) < 1e-3) f = 1e-3
-        // Surfaces and solids cannot be stretched along one axis yet, so they scale uniformly.
-        if (shift || this.hasBreps()) return { matrix: scaleAbout(origin, f), label: `×${fmt(f)}` }
+        if (shift) return { matrix: scaleAbout(origin, f), label: `×${fmt(f)}` }
         return { matrix: axisScale(origin, axis, f), label: `${AXIS_NAMES[axis]} ×${fmt(f)}` }
       }
     }
-  }
-
-  private hasBreps(): boolean {
-    return editedIds(this.doc).some((id) => this.doc.objects.get(id)?.geometry.type === 'brep')
   }
 
   private onUp(e: PointerEvent): void {
@@ -328,9 +323,7 @@ export class Gumball {
             ? translation(AXES[axis].clone().multiplyScalar(value))
             : mode === 'rotate'
               ? rotationAbout(origin, AXES[axis], (value * Math.PI) / 180)
-              : this.hasBreps()
-                ? scaleAbout(origin, value)
-                : axisScale(origin, axis, value)
+              : axisScale(origin, axis, value)
         for (const [id, g] of transformedSelection(doc, matrix)) doc.setGeometry(id, g)
       },
     }

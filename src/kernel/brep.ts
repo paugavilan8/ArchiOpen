@@ -1,6 +1,7 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import * as R from 'replicad'
 import { isSimilarity, join } from '../core/curves'
+import { deformShape } from './deform'
 import { AnyCurve, BrepGeometry, endPoint, isClosed, MeshGeometry, pointAt, startPoint } from '../core/geometry'
 import { weldMesh } from '../core/mesh'
 import { edgeToCurve } from './edges'
@@ -127,13 +128,23 @@ export function shapeOf(g: BrepGeometry): AnyShape {
   const shape = oc().BRepToolsWrapper.Read(g.brep)
   if (!g.matrix) return R.cast(shape)
   const m = new Matrix4().fromArray(g.matrix)
-  if (!isSimilarity(m)) throw new Error('Surfaces and solids can only be moved, rotated, mirrored or scaled uniformly')
+  if (isSimilarity(m)) return R.cast(transformed(shape, m))
+  // Stretched along an axis (Scale1D, Scale2D, a shear): its NURBS moved point by point, exactly.
+  // A mirror first, as a mirror, so the faces keep facing out.
+  const mirror = m.determinant() < 0 ? new Matrix4().makeScale(-1, 1, 1) : null
+  const start = mirror ? transformed(shape, mirror) : shape
+  const rest = mirror ? m.clone().multiply(mirror) : m
+  return deformShape(R.cast(start), (p) => p.clone().applyMatrix4(rest))
+}
+
+/** A shape moved by a similarity (move, rotate, mirror, uniform scale). */
+function transformed(shape: AnyShape['wrapped'], m: Matrix4): AnyShape['wrapped'] {
   const e = m.elements
   const trsf = new (oc().gp_Trsf)()
   // Rows of the 3×4 affine part; OCCT works out the uniform scale (and a mirror) from it.
   trsf.SetValues(e[0], e[4], e[8], e[12], e[1], e[5], e[9], e[13], e[2], e[6], e[10], e[14])
   const maker = new (oc().BRepBuilderAPI_Transform)(shape, trsf, true, false)
-  const result = R.cast(maker.Shape())
+  const result = maker.Shape()
   maker.delete()
   trsf.delete()
   return result
@@ -189,6 +200,36 @@ export function cylinder(center: Vector3, radius: number, height: number, axis: 
 
 export function sphere(center: Vector3, radius: number): AnyShape {
   return R.makeSphere(radius).translate(pt(center))
+}
+
+/**
+ * A cone, or a truncated cone with `topRadius` above 0: a profile through the axis turned round it.
+ * `x` is any direction square to the axis (where the seam goes).
+ */
+export function cone(center: Vector3, radius: number, topRadius: number, height: number, axis: Vector3, x: Vector3): AnyShape {
+  const n = axis.clone().normalize()
+  const top = center.clone().addScaledVector(n, height)
+  const points = [center.clone(), center.clone().addScaledVector(x, radius), top.clone().addScaledVector(x, topRadius), top]
+  if (topRadius < 1e-12) points.splice(2, 1)
+  return revolveCurve({ type: 'polyline', points, closed: true }, center, n, Math.PI * 2)
+}
+
+/** A torus round `axis` through `center`. */
+export function torus(center: Vector3, axis: Vector3, major: number, minor: number): AnyShape {
+  const k = oc()
+  const n = axis.clone().normalize()
+  const ax = new k.gp_Ax2(new k.gp_Pnt(center.x, center.y, center.z), new k.gp_Dir(n.x, n.y, n.z))
+  const maker = new k.BRepPrimAPI_MakeTorus(ax, major, minor)
+  const result = R.cast(maker.Shape())
+  maker.delete()
+  ax.delete()
+  return result
+}
+
+/** A pyramid on a flat polygon base, up to an apex. */
+export function pyramid(base: Vector3[], apex: Vector3): AnyShape {
+  const faces = [R.makePolygon(base.map(pt)), ...base.map((p, i) => R.makePolygon([pt(p), pt(base[(i + 1) % base.length]), pt(apex)]))]
+  return R.makeSolid(faces)
 }
 
 export type BooleanKind = 'union' | 'difference' | 'intersection'

@@ -30,6 +30,7 @@ export const IMAGE: FileType = { name: 'Image', extension: 'jpg', extensions: ['
 export const IFC: FileType = { name: 'IFC model', extension: 'ifc', mime: 'application/x-step' }
 export const SCRIPT: FileType = { name: 'JavaScript', extension: 'js', mime: 'text/javascript' }
 export const OBJ: FileType = { name: 'OBJ mesh', extension: 'obj', mime: 'model/obj' }
+export const GLB: FileType = { name: 'glTF binary', extension: 'glb', mime: 'model/gltf-binary' }
 const UNTITLED = 'Untitled'
 
 const isMeshFile = (fileName: string) => [STL.extension, OBJ.extension].includes(extensionOf(fileName))

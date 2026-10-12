@@ -205,8 +205,10 @@ async function exportBytes(ctx: CommandContext, format: string): Promise<Uint8Ar
       const { layoutSheets, viewSheet } = await import('../commands/plot')
       return writePdf(doc.layouts.length > 0 ? await layoutSheets(ctx, doc.layouts, false) : viewSheet(ctx, visible))
     }
+    case 'glb':
+      return (await import('../commands/meshes')).glbOf(ctx, visible)
     default:
-      throw new Error('The format must be archi, ifc, pdf, dxf or csv')
+      throw new Error('The format must be archi, ifc, pdf, dxf, glb or csv')
   }
 }
 

@@ -5,6 +5,7 @@ import { blendSurface, edgeSurface, networkSurface, patch, pipe, surfaceFromPoin
 import {
   boolean,
   box,
+  cone,
   cylinder,
   explodeShape,
   extrudeCurve,
@@ -23,11 +24,15 @@ import {
   sphere,
   sweep,
   toBrep,
+  torus,
+  pyramid,
 } from './brep'
 import { shapeFromRhino } from './fromRhino'
 import { filletSurfaces } from './filletSrf'
 import { make2DWithMeshes } from './make2d'
 import { roomRegion } from './architecture'
+import { curveRegions } from './curveBoolean'
+import { extendSurface } from './extendSrf'
 import { matchSurface } from './matchSrf'
 import { unrollShape } from './unroll'
 import { checkShape, shapeArea, shapeBounds, shapeVolume } from './measure'
@@ -65,9 +70,14 @@ function cuttersFor(target: AnyShape, curves: AnyCurve[], shapes: AnyShape[], di
 }
 
 export const api = {
+  curveRegions,
+  extendSurface,
   box,
   cylinder,
   sphere,
+  cone,
+  torus,
+  pyramid,
   extrudeCurve,
   revolveCurve,
   loftCurves,

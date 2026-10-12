@@ -1,7 +1,7 @@
 import { flipClipping } from './clipping'
-import { Box3, Vector3 } from 'three'
+import { Box3, Matrix4, Vector3 } from 'three'
 import type { CadObject } from '../core/document'
-import { BrepGeometry, MeshGeometry, TOLERANCE } from '../core/geometry'
+import { BrepGeometry, type Geometry, MeshGeometry, TOLERANCE } from '../core/geometry'
 import {
   brepDisplayMesh,
   faceCount,
@@ -16,9 +16,12 @@ import {
   vertexCount,
   weldMesh,
 } from '../core/mesh'
-import { OBJ, STL } from '../app/files'
+import { GLB, OBJ, STL } from '../app/files'
 import { CancelError } from '../input/interaction'
 import { writeObj, writeStl } from '../io/meshFiles'
+import { writeGlb, type GltfObject } from '../io/gltf'
+import { transform } from '../core/curves'
+import { METERS } from '../core/units'
 import { kernelJob } from '../kernel/client'
 import { shapeRef } from '../kernel/wire'
 import { isOption, plural, valueOption } from './helpers'
@@ -330,6 +333,45 @@ const exportObj: Command = {
   },
 }
 
+/** The triangles of a surface, solid or mesh (blocks opened up), for glTF. */
+function gltfParts(g: Geometry, name: string, material: GltfObject['material'], out: GltfObject[]): void {
+  if (g.type === 'brep') out.push({ name, positions: g.display.vertices, normals: g.display.normals, indices: g.display.triangles, material })
+  else if (g.type === 'mesh') {
+    const indices: number[] = []
+    const f = g.faces
+    for (let i = 0; i < f.length; i += 4) {
+      indices.push(f[i], f[i + 1], f[i + 2])
+      if (f[i + 2] !== f[i + 3]) indices.push(f[i], f[i + 2], f[i + 3])
+    }
+    out.push({ name, positions: g.vertices, indices, material })
+  } else if (g.type === 'instance') {
+    const m = new Matrix4().fromArray(g.matrix)
+    for (const o of g.definition.objects) gltfParts(transform(o.geometry, m), name, material, out)
+  }
+}
+
+/** Objects as a .glb file's bytes. */
+export function glbOf(ctx: CommandContext, objects: CadObject[]): Uint8Array {
+  const { doc } = ctx
+  const parts: GltfObject[] = []
+  for (const o of objects) gltfParts(o.geometry, `${doc.layerOf(o).name} ${o.id}`, doc.materialOf(o), parts)
+  if (parts.length === 0) throw new Error('There are no surfaces, solids, meshes or blocks to export')
+  return writeGlb(parts, METERS[doc.units] ?? 0.001)
+}
+
+/** ExportGLTF: the model as a .glb file (glTF binary) with its render materials, in meters. */
+const exportGltf: Command = {
+  name: 'ExportGLTF',
+  history: false,
+  repeat: false,
+  async run(ctx) {
+    const objects = chosenObjects(ctx)
+    const bytes = glbOf(ctx, objects)
+    const fileName = await ctx.files.exportFile(GLB, () => bytes)
+    if (fileName) ctx.log(`Exported ${plural('object', objects.length)} to ${fileName} (in meters, with render materials)`)
+  },
+}
+
 export const meshCommands: Command[] = [
   meshCommand,
   meshBoxCommand,
@@ -344,4 +386,5 @@ export const meshCommands: Command[] = [
   fillMeshHoles,
   exportStl,
   exportObj,
+  exportGltf,
 ]
