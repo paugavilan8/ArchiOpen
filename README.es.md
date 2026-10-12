@@ -264,6 +264,11 @@ Despliega cada apartado para ver los detalles.
   de cada tramo recto de los muros de fachada, una cadena de esquina a esquina pasando por los bordes
   de los huecos y, más afuera, la cota total (los muros interiores no se acotan). Las cotas llevan
   marcas oblicuas, van en la capa *Dimensions* y quedan agrupadas.
+- `Room` rotula estancias: al hacer clic dentro de una se crea su contorno (entre los contornos de
+  los muros en planta, rodeando los pilares y sin contar los huecos) en la capa *Rooms* y un rótulo
+  con su nombre y su superficie útil (m² o ft² según las unidades), centrado donde se hizo clic y
+  agrupado. El contorno sirve para hacer el suelo de la estancia con `Slab` (opción `Curve`). Si la
+  estancia no está cerrada, se avisa.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -469,7 +474,8 @@ flowchart LR
 - [x] Cubiertas sobre plantas en L, T y U
 - [x] Barandillas en escaleras y bordes de forjado
 - [x] Cotas automáticas de muros y huecos en planta
-- [ ] Rótulos de estancias con superficie y abatimiento de puertas en planta
+- [x] Rótulos de estancias con superficie
+- [ ] Abatimiento de puertas y símbolos de ventanas en planta
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

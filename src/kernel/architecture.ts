@@ -4,7 +4,10 @@ import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, t
 import { startPoint, type AnyCurve } from '../core/geometry'
 import { railingPieces, type RailingParams } from '../core/railings'
 import { roofPlan, stairPlan, type ColumnParams, type Plane, type RoofParams, type RoofPlan, type StairParams } from '../core/buildingParts'
-import { boolean, box, extrudeCurve } from './brep'
+import { boolean, box, extrudeCurve, planarFace } from './brep'
+import { closestOn } from './surfaceEdit'
+import { edgeToCurve } from './edges'
+import { join, length } from '../core/curves'
 
 /** The solids of architectural objects (see core/architecture.ts). Needs the kernel. */
 
@@ -131,4 +134,60 @@ export function railingShape(lines: Vector3[][], params: RailingParams): AnyShap
   const solids = lines.flatMap((l) => railingPieces(l, params)).map((b) => box(b.origin, b.u, b.v, b.w) as R.Shape3D)
   if (solids.length === 0) throw new Error('The railing has no length')
   return R.makeCompound(solids)
+}
+
+/** The room around a point: the floor region the walls' plan outlines enclose, with its area. */
+export interface RoomRegion {
+  /** Its boundary loops: the outside one first, then any holes (around columns, say). */
+  loops: AnyCurve[]
+  area: number
+}
+
+/**
+ * The room a point is in: a flat region at the point's height, bounded by wall outlines (each wall's
+ * outline loops, the outer one and, for a closed wall, its inner one). Fails if the walls do not
+ * enclose the point.
+ */
+/** A flat shape less others in its plane (2D Boolean difference). */
+function cutFlat(shape: AnyShape, tools: AnyShape[]): AnyShape {
+  const k = R.getOC()
+  let current = shape
+  for (const tool of tools) {
+    const cut = new k.BRepAlgoAPI_Cut(current.wrapped, tool.wrapped)
+    cut.Build()
+    if (cut.HasErrors()) throw new Error('The room could not be worked out')
+    current = R.cast(cut.Shape())
+    cut.delete()
+  }
+  return current
+}
+
+export function roomRegion(walls: AnyCurve[][], point: Vector3): RoomRegion {
+  const z = point.z
+  const flatAt = (c: AnyCurve) => (c.type === 'polyline' ? ({ ...c, points: c.points.map((p) => new Vector3(p.x, p.y, z)) } as AnyCurve) : c)
+  const faces = walls.flatMap((loops) => {
+    const [outer, ...inner] = loops.map(flatAt)
+    const face = planarFace(outer)
+    if (!face) return []
+    const holes = inner.map(planarFace).filter((f): f is R.Face => f !== null)
+    return [holes.length > 0 ? cutFlat(face, holes) : face]
+  })
+  if (faces.length === 0) throw new Error('There are no walls to bound a room')
+  // A floor larger than every wall, less the walls: its pieces are the rooms (and the outside).
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity]
+  for (const f of faces) {
+    const [[a, b], [c, d]] = f.boundingBox.bounds
+    ;[x0, y0, x1, y1] = [Math.min(x0, a, point.x), Math.min(y0, b, point.y), Math.max(x1, c, point.x), Math.max(y1, d, point.y)]
+  }
+  const m = Math.max(x1 - x0, y1 - y0) * 0.1 + 1
+  const floor = planarFace({ type: 'polyline', points: [new Vector3(x0 - m, y0 - m, z), new Vector3(x1 + m, y0 - m, z), new Vector3(x1 + m, y1 + m, z), new Vector3(x0 - m, y1 + m, z)], closed: true })!
+  const pieces = cutFlat(floor, faces).faces
+  const room = pieces.find((f) => (closestOn(f, point)?.distance ?? Infinity) < 1e-6 * Math.max(1, m))
+  if (!room) throw new Error('That point is inside a wall')
+  const [[a, b], [c, d]] = room.boundingBox.bounds
+  if (a <= x0 - m + 1e-6 || b <= y0 - m + 1e-6 || c >= x1 + m - 1e-6 || d >= y1 + m - 1e-6) throw new Error('The walls do not enclose that point (the room is open)')
+  const loops = room.wires.map((w) => join(w.edges.map(edgeToCurve).filter((e): e is AnyCurve => e !== null)).map((j) => j.geometry)).flat()
+  // The outside loop first: the longest.
+  loops.sort((p, q) => length(q) - length(p))
+  return { loops, area: R.measureShapeSurfaceProperties(room as unknown as R.Shape3D).area }
 }

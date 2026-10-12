@@ -2,9 +2,9 @@ import { Vector3 } from 'three'
 import opencascade from 'replicad-opencascadejs'
 import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { FRAME, wallParams, type Opening } from '../core/architecture'
+import { FRAME, findJoins, wallOutline, wallParams, type Opening } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
-import { columnShape, openingPartShape, railingShape, roofShape, slabShape, stairShape, wallShape } from './architecture'
+import { columnShape, openingPartShape, railingShape, roofShape, roomRegion, slabShape, stairShape, wallShape } from './architecture'
 import { railingParams, railingPieces } from '../core/railings'
 import { columnOutline, roofParams, stairParams, stairPlan } from '../core/buildingParts'
 
@@ -174,5 +174,35 @@ describe('architectural solids', () => {
     const expected = railingPieces(points, params).reduce((sum, b) => sum + Math.abs(b.u.clone().cross(b.v).dot(b.w)), 0)
     expect(volume(shape)).toBeCloseTo(expected, -2)
     expect(shape.boundingBox.bounds[1][2]).toBeCloseTo(1000, 6)
+  })
+
+  it('finds the room a point is in, between the walls', () => {
+    const line = (a: Vector3, b: Vector3): AnyCurve => ({ type: 'polyline', points: [a, b], closed: false })
+    const refs = [
+      line(v(0, 0), v(8000, 0)),
+      line(v(8000, 0), v(8000, 5000)),
+      line(v(8000, 5000), v(0, 5000)),
+      line(v(0, 5000), v(0, 0)),
+      line(v(4000, 0), v(4000, 5000)),
+    ].map((path) => ({ path, params: wallParams({ thickness: 200, height: 3000 }) }))
+    const outlines = refs.map((w, i) => {
+      const others = refs.filter((_, j) => j !== i)
+      return wallOutline(w.path, w.params, findJoins(w, others).map((j) => ({ ...j, other: others[j.other] })))
+    })
+    // The left room: inside faces at x 100..3900, y 100..4900.
+    const left = roomRegion(outlines, v(2000, 2500))
+    expect(left.area).toBeCloseTo(3800 * 4800, 0)
+    expect(left.loops).toHaveLength(1)
+    const right = roomRegion(outlines, v(6000, 1000))
+    expect(right.area).toBeCloseTo(3800 * 4800, 0)
+    // Outside, or with a wall missing, there is no room.
+    expect(() => roomRegion(outlines, v(9000, 2500))).toThrow(/enclose/)
+    expect(() => roomRegion(outlines.slice(1), v(2000, 2500))).toThrow(/enclose/)
+    // A closed wall (a room drawn as one), with a column in it: the column is a hole.
+    const room: AnyCurve = { type: 'polyline', points: [v(0, 0), v(6000, 0), v(6000, 4000), v(0, 4000)], closed: true }
+    const column: AnyCurve = { type: 'polyline', points: [v(2900, 1900), v(3100, 1900), v(3100, 2100), v(2900, 2100)], closed: true }
+    const withColumn = roomRegion([wallOutline(room, wallParams({ thickness: 200 })), [column]], v(1000, 1000))
+    expect(withColumn.area).toBeCloseTo(5800 * 3800 - 200 * 200, 0)
+    expect(withColumn.loops).toHaveLength(2)
   })
 })

@@ -19,6 +19,7 @@ import { nextOpeningId } from '../app/openingParts'
 import { AnyCurve, isClosed, isCurve, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
+import { LINE_SPACING, textShape } from '../text/strokeFont'
 import { wallDimensions, type DimensionedWall } from '../core/autoDimensions'
 import { MATERIAL_PRESETS } from '../core/materials'
 import { DEFAULT_RAILING, type RailingSides, type RailingStyle } from '../core/railings'
@@ -44,6 +45,7 @@ const memory = {
   column: { ...DEFAULT_COLUMN },
   railing: { ...DEFAULT_RAILING },
   dimensions: { offset: 800, height: 200 },
+  room: { height: 250 },
 }
 
 const JUSTIFICATIONS: Justification[] = ['center', 'left', 'right']
@@ -546,6 +548,100 @@ async function railingsOnStairs(ctx: CommandContext): Promise<void> {
   }
 }
 
+/** A wall's path, parameters and plan outline (with its joins), from its record. */
+function dimensionedWall(ctx: CommandContext, id: number): DimensionedWall | null {
+  const { doc } = ctx
+  const record = doc.objects.get(id)?.history
+  if (record?.command !== 'Wall') return null
+  const path = doc.objects.get(record.inputs[0])?.geometry
+  if (!path || !isCurve(path)) return null
+  const params = wallParams(record.params)
+  const joins = (Array.isArray(record.params?.joins) ? (record.params!.joins as SavedJoin[]) : []).flatMap((j) => {
+    const other = doc.objects.get(record.inputs[j.input])?.geometry
+    return other && isCurve(other) ? [{ end: j.end, kind: j.kind, other: { path: other, params: { thickness: j.thickness, justification: j.justification } } }] : []
+  })
+  return { path, params, outline: wallOutline(path, params, joins) }
+}
+
+/** Square units of area for a document's units, and how many of them a square model unit is. */
+function areaUnits(units: string): { name: string; factor: number } {
+  const table: Record<string, { name: string; factor: number }> = {
+    Millimeters: { name: 'm²', factor: 1e-6 },
+    Centimeters: { name: 'm²', factor: 1e-4 },
+    Meters: { name: 'm²', factor: 1 },
+    Inches: { name: 'ft²', factor: 1 / 144 },
+    Feet: { name: 'ft²', factor: 1 },
+  }
+  return table[units] ?? { name: `${units.toLowerCase()}²`, factor: 1 }
+}
+
+/**
+ * Room labels: click inside a room to get its outline (between the walls' plan outlines, around
+ * any columns in it, ignoring openings) on a Rooms layer and a label with its name and floor area at
+ * the click, grouped. The outline can make the room's floor (Slab, Curve option).
+ */
+const room: Command = {
+  name: 'Room',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const m = memory.room
+    let made = 0
+    for (;;) {
+      const r = await input.getPoint({ prompt: made ? 'Click inside another room. Press Enter when done' : 'Click inside a room', options: [valueOption('TextHeight', m.height)] })
+      if (r.kind === 'option') {
+        if (isOption(r.option, 'TextHeight')) m.height = await askPositive(ctx, 'Text height', m.height)
+        continue
+      }
+      if (r.kind !== 'point') break
+      // The walls (and columns) at this height bound the room.
+      const z = r.point.z
+      const near = (c: AnyCurve) => Math.abs(tessellate(c)[0].z - z) <= Math.max(1, doc.level.height)
+      const outlines: AnyCurve[][] = []
+      for (const obj of doc.objects.values()) {
+        const command = obj.history?.command
+        if (command === 'Wall') {
+          const w = dimensionedWall(ctx, obj.id)
+          if (w && near(w.path) && tessellate(w.path)[0].z <= z + 1) outlines.push(w.outline)
+        } else if (command === 'Column') {
+          const c = doc.objects.get(obj.history!.inputs[0])?.geometry
+          if (c && isCurve(c) && isClosed(c) && near(c)) outlines.push([c])
+        }
+      }
+      await kernel(ctx)
+      let region: { loops: AnyCurve[]; area: number }
+      try {
+        region = await kernelJob('roomRegion', outlines, r.point)
+      } catch (error) {
+        // Say why (open room, inside a wall) and let another room be tried.
+        log(error instanceof Error ? error.message : String(error))
+        continue
+      }
+      const name = (await input.getString(`Room name <Room ${made + 1}>`))?.trim() || `Room ${made + 1}`
+      const units = areaUnits(doc.units)
+      const label = `${name}\n${(region.area * units.factor).toFixed(2)} ${units.name}`
+      const layer = layerNamed(ctx, 'Rooms', '#b0802f')
+      const ids = region.loops.map((loop) => doc.add(loop, layer.id).id)
+      // The label centred on the click.
+      const shape = textShape(label)
+      const width = Math.max(...shape.widths) * m.height
+      const lines = shape.widths.length
+      const block = ((lines - 1) * LINE_SPACING + 1) * m.height
+      // The text sits on the baseline of its last line; its block reaches up from there.
+      const at = new Vector3(r.point.x - width / 2, r.point.y - block / 2, z)
+      ids.push(
+        doc.add(
+          { type: 'annotation', kind: 'text', points: [at], xaxis: new Vector3(1, 0, 0), yaxis: new Vector3(0, 1, 0), text: label, height: m.height, arrow: 'arrow', precision: 0 },
+          layer.id,
+        ).id,
+      )
+      doc.group(ids)
+      made++
+      log(`${name}: ${(region.area * units.factor).toFixed(2)} ${units.name}`)
+    }
+    if (made > 0) log(`${made} room${made === 1 ? '' : 's'} labelled`)
+  },
+}
+
 /**
  * Plan dimensions of walls: along the outside face of each straight stretch, a chain through the
  * edges of its openings and, further out, its overall length. The dimensions are grouped, on a
@@ -561,18 +657,7 @@ const wallDimensionsCommand: Command = {
     if (typeof offset === 'number' && offset > 0) memory.dimensions.offset = offset
     const height = await input.getNumber('Text height', memory.dimensions.height)
     if (typeof height === 'number' && height > 0) memory.dimensions.height = height
-    const walls: DimensionedWall[] = []
-    for (const id of ids) {
-      const record = doc.objects.get(id)!.history!
-      const path = doc.objects.get(record.inputs[0])?.geometry
-      if (!path || !isCurve(path)) continue
-      const params = wallParams(record.params)
-      const joins = (Array.isArray(record.params?.joins) ? (record.params!.joins as SavedJoin[]) : []).flatMap((j) => {
-        const other = doc.objects.get(record.inputs[j.input])?.geometry
-        return other && isCurve(other) ? [{ end: j.end, kind: j.kind, other: { path: other, params: { thickness: j.thickness, justification: j.justification } } }] : []
-      })
-      walls.push({ path, params, outline: wallOutline(path, params, joins) })
-    }
+    const walls = ids.map((id) => dimensionedWall(ctx, id)).filter((w): w is DimensionedWall => w !== null)
     const dims = wallDimensions(walls, { offset: memory.dimensions.offset })
     if (dims.length === 0) {
       log('No outside wall faces to dimension')
@@ -602,4 +687,4 @@ const wallDimensionsCommand: Command = {
   },
 }
 
-export const architectureCommands: Command[] = [wallDimensionsCommand, level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]
+export const architectureCommands: Command[] = [wallDimensionsCommand, room, level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]

@@ -254,6 +254,10 @@ Expand a section for details.
   face of each straight stretch of the outside walls, a chain from corner to corner through the
   edges of the openings and, further out, the overall length (inside walls are left alone). The
   dimensions use architectural ticks, go on a *Dimensions* layer and are grouped.
+- `Room` labels rooms: click inside one to get its outline (between the walls' plan outlines,
+  around any columns, ignoring openings) on a *Rooms* layer and a label with its name and floor
+  area (m² or ft² by the document's units) centred where you clicked, grouped. The outline can
+  make the room's floor with `Slab` (`Curve` option). Open rooms are reported.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -457,7 +461,8 @@ flowchart LR
 - [x] Roofs over L, T and U plans
 - [x] Railings for stairs and slab edges
 - [x] Automatic plan dimensions for walls and openings
-- [ ] Room labels with areas, and door swings in plan
+- [x] Room labels with areas
+- [ ] Door swings and window symbols in plan
 - [ ] Signed installers and automatic updates
 
 ## FAQ

@@ -265,6 +265,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         'separator',
         item('Levels', 'Level'),
         item('Dimension Walls', 'WallDimensions'),
+        item('Room Label', 'Room'),
       ],
     ],
     [
