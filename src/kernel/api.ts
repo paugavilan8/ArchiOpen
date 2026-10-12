@@ -27,6 +27,7 @@ import {
 import { shapeFromRhino } from './fromRhino'
 import { filletSurfaces } from './filletSrf'
 import { make2DWithMeshes } from './make2d'
+import { roomRegion } from './architecture'
 import { matchSurface } from './matchSrf'
 import { unrollShape } from './unroll'
 import { checkShape, shapeArea, shapeBounds, shapeVolume } from './measure'
@@ -105,6 +106,7 @@ export const api = {
   untrim,
   filletSurfaces,
   matchSurface,
+  roomRegion,
   borderCurves,
   edgeCurves,
   sweep2,
