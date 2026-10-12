@@ -5,6 +5,15 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Stretching surfaces and solids**: `Scale1D` and `Scale2D`, and the gumball's scale along one
+  axis, now stretch surfaces and solids too, exactly (their NURBS are stretched with them), and
+  they export exactly to `.3dm` and STEP.
+- New solids: `Cone`, `TCone`, `Torus` and `Pyramid`.
+- `ArrayCrv` (copies along a curve), `ProjectToCPlane`, `CurveBoolean` (regions of curves picked by
+  clicking inside them) and `ExtendSrf` (a surface made longer past an edge).
+- **glTF export** (`ExportGLTF`, `.glb`) with render materials, for Blender, Unreal, Twinmotion and
+  web viewers.
+
 - **Door and window tags** (`Tags`): each opening's mark from the schedule beside it in plan, kept
   up to date by `UpdateDrawings` and added by `DrawingSet`.
 - Plans of a drawing set show texts (room labels, tags, dimensions) on their own level only.

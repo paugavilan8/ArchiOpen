@@ -448,4 +448,29 @@ const matchSrf: Command = {
   },
 }
 
-export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge, untrim, filletSrf, matchSrf]
+const extendSrfMemory = { length: 1 }
+
+/** ExtendSrf: a surface made longer past the edge picked, carrying on as it goes. */
+const extendSrf: Command = {
+  name: 'ExtendSrf',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    await kernel(ctx)
+    const pick = await input.getPick('Select the edge of the surface to extend', [], (id) => !!brepOf(ctx, id))
+    if (pick.kind !== 'pick') return
+    const g = brepOf(ctx, pick.id)
+    if (!g) return
+    if (g.faces !== 1) throw new Error('ExtendSrf works on single surfaces (use ExtractSrf first)')
+    const r = await input.getPoint({ prompt: `Extension length <${extendSrfMemory.length}>`, base: pick.point, acceptNumber: true })
+    const length = r.kind === 'number' ? r.value : r.kind === 'point' ? r.point.distanceTo(pick.point) : r.kind === 'enter' ? extendSrfMemory.length : null
+    if (length === null) return
+    if (length <= 0) throw new Error('The length must be more than zero')
+    extendSrfMemory.length = length
+    const result = await readable(kernelJob('extendSurface', shapeRef(g), pick.point, length), 'extend that surface')
+    doc.setGeometry(pick.id, result)
+    doc.select([pick.id])
+    log('Surface extended')
+  },
+}
+
+export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge, untrim, filletSrf, matchSrf, extendSrf]

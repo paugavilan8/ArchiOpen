@@ -139,11 +139,11 @@ const TOOLS = [
   {
     name: 'export',
     description:
-      'Writes the model to a file on this computer: archi (the native model, to save work), ifc (BIM), pdf (the layouts/sheets if there are any, otherwise the active view), dxf (2D/3D geometry for CAD) or csv (quantities). Give an absolute path; an existing file is only replaced with overwrite: true.',
+      'Writes the model to a file on this computer: archi (the native model, to save work), ifc (BIM), pdf (the layouts/sheets if there are any, otherwise the active view), dxf (2D/3D geometry for CAD), glb (glTF 3D model with materials, for Blender, game engines and web viewers) or csv (quantities). Give an absolute path; an existing file is only replaced with overwrite: true.',
     inputSchema: {
       type: 'object',
       properties: {
-        format: { type: 'string', enum: ['archi', 'ifc', 'pdf', 'dxf', 'csv'] },
+        format: { type: 'string', enum: ['archi', 'ifc', 'pdf', 'dxf', 'glb', 'csv'] },
         path: { type: 'string', description: 'Absolute path of the file to write' },
         overwrite: { type: 'boolean' },
       },

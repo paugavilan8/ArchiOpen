@@ -22,6 +22,7 @@ export const memory = {
   chamferEdge: 1,
   shellThickness: 1,
   contourSpacing: 3,
+  pyramidSides: 4,
 }
 
 export async function kernel(ctx: CommandContext): Promise<void> {
@@ -174,6 +175,135 @@ const sphereCommand: Command = {
     const r = await getRadius(ctx, center.point, xaxis, yaxis)
     await kernel(ctx)
     await addShape(ctx, kernelJob('sphere', center.point, r), 'make the sphere')
+  },
+}
+
+/** The cone's outline for previews: base circle, top circle (if any) and four lines up its side. */
+function coneLines(c: Vector3, x: Vector3, y: Vector3, n: Vector3, r: number, top: number, h: number): Vector3[][] {
+  const apex = c.clone().addScaledVector(n, h)
+  const lines = [circleLines(c, x, y, r)]
+  if (top > 1e-12) lines.push(circleLines(apex, x, y, top))
+  for (const [dx, dy] of [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+  ])
+    lines.push([c.clone().addScaledVector(x, r * dx).addScaledVector(y, r * dy), apex.clone().addScaledVector(x, top * dx).addScaledVector(y, top * dy)])
+  return lines
+}
+
+/** Cone: base circle and apex height. A negative height points it downwards. */
+const coneCommand: Command = {
+  name: 'Cone',
+  async run(ctx) {
+    const base = await ctx.input.getPoint({ prompt: 'Center of base' })
+    if (base.kind !== 'point') return
+    const c = base.point
+    const { xaxis, yaxis, normal } = base.viewport.cplane
+    const r = await getRadius(ctx, c, xaxis, yaxis)
+    const h = await getHeight(ctx, c, normal, (h) => coneLines(c, xaxis, yaxis, normal, r, 0, h))
+    if (Math.abs(h) < 1e-9) throw new Error('The height must not be zero')
+    memory.height = Math.abs(h)
+    await kernel(ctx)
+    await addShape(ctx, kernelJob('cone', c, r, 0, Math.abs(h), h > 0 ? normal : normal.clone().negate(), xaxis), 'make the cone')
+  },
+}
+
+/** TCone: a truncated cone, with a radius at the bottom and another at the top. */
+const truncatedConeCommand: Command = {
+  name: 'TCone',
+  async run(ctx) {
+    const { input } = ctx
+    const base = await input.getPoint({ prompt: 'Center of base' })
+    if (base.kind !== 'point') return
+    const c = base.point
+    const { xaxis, yaxis, normal } = base.viewport.cplane
+    const r = await getRadius(ctx, c, xaxis, yaxis)
+    const h = await getHeight(ctx, c, normal, (h) => coneLines(c, xaxis, yaxis, normal, r, r / 2, h))
+    if (Math.abs(h) < 1e-9) throw new Error('The height must not be zero')
+    memory.height = Math.abs(h)
+    const top = c.clone().addScaledVector(normal, h)
+    const second = await input.getPoint({
+      prompt: `Top radius <${r / 2}>`,
+      base: top,
+      acceptNumber: true,
+      preview: (p) => coneLines(c, xaxis, yaxis, normal, r, p.distanceTo(top), h),
+    })
+    const topRadius = second.kind === 'number' ? second.value : second.kind === 'point' ? second.point.distanceTo(top) : second.kind === 'enter' ? r / 2 : null
+    if (topRadius === null) return
+    if (topRadius < 0) throw new Error('The radius must not be negative')
+    await kernel(ctx)
+    await addShape(ctx, kernelJob('cone', c, r, topRadius, Math.abs(h), h > 0 ? normal : normal.clone().negate(), xaxis), 'make the truncated cone')
+  },
+}
+
+/** Torus: a center, the radius to the middle of the tube, and the tube's radius. */
+const torusCommand: Command = {
+  name: 'Torus',
+  async run(ctx) {
+    const { input } = ctx
+    const center = await input.getPoint({ prompt: 'Center of torus' })
+    if (center.kind !== 'point') return
+    const c = center.point
+    const { xaxis, yaxis, normal } = center.viewport.cplane
+    const major = await getRadius(ctx, c, xaxis, yaxis)
+    const onRing = c.clone().addScaledVector(xaxis, major)
+    const tube = (r: number) => [circleLines(c, xaxis, yaxis, major + r), circleLines(c, xaxis, yaxis, Math.max(major - r, 0)), circleLines(onRing, xaxis, normal, r)]
+    const second = await input.getPoint({
+      prompt: `Radius of the tube <${major / 4}>`,
+      base: onRing,
+      acceptNumber: true,
+      preview: (p) => tube(p.distanceTo(onRing)),
+    })
+    const minor = second.kind === 'number' ? second.value : second.kind === 'point' ? second.point.distanceTo(onRing) : second.kind === 'enter' ? major / 4 : null
+    if (minor === null) return
+    if (minor <= 0) throw new Error('The radius must be more than zero')
+    if (minor >= major) throw new Error('The tube must be thinner than the torus is wide')
+    await kernel(ctx)
+    await addShape(ctx, kernelJob('torus', c, normal, major, minor), 'make the torus')
+  },
+}
+
+/** Pyramid: a regular polygon base (center and corner) and an apex height. */
+const pyramidCommand: Command = {
+  name: 'Pyramid',
+  async run(ctx) {
+    const { input } = ctx
+    for (;;) {
+      const center = await input.getPoint({ prompt: 'Center of base', options: [valueOption('Sides', memory.pyramidSides)] })
+      if (center.kind === 'option') {
+        const n = await input.getNumber('Number of sides', memory.pyramidSides)
+        if (typeof n === 'number') {
+          if (n < 3 || !Number.isInteger(n)) throw new Error('A pyramid has a whole number of sides, 3 or more')
+          memory.pyramidSides = n
+        }
+        continue
+      }
+      if (center.kind !== 'point') return
+      const c = center.point
+      const { normal } = center.viewport.cplane
+      const sides = memory.pyramidSides
+      const polygon = (corner: Vector3) => {
+        const d = corner.clone().sub(c)
+        d.addScaledVector(normal, -d.dot(normal))
+        return Array.from({ length: sides }, (_, i) => c.clone().add(d.clone().applyAxisAngle(normal, (i * 2 * Math.PI) / sides)))
+      }
+      const corner = await input.getPoint({ prompt: 'Corner of base', base: c, preview: (p) => (p.distanceTo(c) > 1e-9 ? [[...polygon(p), polygon(p)[0]]] : []) })
+      if (corner.kind !== 'point') return
+      const base = polygon(corner.point)
+      if (base[0].distanceTo(c) < 1e-9) throw new Error('The base has no size')
+      const lines = (h: number) => {
+        const apex = c.clone().addScaledVector(normal, h)
+        return [[...base, base[0]], ...base.map((p) => [p, apex])]
+      }
+      const h = await getHeight(ctx, c, normal, lines)
+      if (Math.abs(h) < 1e-9) throw new Error('The height must not be zero')
+      memory.height = Math.abs(h)
+      await kernel(ctx)
+      await addShape(ctx, kernelJob('pyramid', base, c.clone().addScaledVector(normal, h)), 'make the pyramid')
+      return
+    }
   },
 }
 
@@ -615,6 +745,10 @@ export const solidCommands: Command[] = [
   boxCommand,
   cylinderCommand,
   sphereCommand,
+  coneCommand,
+  truncatedConeCommand,
+  torusCommand,
+  pyramidCommand,
   extrudeCrv,
   revolve,
   railRevolve,

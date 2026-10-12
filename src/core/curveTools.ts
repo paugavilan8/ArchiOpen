@@ -1,4 +1,4 @@
-import { Box3, Vector3 } from 'three'
+import { Box3, Matrix4, Quaternion, Vector3 } from 'three'
 import { approximate } from '../math/nurbs'
 import { closestPoint, length } from './curves'
 import { AnyCurve, ArcGeometry, CurveGeometry, domain, isClosed, pointAt, PolylineGeometry, samples, SegmentGeometry, tangentAt, tessellate } from './geometry'
@@ -260,4 +260,39 @@ export function atLengths(g: AnyCurve, distances: number[]): { points: Vector3[]
 export function alongCurve(g: AnyCurve, count: number): { points: Vector3[]; tangents: Vector3[]; params: number[] } {
   const total = length(g)
   return atLengths(g, Array.from({ length: count }, (_, i) => (total * i) / (count - 1)))
+}
+
+export type CurveArrayOrientation = 'freeform' | 'roadlike' | 'none'
+
+/**
+ * Where ArrayCrv puts each copy: matrices that take `base` to points along the curve at the given
+ * lengths. Freeform turns the copies with the curve's tangent (carried along it without twisting);
+ * Roadlike turns them only about `up`, so they stay upright; None only moves them.
+ */
+export function curveArrayMatrices(g: AnyCurve, base: Vector3, distances: number[], orientation: CurveArrayOrientation, up: Vector3): Matrix4[] {
+  const { points, tangents } = atLengths(g, distances)
+  const out: Matrix4[] = []
+  const turn = new Quaternion()
+  const step = new Quaternion()
+  const flat = (t: Vector3) => t.clone().addScaledVector(up, -t.dot(up)).normalize()
+  for (let i = 0; i < points.length; i++) {
+    const t = tangents[i].clone().normalize()
+    if (orientation === 'freeform' && i > 0) {
+      // Turn by the change of tangent since the last copy, so it never twists about the curve.
+      step.setFromUnitVectors(tangents[i - 1].clone().normalize(), t)
+      turn.premultiply(step)
+    } else if (orientation === 'roadlike') {
+      const a = flat(tangents[0])
+      const b = flat(t)
+      const angle = a.lengthSq() > 0 && b.lengthSq() > 0 ? Math.atan2(new Vector3().crossVectors(a, b).dot(up), a.dot(b)) : 0
+      turn.setFromAxisAngle(up, angle)
+    }
+    out.push(
+      new Matrix4()
+        .makeTranslation(points[i].x, points[i].y, points[i].z)
+        .multiply(new Matrix4().makeRotationFromQuaternion(turn))
+        .multiply(new Matrix4().makeTranslation(-base.x, -base.y, -base.z)),
+    )
+  }
+  return out
 }

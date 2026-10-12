@@ -48,7 +48,7 @@ superficies, no como mallas.
   grosores, láminas con cajetín y salida a PDF vectorial y DXF.
 - **Render:** materiales físicos y texturas, sol y sombras, oclusión ambiental e imágenes de hasta 4K.
 - **Intercambio:** `.3dm` de Rhino con superficies exactas y bloques, STEP AP242, DXF con capas,
-  bloques y cotas, STL y OBJ.
+  bloques y cotas, STL, OBJ y glTF.
 - **Rendimiento:** el núcleo geométrico trabaja en segundo plano, la selección usa un índice
   espacial y los bloques se dibujan con instancias en la GPU.
 
@@ -162,9 +162,20 @@ Despliega cada apartado para ver los detalles.
 - Edición de curvas: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet`, `FilletCorners`,
   `Chamfer`, `Extend`, `BlendCrv` (continuidad de posición, tangencia o curvatura) y `Rebuild`
   (indica cuánto se separa de la original).
+- `CurveBoolean`: se hace clic dentro de las regiones que encierran unas curvas y da su contorno:
+  las regiones vecinas se unen, así que sirve para uniones, diferencias e intersecciones de curvas
+  cerradas, y para partir regiones con curvas abiertas.
 - Puntos: `Point`, `Points` y `Divide` (por número de tramos o por longitud); `SelPt` los selecciona.
-- Transformaciones: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array` y `ArrayPolar`, y
-  herramientas para colocar objetos respecto a otros (menú *Transform*):
+- Transformaciones: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array` y `ArrayPolar`, y además:
+  - `Scale1D` estira en una sola dirección y `Scale2D` solo en el plano de construcción. También
+    estira superficies y sólidos, de forma exacta: sus NURBS se estiran con ellos (una esfera pasa
+    a ser un huevo, un cilindro uno elíptico), igual que el tirador de escala del gumball en un eje;
+  - `ArrayCrv`: copias a lo largo de una curva, por número o por distancia, girando con ella
+    (`Freeform`), de pie respecto a la normal del plano de construcción (`Roadlike`) o sin girar;
+  - `ProjectToCPlane`: aplana curvas, puntos, mallas, textos y sombreados sobre el plano de
+    construcción.
+
+  Y herramientas para colocar objetos respecto a otros (menú *Transform*):
   - `Orient`: lleva un punto de referencia a un punto de destino y, con un segundo par, gira la
     línea de referencia sobre la de destino, también en 3D. Opciones `Copy` y `Scale` (`No`,
     `Uniform`, u `OneDirection` para estirar solo a lo largo de la línea).
@@ -182,7 +193,8 @@ Despliega cada apartado para ver los detalles.
 <summary><b>Superficies, sólidos e historial</b></summary>
 <br>
 
-- Sólidos y superficies: `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (con opción `Solid`),
+- Sólidos y superficies: `Box`, `Cylinder`, `Sphere`, `Cone`, `TCone` (truncado), `Torus`,
+  `Pyramid` (con los lados que se quiera), `ExtrudeCrv` (con opción `Solid`),
   `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`, `BooleanIntersection`,
   `FilletEdge`, `ChamferEdge`, `Sweep1`, `Shell`, `Section` y `Contour`. `Explode` separa una polisuperficie en
   caras y `Join` las vuelve a unir.
@@ -197,6 +209,8 @@ Despliega cada apartado para ver los detalles.
   - `MatchSrf`: modifica una superficie junto a uno de sus bordes para que encaje con el borde de
     otra, con continuidad de posición, tangencia o curvatura (`Position`, `Tangency`, `Curvature`;
     una cara recortada se ajusta sobre su superficie completa);
+  - `ExtendSrf`: alarga una superficie más allá del borde elegido, siguiendo como iba (un plano
+    sigue plano, un cilindro sigue su círculo);
   - `Pipe`: tubo a lo largo de curvas, con radio inicial y final y opción de cerrarlo como sólido;
   - `RailRevolve`: un perfil girado alrededor de un eje mientras uno de sus extremos sigue una curva
     carril, para cúpulas y cubiertas sobre plantas ovaladas o irregulares.
@@ -461,6 +475,9 @@ Despliega cada apartado para ver los detalles.
   arcos, círculos, arcos, elipses, splines, caras 3D, textos, cotas (que siguen midiendo),
   directrices, sombreados y bloques (que siguen siendo bloques). No se leen DXF binarios ni DWG.
 - Importación y exportación de **STL** y **OBJ**.
+- Exportación a **glTF** (`.glb`) con `ExportGLTF`: superficies, sólidos, mallas y bloques con sus
+  materiales de render, en metros y con Y hacia arriba, para visores web, Blender, Unreal, Unity,
+  Twinmotion y realidad aumentada.
 - **IFC** (IFC4), para programas BIM como Revit, ArchiCAD o BIMcollab:
   - `ExportIFC` escribe un proyecto con emplazamiento, edificio y una planta por nivel. Los muros,
     forjados, cubiertas, escaleras, pilares, barandillas, pavimentos y rodapiés pasan a su entidad
@@ -577,6 +594,7 @@ flowchart LR
 | STEP `.step` `.stp` | Sí | Sí | AP242, B-rep exacto, con capas, colores y unidades |
 | DXF | Sí | Sí | ASCII R12–2018: capas, bloques, cotas, textos, sombreados |
 | STL / OBJ | Sí | Sí | Mallas; las superficies se exportan trianguladas |
+| glTF `.glb` | — | Sí | Triángulos con materiales de render, en metros |
 | PDF | — | Sí | Vectorial, con grosores y tipos de línea; láminas en varias páginas |
 | PNG | — | Sí | `Render` y `ViewCaptureToFile` |
 

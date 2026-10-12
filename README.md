@@ -48,7 +48,7 @@ exported to Rhino or STEP therefore arrive as surfaces, not meshes.
 - **Rendering:** physically based materials and textures, sun and shadows, ambient occlusion, and
   images up to 4K.
 - **Interoperability:** Rhino `.3dm` with exact surfaces and blocks, STEP AP242, DXF with layers,
-  blocks and dimensions, STL and OBJ.
+  blocks and dimensions, STL, OBJ and glTF.
 - **Performance:** the geometry kernel runs in a background worker, picking uses a spatial index,
   and block instances are drawn with GPU instancing.
 
@@ -160,10 +160,21 @@ Expand a section for details.
 - Curve editing: `Trim`, `Split`, `Join`, `Explode`, `Offset`, `Fillet`, `FilletCorners`,
   `Chamfer`, `Extend`, `BlendCrv` (position, tangency or curvature continuity) and `Rebuild`
   (reports the deviation from the original).
+- `CurveBoolean`: click inside the regions curves enclose to get their outline: regions next to
+  each other merge, so it gives unions, differences and intersections of closed curves, and
+  splits regions with open curves.
 - Points: `Point`, `Points`, and `Divide` (by number of segments or by length); `SelPt` selects
   them.
-- Transforms: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array` and `ArrayPolar`, plus tools to
-  place objects relative to others (*Transform* menu):
+- Transforms: `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`, `Array` and `ArrayPolar`, plus:
+  - `Scale1D` stretches along one direction and `Scale2D` in the construction plane only. Surfaces
+    and solids stretch too, exactly: their NURBS are stretched with them (a sphere becomes an
+    egg, a cylinder an elliptic one), and so does the gumball's scale handle along one axis;
+  - `ArrayCrv`: copies along a curve, by number or by distance, turning with it (`Freeform`),
+    upright about the construction plane's normal (`Roadlike`) or not at all;
+  - `ProjectToCPlane`: flattens curves, points, meshes, texts and hatches onto the construction
+    plane.
+
+  And tools to place objects relative to others (*Transform* menu):
   - `Orient`: moves a reference point onto a target point and, given a second pair, rotates the
     reference line onto the target line, in 3D. Options `Copy` and `Scale` (`No`, `Uniform`, or
     `OneDirection` to stretch along the line only).
@@ -181,7 +192,8 @@ Expand a section for details.
 <summary><b>Surfaces, solids and history</b></summary>
 <br>
 
-- Solids and surfaces: `Box`, `Cylinder`, `Sphere`, `ExtrudeCrv` (with a `Solid` option),
+- Solids and surfaces: `Box`, `Cylinder`, `Sphere`, `Cone`, `TCone` (truncated), `Torus`,
+  `Pyramid` (any number of sides), `ExtrudeCrv` (with a `Solid` option),
   `Revolve`, `Loft`, `PlanarSrf`, `BooleanUnion`, `BooleanDifference`, `BooleanIntersection`,
   `FilletEdge`, `ChamferEdge`, `Sweep1`, `Shell`, `Section` and `Contour`. `Explode` splits a polysurface into
   faces and `Join` joins them again.
@@ -196,6 +208,8 @@ Expand a section for details.
   - `MatchSrf`: changes a surface near one of its edges so that it meets an edge of another
     surface with `Position`, `Tangency` or `Curvature` continuity (a trimmed face is matched over
     its whole surface);
+  - `ExtendSrf`: makes a surface longer past the edge picked, carrying on as it goes (a plane
+    stays a plane, a cylinder bends round its circle);
   - `Pipe`: a pipe along curves, with start and end radii and an option to cap it as a solid;
   - `RailRevolve`: a profile revolved about an axis while one of its ends follows a rail curve,
     for domes and roofs on oval or irregular plans.
@@ -446,6 +460,8 @@ Expand a section for details.
   arcs, circles, arcs, ellipses, splines, 3D faces, text, dimensions (kept associative), leaders,
   hatches and blocks (kept as blocks). Binary DXF and DWG are not supported.
 - **STL** and **OBJ** import and export.
+- **glTF** (`.glb`) export with `ExportGLTF`: surfaces, solids, meshes and blocks with their render
+  materials, in meters with Y up, for web viewers, Blender, Unreal, Unity, Twinmotion and AR.
 - **IFC** (IFC4), for BIM tools such as Revit, ArchiCAD or BIMcollab:
   - `ExportIFC` writes a project with a site, a building and a storey per level. Walls, slabs,
     roofs, stairs, columns, railings, floor finishes and skirting become their IFC entities, and
@@ -560,6 +576,7 @@ flowchart LR
 | STEP `.step` `.stp` | Yes | Yes | AP242, exact B-rep, with layers, colors and units |
 | DXF | Yes | Yes | ASCII R12–2018: layers, blocks, dimensions, text, hatches |
 | STL / OBJ | Yes | Yes | Meshes; surfaces are exported triangulated |
+| glTF `.glb` | — | Yes | Triangles with render materials, in meters |
 | PDF | — | Yes | Vector output with lineweights and linetypes; multi-page layouts |
 | PNG | — | Yes | `Render` and `ViewCaptureToFile` |
 

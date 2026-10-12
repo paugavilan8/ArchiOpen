@@ -18,6 +18,11 @@ export const memory = {
   filletRadius: 1,
   chamferA: 1,
   chamferB: 1,
+  projectDelete: true,
+  curveArrayCount: 5,
+  curveArrayDistance: 10,
+  curveArrayByDistance: false,
+  curveArrayOrientation: 'freeform' as 'freeform' | 'roadlike' | 'none',
 }
 
 export function formatValue(value: number): string {
@@ -67,6 +72,26 @@ export function scaleAbout(center: Vector3, factor: number): Matrix4 {
     .makeTranslation(center.x, center.y, center.z)
     .multiply(new Matrix4().makeScale(factor, factor, factor))
     .multiply(new Matrix4().makeTranslation(-center.x, -center.y, -center.z))
+}
+
+/** Scaling by `factor` along a direction only, about a point (Scale1D). */
+export function scaleAlong(center: Vector3, direction: Vector3, factor: number): Matrix4 {
+  const { x, y, z } = direction.clone().normalize()
+  const k = factor - 1
+  // prettier-ignore
+  const linear = new Matrix4().set(
+    1 + k * x * x, k * x * y, k * x * z, 0,
+    k * x * y, 1 + k * y * y, k * y * z, 0,
+    k * x * z, k * y * z, 1 + k * z * z, 0,
+    0, 0, 0, 1,
+  )
+  return new Matrix4().makeTranslation(center.x, center.y, center.z).multiply(linear).multiply(new Matrix4().makeTranslation(-center.x, -center.y, -center.z))
+}
+
+/** Scaling by `factor` across a plane (normal `normal`), not along its normal, about a point (Scale2D). */
+export function scaleAcross(center: Vector3, normal: Vector3, factor: number): Matrix4 {
+  // The uniform scale with the part along the normal undone.
+  return scaleAlong(center, normal, 1 / factor).multiply(scaleAbout(center, factor))
 }
 
 /** Reflection in the plane through `point` with unit normal `normal`. */

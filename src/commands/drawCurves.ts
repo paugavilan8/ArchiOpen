@@ -6,6 +6,9 @@ import { CancelError } from '../input/interaction'
 import { interpolate } from '../math/nurbs'
 import { formatValue, isOption, plural, valueOption } from './helpers'
 import type { Command, CommandContext } from './runner'
+import { kernelJob } from '../kernel/client'
+import { kernel, readable } from './solids'
+import { yesNo } from './helpers'
 
 const memory = {
   sides: 6,
@@ -218,4 +221,43 @@ const blendCrv: Command = {
   },
 }
 
-export const curveCommands: Command[] = [ellipseCommand, polygonCommand, helixCommand, interpCrv, rebuildCommand, blendCrv]
+const curveBooleanMemory = { deleteInput: false }
+
+/**
+ * CurveBoolean: the outline of the regions curves enclose, picked by clicking inside them. Regions
+ * next to each other merge (a union); leaving some out gives a difference or an intersection.
+ */
+const curveBoolean: Command = {
+  name: 'CurveBoolean',
+  async run(ctx) {
+    const { doc, input, display, log } = ctx
+    const ids = (await input.getObjects('Select curves (in the construction plane)')).filter((id) => {
+      const g = doc.objects.get(id)?.geometry
+      return !!g && isCurve(g)
+    })
+    if (ids.length === 0) throw new Error('Select curves')
+    const curves = ids.map((id) => doc.objects.get(id)!.geometry as AnyCurve)
+    const points: Vector3[] = []
+    for (;;) {
+      const r = await input.getPoint({
+        prompt: `Click inside the regions to keep${points.length > 0 ? ` (${points.length} picked). Press Enter when done` : ''}`,
+        options: [yesNo('DeleteInput', curveBooleanMemory.deleteInput)],
+      })
+      if (r.kind === 'option') curveBooleanMemory.deleteInput = !curveBooleanMemory.deleteInput
+      else if (r.kind === 'point') points.push(r.point)
+      else if (r.kind === 'enter') break
+      else return
+    }
+    if (points.length === 0) return
+    const { origin, xaxis, yaxis, normal } = display.active.cplane
+    await kernel(ctx)
+    const outlines = await readable(kernelJob('curveRegions', curves, points, origin, xaxis, yaxis, normal), 'find the regions. Pick inside curves that close round a region')
+    const layer = doc.objects.get(ids[0])!.layerId
+    const made = outlines.map((c) => doc.add(c, layer).id)
+    if (curveBooleanMemory.deleteInput) for (const id of ids) doc.remove(id)
+    doc.select(made)
+    log(`${plural('curve', made.length)} round the regions picked`)
+  },
+}
+
+export const curveCommands: Command[] = [ellipseCommand, polygonCommand, helixCommand, interpCrv, rebuildCommand, blendCrv, curveBoolean]

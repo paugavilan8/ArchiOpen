@@ -132,18 +132,20 @@ describe('exact polysurfaces for Rhino', () => {
   it('exports surfaces and solids exactly in .3dm files, and the rest as meshes', () => {
     const layers = [{ id: 1, name: 'Default', color: '#000000', visible: true, locked: false }]
     const solid = toBrep(boolean('difference', box(v(-4, -4, 0), v(8, 0, 0), v(0, 8, 0), v(0, 0, 2)), [cylinder(v(0, 0, -1), 1.5, 4, v(0, 0, 1))]))
-    // Stretched unevenly, a sphere is no longer one the kernel can describe exactly.
+    // Stretched unevenly (Scale1D), a sphere becomes a NURBS egg, still exact.
     const egg = { ...toBrep(sphere(v(10, 0, 0), 1)), matrix: new Matrix4().makeScale(1, 1, 2).toArray() }
-    expect(exactRhinoBrep(egg)).toBeNull()
+    // One the kernel cannot read goes as its display mesh.
+    const unreadable = { ...toBrep(sphere(v(20, 0, 0), 1)), brep: 'not a shape' }
+    expect(exactRhinoBrep(unreadable)).toBeNull()
     const report = { exact: 0, meshed: 0 }
     const bytes = writeRhinoFile(
       rhino,
-      { units: 'Millimeters', layers, objects: [solid, egg].map((geometry) => ({ layerId: 1, geometry })), exactBrep: exactRhinoBrep },
+      { units: 'Millimeters', layers, objects: [solid, egg, unreadable].map((geometry) => ({ layerId: 1, geometry })), exactBrep: exactRhinoBrep },
       report,
     )
-    expect(report).toEqual({ exact: 1, meshed: 1 })
+    expect(report).toEqual({ exact: 2, meshed: 1 })
     const model = readRhinoFile(rhino, bytes)
-    expect(model.breps).toHaveLength(1)
+    expect(model.breps).toHaveLength(2)
     expect(model.breps[0].data.faces).toHaveLength(7)
     expect(model.objects.filter((o) => o.geometry.type === 'mesh')).toHaveLength(1)
   })
