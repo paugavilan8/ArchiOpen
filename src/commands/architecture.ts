@@ -18,6 +18,7 @@ import { nextOpeningId } from '../app/openingParts'
 import { AnyCurve, isClosed, isCurve, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
+import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairPlan, type RoofType } from '../core/buildingParts'
 import { layerNamed } from './drawing'
 import { kernel, readable } from './solids'
 import type { Command, CommandContext } from './runner'
@@ -34,6 +35,9 @@ const memory = {
   slab: DEFAULT_SLAB.thickness,
   openings: { window: { ...DEFAULT_OPENINGS.window }, door: { ...DEFAULT_OPENINGS.door } },
   frame: true,
+  roof: { ...DEFAULT_ROOF },
+  stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers },
+  column: { ...DEFAULT_COLUMN },
 }
 
 const JUSTIFICATIONS: Justification[] = ['center', 'left', 'right']
@@ -42,6 +46,9 @@ const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const construction = (ctx: CommandContext) => layerNamed(ctx, 'Construction', '#8c8c8c', 'Dashed')
 const wallsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Walls', '#5b5b5b')
 const slabsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Slabs', '#7a7a7a')
+const roofsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Roofs', '#9c5a43')
+const stairsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Stairs', '#6e6e6e')
+const columnsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Columns', '#666666')
 
 /** Is this object a wall (or slab), made from its curve? */
 export const isWall = (ctx: CommandContext, id: number) => ctx.doc.objects.get(id)?.history?.command === 'Wall'
@@ -290,4 +297,144 @@ function openingCommand(kind: Opening['kind']): Command {
   }
 }
 
-export const architectureCommands: Command[] = [level, wall, slab, openingCommand('window'), openingCommand('door')]
+
+const ROOF_TYPES: RoofType[] = ['hip', 'gable', 'shed']
+
+/** Draws a closed outline corner by corner (Enter closes it), or null if cancelled. */
+async function drawOutline(ctx: CommandContext, first: Vector3): Promise<Vector3[] | null> {
+  const points = [first]
+  for (;;) {
+    const r = await ctx.input.getPoint({
+      prompt: points.length < 3 ? 'Next corner' : 'Next corner. Press Enter to close the outline',
+      base: points[points.length - 1],
+      options: points.length >= 2 ? ['Undo'] : [],
+      preview: (p) => [[...points, p, points[0]]],
+    })
+    if (r.kind === 'point') points.push(r.point)
+    else if (r.kind === 'option' && r.option === 'Undo') points.pop()
+    else break
+  }
+  return points.length >= 3 ? points : null
+}
+
+const roof: Command = {
+  name: 'Roof',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const m = memory.roof
+    const options = () => [`Type=${capital(m.type)}`, valueOption('Pitch', m.pitch), valueOption('Overhang', m.overhang), valueOption('Thickness', m.thickness), 'Curve']
+    // Drawn roofs sit on the walls of the current level.
+    const eaves = doc.level.elevation + doc.level.height
+    const make = async (outline: AnyCurve, curveId: number | null) => {
+      roofPlan(outline, m) // Fails early, with the reason, for outlines that cannot be roofed.
+      return addRecorded(ctx, outline, curveId, { command: 'Roof', params: { ...m } }, roofsLayer(ctx).id, 'make the roof')
+    }
+    for (;;) {
+      const r = await input.getPoint({ prompt: `First corner of roof outline (eaves at ${formatValue(eaves)})`, options: options() })
+      if (r.kind === 'option') {
+        if (isOption(r.option, 'Type')) m.type = ROOF_TYPES[(ROOF_TYPES.indexOf(m.type) + 1) % ROOF_TYPES.length]
+        else if (isOption(r.option, 'Pitch')) {
+          const v = await input.getNumber('Roof pitch in degrees', m.pitch)
+          if (typeof v === 'number' && v >= 0 && v < 80) m.pitch = v
+        } else if (isOption(r.option, 'Overhang')) {
+          const v = await input.getNumber('Overhang', m.overhang)
+          if (typeof v === 'number' && v >= 0) m.overhang = v
+        } else if (isOption(r.option, 'Thickness')) m.thickness = await askPositive(ctx, 'Roof thickness', m.thickness)
+        else if (isOption(r.option, 'Curve')) {
+          const ids = (await input.getObjects('Select closed outlines to roof')).filter((id) => {
+            const g = doc.objects.get(id)!.geometry
+            return isCurve(g) && isClosed(g)
+          })
+          if (ids.length === 0) throw new Error('Select closed outlines')
+          const made: number[] = []
+          for (const id of ids) made.push(await make(doc.objects.get(id)!.geometry as AnyCurve, id))
+          doc.select(made)
+          log(`${made.length} roof${made.length === 1 ? '' : 's'} made`)
+          return
+        }
+        continue
+      }
+      if (r.kind !== 'point') return
+      const corners = await drawOutline(ctx, r.point)
+      if (!corners) return
+      const outline: AnyCurve = { type: 'polyline', points: corners.map((p) => new Vector3(p.x, p.y, eaves)), closed: true }
+      const id = await make(outline, null)
+      doc.select([id])
+      log(`${capital(m.type)} roof made, ${formatValue(m.pitch)}° pitch, eaves at ${formatValue(eaves)}. Change it in Properties`)
+      return
+    }
+  },
+}
+
+const stair: Command = {
+  name: 'Stair',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const m = memory.stair
+    const height = () => doc.level.height
+    const options = () => [valueOption('Width', m.width), m.risers > 0 ? valueOption('Risers', m.risers) : 'Risers=Auto']
+    const handle = async (option: string) => {
+      if (isOption(option, 'Width')) m.width = await askPositive(ctx, 'Stair width', m.width)
+      else if (isOption(option, 'Risers')) {
+        const v = await input.getNumber('Number of risers (0 for comfortable steps)', m.risers)
+        if (typeof v === 'number' && v >= 0) m.risers = Math.round(v)
+      }
+    }
+    let start: Vector3 | null = null
+    while (!start) {
+      const r = await input.getPoint({ prompt: 'Start of stair (bottom step)', options: options() })
+      if (r.kind === 'point') start = r.point
+      else if (r.kind === 'option') await handle(r.option)
+      else return
+    }
+    const preview = (p: Vector3) => {
+      try {
+        return [tessellate(stairPlan({ type: 'polyline', points: [start!, p], closed: false }, { ...m, height: height(), waist: DEFAULT_STAIR.waist }).profile)]
+      } catch {
+        return []
+      }
+    }
+    const r = await input.getPoint({ prompt: 'End of stair run (top step)', base: start, preview })
+    if (r.kind !== 'point') return
+    const line: AnyCurve = { type: 'polyline', points: [start, r.point], closed: false }
+    const params = { width: m.width, height: height(), risers: m.risers, waist: DEFAULT_STAIR.waist }
+    const plan = stairPlan(line, params)
+    const id = await addRecorded(ctx, line, null, { command: 'Stair', params }, stairsLayer(ctx).id, 'make the stair')
+    doc.select([id])
+    log(
+      `Stair made: ${plan.risers} risers of ${formatValue(plan.riser)}, treads of ${formatValue(plan.tread)}` +
+        (comfortable(plan.riser, plan.tread) ? '' : ' (steeper or shallower than comfortable: 2 risers + 1 tread should be 600 to 650)'),
+    )
+  },
+}
+
+const column: Command = {
+  name: 'Column',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const m = memory.column
+    const options = () => [`Shape=${m.shape === 'round' ? 'Round' : 'Rectangular'}`, valueOption(m.shape === 'round' ? 'Diameter' : 'Width', m.width), ...(m.shape === 'round' ? [] : [valueOption('Depth', m.depth)])]
+    const made: number[] = []
+    for (;;) {
+      const r = await input.getPoint({
+        prompt: made.length ? 'Centre of next column. Press Enter when done' : 'Centre of column',
+        options: options(),
+        preview: (p) => [tessellate(columnOutline(p, m.shape, m.width, m.depth))],
+      })
+      if (r.kind === 'option') {
+        if (isOption(r.option, 'Shape')) m.shape = m.shape === 'round' ? 'rectangular' : 'round'
+        else if (isOption(r.option, 'Width') || isOption(r.option, 'Diameter')) m.width = await askPositive(ctx, m.shape === 'round' ? 'Column diameter' : 'Column width', m.width)
+        else if (isOption(r.option, 'Depth')) m.depth = await askPositive(ctx, 'Column depth', m.depth)
+        continue
+      }
+      if (r.kind !== 'point') break
+      made.push(await addRecorded(ctx, columnOutline(r.point, m.shape, m.width, m.depth), null, { command: 'Column', params: { height: doc.level.height } }, columnsLayer(ctx).id, 'make the column'))
+    }
+    if (made.length > 0) {
+      doc.select(made)
+      log(`${made.length} column${made.length === 1 ? '' : 's'} made, ${formatValue(doc.level.height)} high`)
+    }
+  },
+}
+
+export const architectureCommands: Command[] = [level, wall, slab, roof, stair, column, openingCommand('window'), openingCommand('door')]

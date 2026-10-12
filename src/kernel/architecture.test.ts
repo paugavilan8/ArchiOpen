@@ -4,7 +4,8 @@ import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FRAME, wallParams, type Opening } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
-import { openingPartShape, slabShape, wallShape } from './architecture'
+import { columnShape, openingPartShape, roofShape, slabShape, stairShape, wallShape } from './architecture'
+import { columnOutline, roofParams, stairParams, stairPlan } from '../core/buildingParts'
 
 beforeAll(async () => {
   R.setOC(await opencascade())
@@ -70,5 +71,42 @@ describe('architectural solids', () => {
     const leaf = openingPartShape(path, params, door, 'leaf')
     const g = FRAME.gap
     expect(volume(leaf)).toBeCloseTo((900 - 2 * p - 2 * g) * (2100 - p - 2 * g) * FRAME.leaf, -2)
+  })
+
+  it('makes hip, gable and shed roofs as a layer under their slopes', () => {
+    const square: AnyCurve = { type: 'polyline', points: [v(0, 0, 3000), v(10000, 0, 3000), v(10000, 10000, 3000), v(0, 10000, 3000)], closed: true }
+    const cos45 = Math.SQRT1_2
+    const hip = roofShape(square, roofParams({ type: 'hip', pitch: 45, overhang: 0, thickness: 200 }))
+    // A layer of vertical thickness t / cos(pitch) over the whole footprint.
+    expect(volume(hip) / (1e8 * (200 / cos45))).toBeCloseTo(1, 4)
+    const b = hip.boundingBox.bounds
+    expect(b[1][2]).toBeCloseTo(3000 + 5000, 3)
+    const rect: AnyCurve = { type: 'polyline', points: [v(0, 0, 3000), v(8000, 0, 3000), v(8000, 6000, 3000), v(0, 6000, 3000)], closed: true }
+    const gable = roofShape(rect, roofParams({ type: 'gable', pitch: 30, overhang: 500, thickness: 250 }))
+    const tan30 = Math.tan(Math.PI / 6)
+    const g = gable.boundingBox.bounds
+    // The ridge over the middle of the short way; the eaves lower by the overhang's rise.
+    expect(g[1][2]).toBeCloseTo(3000 + 3000 * tan30, 3)
+    expect(g[0][2]).toBeCloseTo(3000 - 500 * tan30 - 250 / Math.cos(Math.PI / 6), 3)
+    expect(volume(gable) / (9000 * 7000 * (250 / Math.cos(Math.PI / 6)))).toBeCloseTo(1, 4)
+    const shed = roofShape(rect, roofParams({ type: 'shed', pitch: 10, overhang: 0, thickness: 200 }))
+    expect(shed.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 6000 * Math.tan(Math.PI / 18), 3)
+  })
+
+  it('makes a stair whose volume is its profile across its width', () => {
+    const line: AnyCurve = { type: 'polyline', points: [v(0, 0), v(4500, 0)], closed: false }
+    const params = stairParams({ width: 1000 }, 3000)
+    const pts = stairPlan(line, params).profile.points
+    let area = 0
+    for (let i = 0; i < pts.length; i++) {
+      const q = pts[(i + 1) % pts.length]
+      area += pts[i].x * q.z - q.x * pts[i].z
+    }
+    expect(volume(stairShape(line, params))).toBeCloseTo((Math.abs(area) / 2) * 1000, -3)
+  })
+
+  it('makes columns', () => {
+    expect(volume(columnShape(columnOutline(v(0, 0), 'rectangular', 300, 400), { height: 3000 }))).toBeCloseTo(300 * 400 * 3000, -2)
+    expect(volume(columnShape(columnOutline(v(0, 0), 'round', 400, 0), { height: 3000 }))).toBeCloseTo(Math.PI * 200 * 200 * 3000, -2)
   })
 })
