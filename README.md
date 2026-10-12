@@ -39,6 +39,8 @@ exported to Rhino or STEP therefore arrive as surfaces, not meshes.
 - **Modeling:** NURBS curves (rational included), sweeps, lofts, network surfaces, patches and
   blends; Boolean operations, fillets and shells; construction history that rebuilds surfaces when
   their input curves change.
+- **Building elements:** parametric walls, slabs, windows and doors on levels, made again when their
+  lines or parameters change.
 - **Precision drafting:** object snaps (End, Mid, Cen, Int, Perp, Tan, …), typed coordinates,
   ortho, construction planes and a gumball.
 - **Drawings:** hidden-line `Make2D`, associative dimensions, hatches, linetypes and print widths,
@@ -205,6 +207,27 @@ Expand a section for details.
   `ExtrudeCrv`, `Revolve`, `Loft`, `Sweep1`, `Sweep2`, `Pipe`, `PlanarSrf`, `EdgeSrf`,
   `NetworkSrf` and `Patch` rebuild when their input curves are moved or edited, in the same undo
   step. `SelChildren`, `SelParents` and `HistoryPurge` are available.
+
+</details>
+
+<details>
+<summary><b>Building elements</b></summary>
+<br>
+
+- `Wall` draws walls point by point (`Close` for a room) or along curves already drawn (`Curve`),
+  with `Thickness` and `Justification` (`Center`, `Left` or `Right` of the line). Corners are
+  mitred and curved lines give curved walls. Walls take the height of the current level.
+- `Slab` makes a floor or roof slab from corner points or closed curves, with its top on the
+  outline and the `Thickness` below it.
+- `Window` and `Door` cut openings where a wall is clicked, with `Width`, `Height` and `Sill`.
+- Walls and slabs keep their line (on the *Construction* layer): moving or editing it makes them
+  again. Thickness, height, justification and openings can be changed in the Properties panel, as
+  one undo step. Moving the solid itself turns it into a plain solid, as with construction history.
+- `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
+  current one, which moves the construction planes to its elevation. Levels are saved with the
+  model.
+- They are ordinary solids for everything else: clipping planes cut them into plans and sections
+  with filled cuts, and `Make2D`, layouts, rendering and export work as for any solid.
 
 </details>
 
@@ -394,7 +417,8 @@ flowchart LR
 - [x] `FilletSrf` and `MatchSrf`
 - [ ] Deformation tools: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] SubD modeling
-- [ ] Architectural tools: walls, slabs, openings and levels
+- [x] Building elements: walls, slabs, windows, doors and levels
+- [ ] More building elements: roofs, stairs, columns and window frames
 - [ ] Signed installers and automatic updates
 
 ## FAQ

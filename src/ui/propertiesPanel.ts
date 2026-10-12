@@ -1,5 +1,7 @@
 import { Matrix4, Vector3 } from 'three'
+import type { HistoryManager } from '../app/historyManager'
 import type { CommandRunner } from '../commands/runner'
+import { slabParams, wallParams, type Justification } from '../core/architecture'
 import type { CadObject, Document } from '../core/document'
 import { length } from '../core/curves'
 import { measure } from '../core/annotation'
@@ -106,11 +108,14 @@ function plural(word: string, n: number): string {
 export class PropertiesPanel {
   private readonly body = document.createElement('div')
   private frame = 0
+  /** A wall or slab being made again from edited parameters. */
+  private remaking = false
 
   constructor(
     container: HTMLElement,
     private readonly doc: Document,
     private readonly runner: CommandRunner,
+    private readonly history?: HistoryManager,
   ) {
     this.body.className = 'properties'
     container.appendChild(this.body)
@@ -158,6 +163,8 @@ export class PropertiesPanel {
         if (g.type === 'annotation') sections.push(this.annotationSection(selected[0].id, g))
         if (g.type === 'hatch') sections.push(this.hatchSection(selected[0].id, g))
         if (g.type === 'clipping') sections.push(this.clippingSection(selected[0].id, g))
+        const command = selected[0].history?.command
+        if (command === 'Wall' || command === 'Slab') sections.push(this.architectureSection(selected[0]))
       }
     }
     this.body.replaceChildren(...sections)
@@ -238,6 +245,70 @@ export class PropertiesPanel {
       dd.appendChild(box)
       list.append(dt, dd)
     }
+    return section
+  }
+
+  /** The parameters of a wall or slab, made again when they change. */
+  private architectureSection(obj: CadObject): HTMLElement {
+    const record = obj.history!
+    const isWall = record.command === 'Wall'
+    const section = this.section(isWall ? 'Wall' : 'Slab', [])
+    const list = section.querySelector('dl')!
+    const update = (params: Record<string, unknown>) => {
+      if (this.runner.busy || !this.history || this.remaking) return
+      // As it is now (the panel may be older than the last change).
+      const current = this.doc.objects.get(obj.id)?.history
+      if (!current) return
+      if (Object.entries(params).every(([key, value]) => JSON.stringify(current.params?.[key]) === JSON.stringify(value))) return
+      this.remaking = true
+      this.history
+        .remakeStep(obj.id, { ...current, params: { ...current.params, ...params } })
+        .catch((error) => {
+          console.warn(error)
+          this.render()
+        })
+        .finally(() => (this.remaking = false))
+    }
+    const field = (label: string, input: HTMLElement) => {
+      const dt = document.createElement('dt')
+      dt.textContent = label
+      const dd = document.createElement('dd')
+      dd.appendChild(input)
+      list.append(dt, dd)
+    }
+    const number = (name: string, value: number, apply: (v: number) => void) => {
+      const input = document.createElement('input')
+      input.type = 'number'
+      input.min = '0'
+      input.step = 'any'
+      input.value = String(Number(value.toFixed(6)))
+      input.dataset.param = name
+      input.addEventListener('change', () => {
+        const v = Number(input.value)
+        if (v > 0 && v !== value) apply(v)
+      })
+      return input
+    }
+    if (!isWall) {
+      field('Thickness', number('thickness', slabParams(record.params).thickness, (thickness) => update({ thickness })))
+      return section
+    }
+    const p = wallParams(record.params)
+    field('Thickness', number('thickness', p.thickness, (thickness) => update({ thickness })))
+    field('Height', number('height', p.height, (height) => update({ height })))
+    const justification = document.createElement('select')
+    for (const j of ['center', 'left', 'right'] as Justification[]) justification.add(new Option(capitalize(j), j, false, p.justification === j))
+    justification.addEventListener('change', () => update({ justification: justification.value }))
+    field('Justification', justification)
+    p.openings.forEach((o, i) => {
+      const remove = document.createElement('button')
+      remove.type = 'button'
+      remove.className = 'opening-remove'
+      remove.textContent = `${fmtSize(o.width)} × ${fmtSize(o.height)}  ✕`
+      remove.title = `Remove this ${o.kind}`
+      remove.addEventListener('click', () => update({ openings: p.openings.filter((_, j) => j !== i) }))
+      field(`${capitalize(o.kind)} ${i + 1}`, remove)
+    })
     return section
   }
 
@@ -334,6 +405,8 @@ export class PropertiesPanel {
     return [dt, dd]
   }
 }
+
+const fmtSize = (n: number) => String(Number(n.toFixed(1)))
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)

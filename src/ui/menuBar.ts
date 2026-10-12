@@ -251,6 +251,18 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
       ],
     ],
     [
+      'Architecture',
+      [
+        item('Wall', 'Wall'),
+        item('Slab', 'Slab'),
+        'separator',
+        item('Window', 'Window'),
+        item('Door', 'Door'),
+        'separator',
+        item('Levels', 'Level'),
+      ],
+    ],
+    [
       'Drawing',
       [
         item('New Layout', 'Layout'),

@@ -35,7 +35,13 @@ export class HistoryManager {
     const { doc } = this
     const changed = new Set<number>()
     const removed = new Set<number>()
+    // Objects made again with a new record in the same step (parameters edited) keep their history.
+    const remade = new Set<number>()
     for (const action of step) {
+      if (action.type === 'history' && action.after) remade.add(action.id)
+    }
+    for (const action of step) {
+      if (action.type === 'modify' && remade.has(action.id)) continue
       if (action.type === 'modify') changed.add(action.id)
       else if (action.type === 'remove') removed.add(action.obj.id)
       else if (action.type === 'add') removed.delete(action.obj.id)
@@ -84,6 +90,26 @@ export class HistoryManager {
       return g
     })
     return kernelJob('rebuild', record.command, curves, record.params ?? {})
+  }
+
+  /**
+   * Makes an object again from a new record (its parameters changed), as part of the current step:
+   * its geometry and record change together, and it keeps following its inputs.
+   */
+  async remake(id: number, record: HistoryRecord): Promise<void> {
+    const geometry = await this.build(record)
+    this.doc.setGeometry(id, geometry)
+    this.doc.setHistory(id, record)
+  }
+
+  /** Like remake(), as an undo step of its own (for edits made outside commands). */
+  async remakeStep(id: number, record: HistoryRecord): Promise<void> {
+    const geometry = await this.build(record)
+    if (!this.doc.objects.has(id)) return
+    this.doc.begin()
+    this.doc.setGeometry(id, geometry)
+    this.doc.setHistory(id, record)
+    this.doc.commit()
   }
 
   /** Remembers how an object was made, if history recording is on. */

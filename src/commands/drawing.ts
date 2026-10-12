@@ -52,7 +52,7 @@ const shift = (drawing: Drawing2D, offset: Vector3): Drawing2D => {
 }
 
 /** The layer with this name, created if missing. */
-function layerNamed(ctx: CommandContext, name: string, color: string, linetype?: string, printWidth?: number): Layer {
+export function layerNamed(ctx: CommandContext, name: string, color: string, linetype?: string, printWidth?: number): Layer {
   const existing = ctx.doc.layers.find((l) => l.name === name)
   if (existing) return existing
   const layer = ctx.doc.addLayer()
