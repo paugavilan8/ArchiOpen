@@ -17,6 +17,7 @@ import {
   projectCurves,
   pullCurve,
   splitShape,
+  untrim,
 } from './surfaceEdit'
 
 beforeAll(async () => {
@@ -129,5 +130,31 @@ describe('rational curves in the kernel', () => {
       expect(Math.abs((p.x / 4) ** 2 + (p.y / 2) ** 2 - 1)).toBeLessThan(1e-9)
     }
     expect(toBrep(extrudeCurve(ellipse(v(0, 0), v(1, 0), v(0, 1), 4, 2), v(0, 0, 3), true)).kind).toBe('solid')
+  })
+})
+
+describe('untrim', () => {
+  // A 10 × 10 plate, 2 thick, with a round hole of radius 2 through it.
+  const plate = () => (box(v(0, 0), v(10, 0), v(0, 10), v(0, 0, 2)) as R.Shape3D).cut(R.makeCylinder(2, 4, [5, 5, -1], [0, 0, 1]))
+  const top = (shape: R.AnyShape) => shape.faces.findIndex((f) => Math.abs(f.center.z - 2) < 1e-6 && Math.abs(f.normalAt().z - 1) < 1e-6)
+
+  it('removes the holes of a face, keeping its outline', () => {
+    const shape = plate()
+    const face = untrim(extractFaces(shape, [top(shape)]).extracted[0], 0, true)
+    expect(area(face)).toBeCloseTo(100, 4)
+  })
+
+  it('takes a face back to its whole surface', () => {
+    const disc = R.makeCylinder(2, 3, [0, 0, 0], [0, 0, 1])
+    const side = disc.faces.findIndex((f) => f.geomType === 'CYLINDRE')
+    const face = extractFaces(disc, [side]).extracted[0]
+    expect(area(untrim(face, 0, false))).toBeGreaterThanOrEqual(area(face) - 1e-6)
+  })
+
+  it('keeps the other faces of a polysurface', () => {
+    const shape = plate()
+    const result = untrim(shape, top(shape), true)
+    expect(result.faces.length).toBe(shape.faces.length)
+    expect(area(result)).toBeCloseTo(area(shape) + Math.PI * 4, 3)
   })
 })

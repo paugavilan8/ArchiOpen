@@ -286,3 +286,37 @@ export function extractFaces(shape: AnyShape, indices: number[]): { extracted: A
   const remaining = faces.filter((_, i) => !chosen.has(i))
   return { extracted, rest: remaining.length > 0 ? connectedPieces(remaining) : [] }
 }
+
+/**
+ * A face rebuilt on its own surface without its trims: with `holesOnly` it keeps its outer boundary
+ * and loses its holes (openings in a wall, say); otherwise it covers the whole parameter range its
+ * boundary spanned.
+ */
+function untrimmedFace(face: R.Face, holesOnly: boolean): R.Face {
+  const k = oc()
+  const f = k.TopoDS.Face(face.wrapped)
+  const surface = k.BRep_Tool.Surface(f)
+  let made
+  if (holesOnly) {
+    const maker = new k.BRepBuilderAPI_MakeFace(surface, k.BRepTools.OuterWire(f), true)
+    const fix = new k.ShapeFix_Face(maker.Face())
+    fix.Perform()
+    fix.FixOrientation()
+    made = fix.Face()
+  } else {
+    const b = k.BRepTools.UVBounds(f)
+    made = new k.BRepBuilderAPI_MakeFace(surface, b.UMin, b.UMax, b.VMin, b.VMax, 1e-7).Face()
+  }
+  // The face keeps the side it faced.
+  const reversed = f.Orientation() === k.TopAbs_Orientation.TopAbs_REVERSED
+  return R.cast(reversed ? made.Reversed() : made) as R.Face
+}
+
+/** Untrims a face of a surface or polysurface (by index); the other faces are joined back to it. */
+export function untrim(shape: AnyShape, face: number, holesOnly: boolean): AnyShape {
+  const faces = shape.faces
+  if (!faces[face]) throw new Error('There is no such face')
+  const rebuilt = untrimmedFace(faces[face], holesOnly)
+  if (faces.length === 1) return rebuilt
+  return joinShapes(faces.map((f, i) => (i === face ? rebuilt : f)))
+}

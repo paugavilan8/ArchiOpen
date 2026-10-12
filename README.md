@@ -183,11 +183,15 @@ Expand a section for details.
   - `Patch`: a surface fitted to a closed boundary and the curves inside it;
   - `EdgeSrf` (from two to four edge curves) and `SrfPt` (from three or four corners);
   - `BlendSrf`: a transition surface between the edges of two surfaces, tangent to both;
-  - `Pipe`: a pipe along curves, with start and end radii and an option to cap it as a solid.
+  - `Pipe`: a pipe along curves, with start and end radii and an option to cap it as a solid;
+  - `RailRevolve`: a profile revolved about an axis while one of its ends follows a rail curve,
+    for domes and roofs on oval or irregular plans.
 - Surface editing:
   - `Split` and `Trim` work on surfaces, polysurfaces and solids, with curves (projected as seen in
     the viewport) or with other surfaces and solids. Solids split into solids.
   - `Cap`, `ExtrudeSrf`, `OffsetSrf` (with a `Solid` option) and `ExtractSrf`.
+  - `Untrim` removes the holes of a face (`HolesOnly`) or every trim, back to its whole surface;
+    the rest of a polysurface is joined back to it.
   - `UnrollSrf` flattens planar, cylindrical and conical faces into cutting patterns (outlines in
     the XY plane, with lengths preserved). Faces that share a straight edge stay joined as a folding
     net; with `Explode` every face is laid out on its own. Other faces are skipped and reported.
@@ -235,7 +239,8 @@ Expand a section for details.
 <br>
 
 - `Rendered` display mode: physically based materials with studio reflections, a sun with soft
-  shadows and a ground shadow under the model.
+  shadows and a ground shadow under the model. Objects without a material show as a matte clay
+  model, tinted lightly by their layer color.
 - Materials from presets (plaster, concrete, wood, brick, tiles, marble, steel, glass, water, …),
   editable color, roughness, metalness and transparency, assigned to objects or layers.
 - Textures: procedural patterns (`Wood`, `Brick`, `Tiles`, `Concrete`, `Marble`) or images
@@ -380,7 +385,8 @@ flowchart LR
 - [ ] Dimensions and SubD from `.3dm`
 - [x] Copy and paste between files
 - [x] `ChamferEdge` and `UnrollSrf`
-- [ ] Surface tools: `FilletSrf`, `MatchSrf`, `RailRevolve`, `Untrim`
+- [x] `Untrim` and `RailRevolve`
+- [ ] Surface tools: `FilletSrf`, `MatchSrf`
 - [ ] Deformation tools: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] SubD modeling
 - [ ] Architectural tools: walls, slabs, openings and levels

@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { Document } from './document'
-import { MATERIAL_PRESETS, materialFromJSON, renderSettingsFromJSON } from './materials'
+import { layerMaterial, MATERIAL_PRESETS, materialFromJSON, renderSettingsFromJSON } from './materials'
 
 const line = () => ({ type: 'polyline' as const, points: [new Vector3(), new Vector3(1, 0, 0)], closed: false })
 
@@ -10,7 +10,11 @@ describe('render materials', () => {
     const doc = new Document()
     const id = doc.add(line()).id
     const obj = doc.objects.get(id)!
-    expect(doc.materialOf(obj)).toMatchObject({ color: doc.layerOf(obj).color, metalness: 0 })
+    // Without a material: clay in the layer color, lightened (a black layer renders light gray).
+    expect(doc.layerOf(obj).color).toBe('#000000')
+    expect(doc.materialOf(obj)).toMatchObject({ color: layerMaterial('#000000').color, metalness: 0 })
+    expect(layerMaterial('#000000').color).toBe('#999794')
+    expect(layerMaterial('#ff0000').color).toBe('#f39794')
     doc.setMaterials([MATERIAL_PRESETS.find((m) => m.name === 'Gold')!, MATERIAL_PRESETS.find((m) => m.name === 'Glass')!])
     doc.updateLayer(obj.layerId, { material: 'Glass' })
     expect(doc.materialOf(obj).name).toBe('Glass')

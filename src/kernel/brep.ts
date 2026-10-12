@@ -171,6 +171,11 @@ export function loftCurves(curves: AnyCurve[]): AnyShape {
   return closed ? R.loft(wires) : R.loft(wires, {}, true)
 }
 
+/** A smooth surface through curves in order (never capped into a solid). */
+export function loftSurface(curves: AnyCurve[]): AnyShape {
+  return R.loft(curves.map(curveToWire), { ruled: false }, true)
+}
+
 /** Box on the rectangle with corner `origin` and edges `u`, `v`, extruded by `w`. */
 export function box(origin: Vector3, u: Vector3, v: Vector3, w: Vector3): AnyShape {
   const corners = [origin, origin.clone().add(u), origin.clone().add(u).add(v), origin.clone().add(v)]
