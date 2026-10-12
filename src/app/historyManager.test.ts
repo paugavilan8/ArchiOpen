@@ -244,4 +244,30 @@ describe('construction history', () => {
     expect(top(wall)).toBeCloseTo(3000, 6)
     expect(doc.objects.get(wall)!.history!.params!.roofs).toBeUndefined()
   })
+
+  it('keeps railings on a stair in line with it', async () => {
+    const doc = new Document()
+    const history = new HistoryManager(doc, new Settings(), vi.fn())
+    doc.begin()
+    const line = doc.add({ type: 'polyline', points: [v(0, 0), v(0, 4000)], closed: false }).id
+    const stair = doc.add({ type: 'polyline', points: [v(0, 0), v(1, 0)], closed: false }).id
+    await history.remake(stair, { command: 'Stair', inputs: [line], params: { width: 1000, height: 2800, risers: 16 } })
+    const railing = doc.add({ type: 'polyline', points: [v(0, 0), v(1, 0)], closed: false }).id
+    await history.remake(railing, { command: 'Railing', inputs: [line], params: { height: 1000, sides: 'both', stair, stairParams: doc.objects.get(stair)!.history!.params } })
+    doc.commit()
+    await history.settled
+    const width = () => {
+      const b = shapeBounds(shapeOf(doc.objects.get(railing)!.geometry as BrepGeometry))
+      return b.max.x - b.min.x
+    }
+    expect(width()).toBeCloseTo(1000 - 2 * 40 + 50, 6)
+    // A wider stair: the railings move out with its sides.
+    await history.remakeStep(stair, { ...doc.objects.get(stair)!.history!, params: { ...doc.objects.get(stair)!.history!.params, width: 1400 } })
+    await history.settled
+    expect(width()).toBeCloseTo(1400 - 2 * 40 + 50, 6)
+    // A longer line: both follow it.
+    doc.setGeometry(line, { type: 'polyline', points: [v(0, 0), v(0, 5000)], closed: false })
+    await history.settled
+    expect(shapeBounds(shapeOf(doc.objects.get(railing)!.geometry as BrepGeometry)).max.y).toBeCloseTo(5000 + 25, 0)
+  })
 })

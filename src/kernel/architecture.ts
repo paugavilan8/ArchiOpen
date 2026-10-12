@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import * as R from 'replicad'
 import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type ResolvedJoin, type SlabParams, type WallParams } from '../core/architecture'
 import { startPoint, type AnyCurve } from '../core/geometry'
+import { railingPieces, type RailingParams } from '../core/railings'
 import { roofPlan, stairPlan, type ColumnParams, type Plane, type RoofParams, type RoofPlan, type StairParams } from '../core/buildingParts'
 import { boolean, box, extrudeCurve } from './brep'
 
@@ -123,4 +124,11 @@ function prism2(outline: AnyCurve, along: Vector3): AnyShape {
   const shape = extrudeCurve(outline, along, true)
   if (!(shape as R.Shape3D).solids?.length) throw new Error('The profile must be closed and flat')
   return shape
+}
+
+/** A railing: its pieces along each of its lines, kept together. */
+export function railingShape(lines: Vector3[][], params: RailingParams): AnyShape {
+  const solids = lines.flatMap((l) => railingPieces(l, params)).map((b) => box(b.origin, b.u, b.v, b.w) as R.Shape3D)
+  if (solids.length === 0) throw new Error('The railing has no length')
+  return R.makeCompound(solids)
 }

@@ -245,6 +245,12 @@ Despliega cada apartado para ver los detalles.
   vuelve). Se crea con `Width` (ancho) y `Risers` (contrahuellas; automático: unos 175 de tabica), y
   avisa si los peldaños no son cómodos (dos tabicas y una huella entre 600 y 650).
 - `Column` coloca pilares rectangulares o circulares, de la altura del nivel actual.
+- `Railing` coloca barandillas a lo largo de una línea dibujada punto a punto (bordes de forjado,
+  balcones) o, con la opción `Stair`, en escaleras: siguiendo los bordes de los peldaños de cada
+  tramo (`Sides` `Both`, `Left` o `Right`) y rodeando los bordes libres de los rellanos. Llevan
+  postes como mucho cada 1200, pasamanos a la altura `Height` y `Style` `Bars` (barrotes
+  verticales) o `Rails` (tres travesaños), en acero cepillado en la capa *Railings*. Las de una
+  escalera la siguen cuando cambian su línea o sus parámetros.
 - `Window` y `Door` abren huecos donde se hace clic en un muro, con `Width` (ancho), `Height`
   (alto) y `Sill` (altura del alféizar), y los cierran: las ventanas llevan marco y vidrio y las
   puertas marco y hoja, cada pieza con su material en las capas *Windows*, *Glazing* y *Doors*
@@ -457,7 +463,8 @@ flowchart LR
 - [x] Muros hasta la cubierta
 - [x] Escaleras con rellano (en L y en U)
 - [x] Cubiertas sobre plantas en L, T y U
-- [ ] Barandillas en escaleras y bordes de forjado
+- [x] Barandillas en escaleras y bordes de forjado
+- [ ] Cotas automáticas de muros y huecos en planta
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

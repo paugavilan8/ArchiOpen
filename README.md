@@ -238,6 +238,11 @@ Expand a section for details.
   `Width` and `Risers` (automatic: steps of about 175, shared among the flights by their length).
   It says whether the steps are comfortable (two risers and a tread between 600 and 650).
 - `Column` places rectangular or round columns, as high as the current level.
+- `Railing` puts railings along a line drawn point by point (slab edges, balconies) or, with the
+  `Stair` option, on stairs: up the steps' noses of each flight (`Sides` `Both`, `Left` or
+  `Right`) and round the free edges of the landings. They have posts at most 1200 apart, a handrail
+  at `Height` and `Style` `Bars` (upright bars) or `Rails` (three level rails), in brushed steel on
+  a *Railings* layer. Railings on a stair follow it when its line or parameters change.
 - `Window` and `Door` cut openings where a wall is clicked, with `Width`, `Height` and `Sill`, and
   fill them: windows get a frame and glass, doors a frame and a leaf, each with its own material on
   the *Windows*, *Glazing* and *Doors* layers (`Frame=No` leaves a bare opening). They stay with
@@ -446,7 +451,8 @@ flowchart LR
 - [x] Walls up to the roof
 - [x] Stairs with landings (L and U)
 - [x] Roofs over L, T and U plans
-- [ ] Railings for stairs and slab edges
+- [x] Railings for stairs and slab edges
+- [ ] Automatic plan dimensions for walls and openings
 - [ ] Signed installers and automatic updates
 
 ## FAQ

@@ -49,7 +49,7 @@ export class HistoryManager {
       else if (action.type === 'add') removed.delete(action.obj.id)
     }
     // Walls added or remade can change how others join, even when nothing else changed.
-    const walls = [...doc.objects.values()].some((o) => o.history?.command === 'Wall')
+    const walls = [...doc.objects.values()].some((o) => o.history?.command === 'Wall' || o.history?.command === 'Railing')
     if (changed.size === 0 && removed.size === 0 && !(walls && remade.size > 0)) return
 
     const breaks: number[] = []
@@ -76,6 +76,14 @@ export class HistoryManager {
       if (obj.history?.command !== 'Wall' || skip.has(obj.id)) continue
       const wanted = withJoins(doc, obj.id, obj.history, skip)
       if (JSON.stringify(wanted) !== JSON.stringify(obj.history)) remakes.set(obj.id, wanted)
+    }
+    // Railings on a stair take its parameters as they are now.
+    for (const obj of doc.objects.values()) {
+      const record = obj.history
+      if (record?.command !== 'Railing' || record.params?.stair === undefined || skip.has(obj.id)) continue
+      const stair = doc.objects.get(Number(record.params.stair))?.history
+      if (stair?.command !== 'Stair' || stair.inputs[0] !== record.inputs[0]) continue
+      if (JSON.stringify(stair.params ?? {}) !== JSON.stringify(record.params.stairParams)) remakes.set(obj.id, { ...record, params: { ...record.params, stairParams: stair.params ?? {} } })
     }
     rebuild = rebuild.filter((id) => {
       const record = doc.objects.get(id)!.history!
