@@ -423,6 +423,15 @@ Despliega cada apartado para ver los detalles.
   arcos, círculos, arcos, elipses, splines, caras 3D, textos, cotas (que siguen midiendo),
   directrices, sombreados y bloques (que siguen siendo bloques). No se leen DXF binarios ni DWG.
 - Importación y exportación de **STL** y **OBJ**.
+- **IFC** (IFC4), para programas BIM como Revit, ArchiCAD o BIMcollab:
+  - `ExportIFC` escribe un proyecto con emplazamiento, edificio y una planta por nivel. Los muros,
+    forjados, cubiertas, escaleras, pilares, barandillas, pavimentos y rodapiés pasan a su entidad
+    IFC, y cada puerta y ventana a un IfcDoor o IfcWindow con sus medidas. El mobiliario pasa a
+    IfcFurniture, las estancias a espacios con su superficie, y el resto a objetos genéricos. Las
+    formas se escriben como caras trianguladas, en metros.
+  - `Open` e `Import` leen archivos IFC (con [web-ifc](https://github.com/ThatOpen/engine_web-ifc))
+    como mallas en una capa por clase (Wall, Slab, Window...), con los colores del archivo y los
+    espacios en una capa oculta. `Open` toma además las plantas como niveles.
 
 </details>
 
@@ -515,6 +524,7 @@ flowchart LR
 - [x] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
 - [x] Planos que se actualizan a partir del modelo (`UpdateDrawings`)
 - [x] Varios niveles en el juego de planos, con una planta para cada uno
+- [x] Exportación e importación IFC
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

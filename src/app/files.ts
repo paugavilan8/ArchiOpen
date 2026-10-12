@@ -3,6 +3,7 @@ import { readDxf } from '../io/dxfRead'
 import { readObj, readStl } from '../io/meshFiles'
 import { describeSkipped, readRhinoFile, RhinoExportReport, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
 import { loadRhino } from '../io/loadRhino'
+import { loadIfc, readIfc, type IfcImport } from '../io/ifcRead'
 import { kernelJob } from '../kernel/client'
 import type { StepObject } from '../kernel/step'
 import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
@@ -25,6 +26,7 @@ export const STEP: FileType = { name: 'STEP model', extension: 'step', extension
 export const STL: FileType = { name: 'STL mesh', extension: 'stl', mime: 'model/stl' }
 export const PNG: FileType = { name: 'PNG image', extension: 'png', mime: 'image/png' }
 export const IMAGE: FileType = { name: 'Image', extension: 'jpg', extensions: ['jpg', 'jpeg', 'png', 'webp'], mime: 'image/*' }
+export const IFC: FileType = { name: 'IFC model', extension: 'ifc', mime: 'application/x-step' }
 export const OBJ: FileType = { name: 'OBJ mesh', extension: 'obj', mime: 'model/obj' }
 const UNTITLED = 'Untitled'
 
@@ -48,6 +50,13 @@ function surfacesIn(g: Geometry, seen = new Set<BlockDefinition>()): BrepGeometr
   if (g.type !== 'instance' || seen.has(g.definition)) return []
   seen.add(g.definition)
   return g.definition.objects.flatMap((o) => surfacesIn(o.geometry, seen))
+}
+
+/** What an IFC file held, by layer. */
+function ifcSummary(result: IfcImport): string {
+  const parts = [...result.counts].map(([layer, n]) => `${n} ${layer.toLowerCase()}${n === 1 ? '' : 's'}`)
+  const levels = result.levels.length > 0 ? ` on ${result.levels.length} level${result.levels.length === 1 ? '' : 's'}` : ''
+  return `${parts.join(', ') || 'no elements'}${levels}, as meshes`
 }
 
 const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']
@@ -232,7 +241,7 @@ export class FileManager {
    */
   async open(): Promise<string | null> {
     if (!(await this.confirmDiscard())) return null
-    const file = await pickFile([ARCHI, RHINO, DXF, STL, OBJ])
+    const file = await pickFile([ARCHI, RHINO, IFC, DXF, STL, OBJ])
     if (!file) return null
     const bytes = await file.read()
     if (isMeshFile(file.fileName)) {
@@ -241,6 +250,13 @@ export class FileManager {
       applyRhinoImport(this.doc, result)
       this.setLocation(baseName(file.fileName), null)
       return `Opened ${file.fileName}: ${this.rhinoSummary(result)}, taken as millimeters (Units changes them)`
+    }
+    if (extensionOf(file.fileName) === IFC.extension) {
+      const result = readIfc(await loadIfc(), bytes)
+      applyRhinoImport(this.doc, result)
+      if (result.levels.length > 0) this.doc.setLevels(result.levels)
+      this.setLocation(baseName(file.fileName), null)
+      return `Opened ${file.fileName}: ${ifcSummary(result)}. Save stores it as an .archi file; use ExportIFC to write an IFC`
     }
     if (extensionOf(file.fileName) === DXF.extension) {
       // DXF files without units are taken as millimeters.
@@ -275,9 +291,15 @@ export class FileManager {
 
   /** Adds the contents of a .3dm, .dxf, .stl or .obj file to the document. Resolves to the new object ids, or null. */
   async importModel(): Promise<{ ids: number[]; message: string } | null> {
-    const file = await pickFile([RHINO, DXF, STL, OBJ])
+    const file = await pickFile([RHINO, IFC, DXF, STL, OBJ])
     if (!file) return null
     const bytes = await file.read()
+    if (extensionOf(file.fileName) === IFC.extension) {
+      const result = readIfc(await loadIfc(), bytes)
+      const { ids, scaledFrom } = mergeRhinoImport(this.doc, result)
+      const scaled = scaledFrom ? `, scaled from ${scaledFrom.toLowerCase()} to ${this.doc.units.toLowerCase()}` : ''
+      return { ids, message: `Imported ${file.fileName}: ${ifcSummary(result)}${scaled}` }
+    }
     // Files without units (DXF without $INSUNITS, STL, OBJ) are taken to be in the model's units.
     const result = isMeshFile(file.fileName)
       ? readMeshFile(file.fileName, bytes, this.doc.units)
