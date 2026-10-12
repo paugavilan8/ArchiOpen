@@ -34,12 +34,65 @@ export interface Opening {
   swing?: 'left' | 'right'
 }
 
+/** One layer of a wall's build-up (brick, insulation, plaster, ...). */
+export interface WallLayer {
+  name: string
+  thickness: number
+  /** Render material, by name. */
+  material?: string
+}
+
 export interface WallParams {
   thickness: number
   height: number
   /** Which side of the path the wall lies on, looking along the path. */
   justification: Justification
   openings: Opening[]
+  /** Its layers from its left face to its right one (looking along the path); their thicknesses add up to `thickness`. */
+  layers?: WallLayer[]
+}
+
+/** Wall build-ups to choose from, from the outside (left) face in. */
+export const WALL_TYPES: Record<string, WallLayer[]> = {
+  'Brick cavity': [
+    { name: 'Facing brick', thickness: 115, material: 'Brick' },
+    { name: 'Insulation', thickness: 50 },
+    { name: 'Hollow brick', thickness: 70 },
+    { name: 'Plaster', thickness: 15, material: 'White plaster' },
+  ],
+  'Insulated concrete': [
+    { name: 'Render', thickness: 10, material: 'White plaster' },
+    { name: 'Insulation', thickness: 80 },
+    { name: 'Concrete', thickness: 200, material: 'Concrete' },
+    { name: 'Plaster', thickness: 15, material: 'White plaster' },
+  ],
+  Partition: [
+    { name: 'Plaster', thickness: 15, material: 'White plaster' },
+    { name: 'Hollow brick', thickness: 70 },
+    { name: 'Plaster', thickness: 15, material: 'White plaster' },
+  ],
+  'Timber frame': [
+    { name: 'Cladding', thickness: 20, material: 'Wood' },
+    { name: 'Insulation', thickness: 140 },
+    { name: 'Board', thickness: 15 },
+  ],
+}
+
+/**
+ * Where a wall's layers meet, as distances to the left of its path (the inner faces between
+ * layers only, not its two outer faces).
+ */
+export function layerBoundaries(params: Pick<WallParams, 'thickness' | 'justification' | 'layers'>): number[] {
+  const layers = params.layers ?? []
+  if (layers.length < 2) return []
+  const { left } = wallSides(params)
+  const out: number[] = []
+  let at = left
+  for (const layer of layers.slice(0, -1)) {
+    at -= layer.thickness
+    out.push(at)
+  }
+  return out
 }
 
 /** An opening through a slab: its outline in plan, and the stair it was made for, if any. */
@@ -89,7 +142,8 @@ function leftAt(g: AnyCurve, t: number): Vector3 {
 }
 
 /** A flat curve offset by `distance` to its left (negative: to its right); the curve itself for 0. */
-function offsetLeft(g: AnyCurve, distance: number): AnyCurve | null {
+/** A curve moved sideways, to its left by `distance` (to its right when negative), in plan. */
+export function offsetLeft(g: AnyCurve, distance: number): AnyCurve | null {
   if (Math.abs(distance) < 1e-9) return g
   const { points, params } = samples(g)
   const i = Math.floor(points.length / 2)
@@ -431,7 +485,15 @@ export function wallParams(p: Record<string, unknown> | undefined, fallbackHeigh
     height: Number(p?.height ?? fallbackHeight),
     justification: j === 'left' || j === 'right' ? j : 'center',
     openings: Array.isArray(p?.openings) ? (p.openings as Opening[]).map((o) => ({ ...o })) : [],
+    ...wallLayers(p?.layers),
   }
+}
+
+/** Layers as saved, if there are any valid ones. */
+function wallLayers(value: unknown): { layers?: WallLayer[] } {
+  if (!Array.isArray(value)) return {}
+  const layers = (value as WallLayer[]).filter((l) => typeof l?.name === 'string' && Number(l.thickness) > 0).map((l) => ({ ...l, thickness: Number(l.thickness) }))
+  return layers.length > 0 ? { layers } : {}
 }
 
 export const slabParams = (p: Record<string, unknown> | undefined): SlabParams => {

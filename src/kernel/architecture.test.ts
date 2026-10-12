@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import opencascade from 'replicad-opencascadejs'
 import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { FRAME, findJoins, wallOutline, wallParams, type Opening } from '../core/architecture'
+import { FRAME, findJoins, layerBoundaries, WALL_TYPES, wallOutline, wallParams, type Opening } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
 import { columnShape, floorShape, openingPartShape, railingShape, roofShape, roomRegion, skirtingShape, slabShape, stairShape, wallShape } from './architecture'
 import { railingParams, railingPieces } from '../core/railings'
@@ -41,6 +41,25 @@ describe('architectural solids', () => {
     const box = cut.boundingBox.bounds
     expect(box[0][2]).toBeCloseTo(0, 6)
     expect(box[1][2]).toBeCloseTo(3000, 6)
+  })
+
+  it('splits a wall into its layers, each a solid as thick as the layer', () => {
+    const path: AnyCurve = { type: 'polyline', points: [v(0, 0), v(5000, 0), v(5000, 4000)], closed: false }
+    const params = wallParams({ thickness: 250, height: 3000, justification: 'center', layers: WALL_TYPES['Brick cavity'] })
+    expect(layerBoundaries(params)).toEqual([125 - 115, 125 - 165, 125 - 235])
+    const plain = wallShape(path, { ...params, layers: undefined })
+    const layered = wallShape(path, params)
+    const solids = (layered as R.Shape3D).solids ?? []
+    expect(solids).toHaveLength(4)
+    expect(volume(layered)).toBeCloseTo(volume(plain), -3)
+    // Along the centre line of each layer, about 9 m of it.
+    const volumes = solids.map((x) => volume(x)).sort((a, b) => a - b)
+    const expected = [15, 50, 70, 115].map((t) => t * 3000 * 9000)
+    volumes.forEach((vol, i) => expect(Math.abs(vol - expected[i]) / expected[i]).toBeLessThan(0.03))
+    // A closed path (a room) splits too.
+    const room: AnyCurve = { type: 'polyline', points: [v(0, 0), v(5000, 0), v(5000, 4000), v(0, 4000)], closed: true }
+    const ring = wallShape(room, wallParams({ thickness: 100, height: 2500, justification: 'center', layers: WALL_TYPES.Partition }))
+    expect((ring as R.Shape3D).solids).toHaveLength(3)
   })
 
   it('makes a slab under its outline', () => {

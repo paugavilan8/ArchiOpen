@@ -1,14 +1,14 @@
-import { Vector3 } from 'three'
+import { Matrix4, Vector3 } from 'three'
 import * as R from 'replicad'
-import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type ResolvedJoin, type SlabParams, type WallParams } from '../core/architecture'
+import { layerBoundaries, offsetLeft, openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type ResolvedJoin, type SlabParams, type WallParams } from '../core/architecture'
 import { startPoint, tessellate, type AnyCurve } from '../core/geometry'
 import { offset } from '../core/offset'
 import { railingPieces, type RailingParams } from '../core/railings'
 import { roofPlan, stairPlan, type ColumnParams, type Plane, type RoofParams, type RoofPlan, type StairParams } from '../core/buildingParts'
 import { boolean, box, extrudeCurve, planarFace } from './brep'
-import { closestOn } from './surfaceEdit'
+import { closestOn, splitShape } from './surfaceEdit'
 import { edgeToCurve } from './edges'
-import { join, length } from '../core/curves'
+import { join, length, transform as transformCurve } from '../core/curves'
 
 /** The solids of architectural objects (see core/architecture.ts). Needs the kernel. */
 
@@ -42,7 +42,35 @@ export function wallShape(path: AnyCurve, params: WallParams, joins: ResolvedJoi
     const b = openingBox(path, params, o)
     return box(b.origin, b.u, b.v, b.w)
   })
-  return cuts.length > 0 ? boolean('difference', wall, cuts) : wall
+  const done = cuts.length > 0 ? boolean('difference', wall, cuts) : wall
+  return params.layers && params.layers.length > 1 ? splitIntoLayers(done, path, params) : done
+}
+
+/**
+ * A wall split into its layers: by upright surfaces along the faces between them (reaching past the
+ * ends of an open path, so mitred ends split too), kept together as one compound of solids.
+ */
+function splitIntoLayers(wall: AnyShape, path: AnyCurve, params: WallParams): AnyShape {
+  const bounds = wall.boundingBox.bounds
+  const [bottom, top] = [bounds[0][2] - 10, bounds[1][2] + 10]
+  const reach = params.thickness * 3
+  const cutters = layerBoundaries(params).flatMap((d) => {
+    let line = offsetLeft(path, d)
+    if (!line) return []
+    if (line.type === 'polyline' && !line.closed && line.points.length >= 2) {
+      const pts = line.points.map((p) => p.clone())
+      const [a, b] = [pts[0], pts[1]]
+      const [y, z] = [pts[pts.length - 1], pts[pts.length - 2]]
+      pts[0] = a.clone().addScaledVector(a.clone().sub(b).setZ(0).normalize(), reach)
+      pts[pts.length - 1] = y.clone().addScaledVector(y.clone().sub(z).setZ(0).normalize(), reach)
+      line = { ...line, points: pts }
+    }
+    const lowered = transformCurve(line, new Matrix4().makeTranslation(0, 0, bottom - startPoint(line).z))
+    return [extrudeCurve(lowered, new Vector3(0, 0, top - bottom), false)]
+  })
+  if (cutters.length === 0) return wall
+  const pieces = splitShape(wall, cutters).filter((p) => ((p as R.Shape3D).solids?.length ?? 0) > 0)
+  return pieces.length > 1 ? R.makeCompound(pieces as R.Shape3D[]) : wall
 }
 
 /** A slab: its outline taken down by its thickness, so its top is where the outline is. */

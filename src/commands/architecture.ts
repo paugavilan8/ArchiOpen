@@ -15,6 +15,7 @@ import {
   type Opening,
   type SavedJoin,
   type SlabHole,
+  WALL_TYPES,
   type WallParams,
 } from '../core/architecture'
 import { formatValue, isOption, valueOption, yesNo } from './helpers'
@@ -45,6 +46,7 @@ const memory = {
   frame: true,
   hinge: 'start' as 'start' | 'end',
   roof: { ...DEFAULT_ROOF },
+  wallType: 'Single',
   stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers, opening: true },
   column: { ...DEFAULT_COLUMN },
   railing: { ...DEFAULT_RAILING },
@@ -180,11 +182,18 @@ const wall: Command = {
   name: 'Wall',
   async run(ctx) {
     const { doc, input, log } = ctx
-    const params = (): WallParams => ({ thickness: memory.thickness, height: doc.level.height, justification: memory.justification, openings: [] })
-    const options = () => [valueOption('Thickness', memory.thickness), `Justification=${capital(memory.justification)}`, 'Curve']
+    const params = (): WallParams => {
+      const layers = WALL_TYPES[memory.wallType]
+      const thickness = layers ? layers.reduce((s, l) => s + l.thickness, 0) : memory.thickness
+      return { thickness, height: doc.level.height, justification: memory.justification, openings: [], ...(layers ? { layers: layers.map((l) => ({ ...l })) } : {}) }
+    }
+    const options = () => [valueOption('Thickness', params().thickness), `Justification=${capital(memory.justification)}`, `Type=${memory.wallType.replace(/ /g, '')}`, 'Curve']
     // Options, until a first point or the Curve option.
     const handle = async (option: string): Promise<boolean> => {
-      if (isOption(option, 'Thickness')) memory.thickness = await askPositive(ctx, 'Wall thickness', memory.thickness)
+      if (isOption(option, 'Thickness')) {
+        memory.thickness = await askPositive(ctx, 'Wall thickness', memory.thickness)
+        memory.wallType = 'Single'
+      } else if (isOption(option, 'Type')) memory.wallType = await askWallType(ctx, memory.wallType)
       else if (isOption(option, 'Justification')) memory.justification = JUSTIFICATIONS[(JUSTIFICATIONS.indexOf(memory.justification) + 1) % JUSTIFICATIONS.length]
       else return false
       return true
@@ -204,7 +213,7 @@ const wall: Command = {
       const r = await input.getPoint({
         prompt: 'Next point of wall. Press Enter when done',
         base: points[points.length - 1],
-        options: [...options().slice(0, 2), ...extra],
+        options: [...options().slice(0, 3), ...extra],
         preview: (p) => [...wallPreview([...points, p], params()), [...points, p]],
       })
       if (r.kind === 'point') points.push(r.point)
@@ -473,6 +482,39 @@ const stair: Command = {
         (treads.every((t) => comfortable(plan.riser, t)) ? '' : ' (steeper or shallower than comfortable: 2 risers + 1 tread should be 600 to 650)') +
         (cut > 0 ? `. Opening cut in the slab above` : ''),
     )
+  },
+}
+
+/** Asks for a wall type: one of the build-ups, or Single for a plain wall. */
+async function askWallType(ctx: CommandContext, current: string): Promise<string> {
+  const names = ['Single', ...Object.keys(WALL_TYPES)]
+  ctx.log(names.map((n) => `${n.replace(/ /g, '')}${WALL_TYPES[n] ? ` (${WALL_TYPES[n].map((l) => `${l.name} ${formatValue(l.thickness)}`).join(', ')})` : ''}`).join('; '))
+  const option = await ctx.input.getOption(`Wall type <${current.replace(/ /g, '')}>`, names.map((n) => n.replace(/ /g, '')))
+  return option === null ? current : (names.find((n) => isOption(option, n.replace(/ /g, ''))) ?? current)
+}
+
+/**
+ * WallType: gives walls a build-up of layers (from their left face, looking along their line, to
+ * their right), or makes them single again. Their thickness becomes the sum of the layers'.
+ */
+const wallType: Command = {
+  name: 'WallType',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = (await input.getObjects('Select walls')).filter((id) => isWall(ctx, id))
+    if (ids.length === 0) throw new Error('Select walls (made with the Wall command)')
+    const type = await askWallType(ctx, 'Single')
+    const layers = WALL_TYPES[type]
+    for (const id of ids) {
+      const record = doc.objects.get(id)!.history!
+      const p = { ...record.params }
+      if (layers) {
+        p.layers = layers.map((l) => ({ ...l }))
+        p.thickness = layers.reduce((sum, l) => sum + l.thickness, 0)
+      } else delete p.layers
+      await remake(ctx, id, { ...record, params: p })
+    }
+    log(`${ids.length} wall${ids.length === 1 ? '' : 's'} made ${layers ? `${type.toLowerCase()} (${layers.length} layers, ${formatValue(layers.reduce((sum, l) => sum + l.thickness, 0))} thick)` : 'single'}`)
   },
 }
 
@@ -915,4 +957,4 @@ const skirtingLayer = (ctx: CommandContext) => {
   return layer
 }
 
-export const architectureCommands: Command[] = [wallDimensionsCommand, room, floor, skirting, level, wall, slab, roof, stair, stairOpening, column, railing, openingCommand('window'), openingCommand('door')]
+export const architectureCommands: Command[] = [wallDimensionsCommand, room, floor, skirting, level, wall, wallType, slab, roof, stair, stairOpening, column, railing, openingCommand('window'), openingCommand('door')]
