@@ -192,6 +192,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Shell', 'Shell'),
         'separator',
         item('Section', 'Section'),
+        item('Drawing Set', 'DrawingSet'),
         item('Contour', 'Contour'),
       ],
     ],
