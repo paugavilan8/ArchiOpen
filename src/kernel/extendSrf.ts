@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import * as R from 'replicad'
-import { exactlyBSpline, solve, surfaceOf } from './deform'
+import { basisOn, exactlyBSpline, solve, spanOf, surfaceOf } from './deform'
 
 /**
  * ExtendSrf: a surface made longer past one of its edges, smoothly. The B-spline's last span runs
@@ -11,33 +11,6 @@ import { exactlyBSpline, solve, surfaceOf } from './deform'
 
 type AnyShape = R.AnyShape
 const oc = () => R.getOC()
-
-/** The p + 1 basis functions non-zero on span `i` of a knot vector, at t (also past the span's ends). */
-function basisOn(knots: number[], p: number, i: number, t: number): number[] {
-  const N = [1]
-  const left: number[] = []
-  const right: number[] = []
-  for (let j = 1; j <= p; j++) {
-    left[j] = t - knots[i + 1 - j]
-    right[j] = knots[i + j] - t
-    let saved = 0
-    for (let r = 0; r < j; r++) {
-      const temp = N[r] / (right[r + 1] + left[j - r])
-      N[r] = saved + right[r + 1] * temp
-      saved = left[j - r] * temp
-    }
-    N[j] = saved
-  }
-  return N
-}
-
-/** The span a parameter is in, the last one for anything past the end. */
-function spanOf(knots: number[], p: number, n: number, t: number): number {
-  if (t >= knots[n]) return n - 1
-  let i = p
-  while (i < n - 1 && t >= knots[i + 1]) i++
-  return i
-}
 
 /**
  * Rows of homogeneous points (one row for each pole across), each a B-spline in u, run on past the
