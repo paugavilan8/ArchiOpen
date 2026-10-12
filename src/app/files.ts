@@ -4,6 +4,7 @@ import { readObj, readStl } from '../io/meshFiles'
 import { describeSkipped, readRhinoFile, RhinoExportReport, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
 import { loadRhino } from '../io/loadRhino'
 import { loadIfc, readIfc, type IfcImport } from '../io/ifcRead'
+import { addNativeElements } from './ifcNative'
 import { kernelJob } from '../kernel/client'
 import type { StepObject } from '../kernel/step'
 import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
@@ -53,11 +54,14 @@ function surfacesIn(g: Geometry, seen = new Set<BlockDefinition>()): BrepGeometr
   return g.definition.objects.flatMap((o) => surfacesIn(o.geometry, seen))
 }
 
-/** What an IFC file held, by layer. */
-function ifcSummary(result: IfcImport): string {
-  const parts = [...result.counts].map(([layer, n]) => `${n} ${layer.toLowerCase()}${n === 1 ? '' : 's'}`)
-  const levels = result.levels.length > 0 ? ` on ${result.levels.length} level${result.levels.length === 1 ? '' : 's'}` : ''
-  return `${parts.join(', ') || 'no elements'}${levels}, as meshes`
+/** What an IFC file held: the editable elements made of it, and the rest as meshes by layer. */
+function ifcSummary(result: IfcImport, native: { walls: number[]; slabs: number[] }): string {
+  const count = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`
+  const openings = result.native.walls.reduce((s, w) => s + w.openings.length, 0)
+  const own = [native.walls.length && count(native.walls.length, 'wall'), openings && count(openings, 'door and window').replace('door and windows', 'doors and windows'), native.slabs.length && count(native.slabs.length, 'slab')].filter(Boolean)
+  const meshes = [...result.counts].map(([layer, n]) => count(n, layer.toLowerCase()))
+  const levels = result.levels.length > 0 ? ` on ${count(result.levels.length, 'level')}` : ''
+  return [own.length ? `${own.join(', ')} as editable elements` : '', meshes.length ? `${meshes.join(', ')} as meshes` : ''].filter(Boolean).join('; ') + levels || 'no elements'
 }
 
 const NOT_REBUILT: [string, string] = ['polysurface that could not be rebuilt', 'polysurfaces that could not be rebuilt']
@@ -197,6 +201,8 @@ function baseName(fileName: string): string {
 /** New / Open / Save / Import / Export for the document, with a desktop and a browser implementation. */
 export class FileManager {
   name = UNTITLED
+  /** Walls made from the last IFC file read, whose doors and windows still need their frames. */
+  nativeWalls: number[] = []
   /** Where Save writes. Only ever an .archi file: an opened .3dm is never overwritten by Save. */
   private location: Location | null = null
   private listeners = new Set<() => void>()
@@ -264,8 +270,11 @@ export class FileManager {
       const result = readIfc(await loadIfc(), bytes)
       applyRhinoImport(this.doc, result)
       if (result.levels.length > 0) this.doc.setLevels(result.levels)
+      const native = await addNativeElements(this.doc, result.native)
+      this.nativeWalls = native.walls
+      this.doc.modified = false
       this.setLocation(baseName(file.fileName), null)
-      return `Opened ${file.fileName}: ${ifcSummary(result)}. Save stores it as an .archi file; use ExportIFC to write an IFC`
+      return `Opened ${file.fileName}: ${ifcSummary(result, native)}. Save stores it as an .archi file; use ExportIFC to write an IFC`
     }
     if (extensionOf(file.fileName) === DXF.extension) {
       // DXF files without units are taken as millimeters.
@@ -323,8 +332,11 @@ export class FileManager {
     if (extensionOf(file.fileName) === IFC.extension) {
       const result = readIfc(await loadIfc(), bytes)
       const { ids, scaledFrom } = mergeRhinoImport(this.doc, result)
+      // Native walls and slabs only in millimeter models (they come in millimeters); else meshes.
+      const native = this.doc.units === 'Millimeters' ? await addNativeElements(this.doc, result.native) : { walls: [], slabs: [] }
+      this.nativeWalls = native.walls
       const scaled = scaledFrom ? `, scaled from ${scaledFrom.toLowerCase()} to ${this.doc.units.toLowerCase()}` : ''
-      return { ids, message: `Imported ${file.fileName}: ${ifcSummary(result)}${scaled}` }
+      return { ids: [...ids, ...native.walls, ...native.slabs], message: `Imported ${file.fileName}: ${ifcSummary(result, native)}${scaled}` }
     }
     // Files without units (DXF without $INSUNITS, STL, OBJ) are taken to be in the model's units.
     const result = isMeshFile(file.fileName)

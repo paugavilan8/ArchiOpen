@@ -2,6 +2,7 @@ import type { CommandContext, CommandRunner } from '../commands/runner'
 import type { Display } from '../view/display'
 import type { ViewKind } from '../view/viewport'
 import { runScript, scriptApi } from './scripting'
+import { framesFor } from './ifcNative'
 import { ifcModel } from '../io/ifcModel'
 import { writeIfc } from '../io/ifc'
 import { writePdf } from '../io/pdf'
@@ -124,6 +125,11 @@ export function toolHandlers(ctx: CommandContext, runner: CommandRunner, display
       if (doc.modified && args.discard_changes !== true) throw new Error('The open model has unsaved changes: save it first (export format "archi"), or pass discard_changes: true')
       const fileName = String(args.file_name ?? 'model.archi')
       const message = await ctx.files.openFile(fileName, fromBase64(String(args.data ?? '')))
+      if (ctx.files.nativeWalls.length > 0) {
+        await framesFor(ctx, ctx.files.nativeWalls)
+        await ctx.history?.settled
+        doc.modified = false
+      }
       ctx.display?.fit(ctx.display.viewports)
       ctx.log(message)
       return { message, objects: doc.objects.size }

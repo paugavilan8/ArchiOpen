@@ -3,6 +3,7 @@ import { writeIfc } from '../io/ifc'
 import { ifcModel } from '../io/ifcModel'
 import { autosaver } from '../app/autosave'
 import { isOption, valueOption, yesNo } from './helpers'
+import { framesFor } from '../app/ifcNative'
 import type { Command } from './runner'
 
 const newFile: Command = {
@@ -18,10 +19,17 @@ const open: Command = {
   name: 'Open',
   history: false,
   repeat: false,
-  async run({ files, display, log }) {
-    log('Choose an .archi or .3dm file')
+  async run(ctx) {
+    const { files, display, log, doc } = ctx
+    log('Choose a model: .archi, .3dm, .ifc, .dxf, .stl or .obj')
     const message = await files.open()
     if (!message) return
+    // Walls made from an IFC file get the frames and glass of their doors and windows.
+    if (files.nativeWalls.length > 0) {
+      await framesFor(ctx, files.nativeWalls)
+      await ctx.history?.settled
+      doc.modified = false
+    }
     display.fit(display.viewports)
     log(message)
   },
@@ -47,9 +55,17 @@ const saveAs: Command = {
 
 const importModel: Command = {
   name: 'Import',
-  async run({ doc, files, display, log }) {
+  async run(ctx) {
+    const { doc, files, display, log } = ctx
+    files.nativeWalls = []
     const result = await files.importModel()
     if (!result) return
+    if (files.nativeWalls.length > 0) {
+      // The import is a step of its own; each wall is then made again in its own.
+      doc.commit()
+      await framesFor(ctx, files.nativeWalls)
+      doc.begin()
+    }
     doc.select(result.ids)
     display.fit(display.viewports, result.ids)
     log(result.message)

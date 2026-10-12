@@ -2,6 +2,7 @@ import type { FlatMesh, IfcAPI } from 'web-ifc'
 import type { Level } from '../core/architecture'
 import type { MeshGeometry } from '../core/geometry'
 import type { RhinoImport } from './rhino3dm'
+import { recognize, type MeshElement, type Recognized } from '../core/ifcRecognize'
 
 /**
  * IFC import, through web-ifc: each element's shape as a mesh, on a layer per IFC class (Wall,
@@ -80,12 +81,14 @@ function lengthUnit(api: IfcAPI, model: number): number {
 export interface IfcImport extends RhinoImport {
   /** The storeys, as levels (elevations in millimeters), lowest first. */
   levels: Level[]
-  /** How many elements were read, by layer. */
+  /** How many elements were read as meshes, by layer. */
   counts: Map<string, number>
+  /** Walls (with their doors and windows) and slabs to make as ArchiOpen's own elements. */
+  native: Pick<Recognized, 'walls' | 'slabs'>
 }
 
 /** Reads an IFC file's elements as meshes. */
-export function readIfc(api: IfcAPI, bytes: Uint8Array): IfcImport {
+export function readIfc(api: IfcAPI, bytes: Uint8Array, options: { native?: boolean } = {}): IfcImport {
   const model = api.OpenModel(bytes)
   if (model < 0) throw new Error('This is not a valid IFC file')
   try {
@@ -121,19 +124,28 @@ export function readIfc(api: IfcAPI, bytes: Uint8Array): IfcImport {
         geometry.delete()
       }
       if (faces.length === 0) return
+      elements.push({ type: typeName, vertices, faces, color })
+    }
+    const elements: (MeshElement & { color: string })[] = []
+    api.StreamAllMeshes(model, onMesh)
+    // Spaces are left out of that stream.
+    api.StreamAllMeshesWithTypes(model, [IFCSPACE], onMesh)
+
+    // Walls, slabs, doors and windows that ArchiOpen can make itself come in as its own elements.
+    const native = options.native === false ? { walls: [], slabs: [], used: new Set<number>() } : recognize(elements)
+    elements.forEach((e, i) => {
+      if (native.used.has(i)) return
+      const name = layerName(e.type)
       let layer = layerIndex.get(name)
       if (layer === undefined) {
         layer = layers.length
         layerIndex.set(name, layer)
         // Spaces are volumes for the rooms' areas: kept, but hidden.
-        layers.push({ name, color, visible: typeName !== 'IFCSPACE', locked: false })
+        layers.push({ name, color: e.color, visible: e.type !== 'IFCSPACE', locked: false })
       }
-      objects.push({ layer, geometry: { type: 'mesh', vertices, faces } satisfies MeshGeometry })
+      objects.push({ layer, geometry: { type: 'mesh', vertices: e.vertices, faces: e.faces } satisfies MeshGeometry })
       counts.set(name, (counts.get(name) ?? 0) + 1)
-    }
-    api.StreamAllMeshes(model, onMesh)
-    // Spaces are left out of that stream.
-    api.StreamAllMeshesWithTypes(model, [IFCSPACE], onMesh)
+    })
 
     // Storeys as levels, each up to the next (the last as high as the one under it).
     const unit = lengthUnit(api, model) * MM
@@ -157,7 +169,7 @@ export function readIfc(api: IfcAPI, bytes: Uint8Array): IfcImport {
       for (let n = 2; seen.has(name); n++) name = `${l.name} (${n})`
       seen.add((l.name = name))
     }
-    return { units: 'Millimeters', layers, objects, breps: [], tolerance: 0, skipped: new Map(), levels, counts }
+    return { units: 'Millimeters', layers, objects, breps: [], tolerance: 0, skipped: new Map(), levels, counts, native: { walls: native.walls, slabs: native.slabs } }
   } finally {
     api.CloseModel(model)
   }

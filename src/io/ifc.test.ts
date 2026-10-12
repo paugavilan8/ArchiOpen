@@ -73,7 +73,7 @@ describe('IFC', () => {
     expect(text).toMatch(/IFCBUILDINGSTOREY\('[^']+',\$,'First',\$,\$,#\d+,\$,\$,\.ELEMENT\.,3\.\)/)
     expect(text).toContain("IFCQUANTITYAREA('NetFloorArea',$,$,11.2,$)")
 
-    const read = readIfc(api, new TextEncoder().encode(text))
+    const read = readIfc(api, new TextEncoder().encode(text), { native: false })
     expect(read.units).toBe('Millimeters')
     expect(read.levels).toEqual([
       { name: 'Ground', elevation: 0, height: 3000 },
