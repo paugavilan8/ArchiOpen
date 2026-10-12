@@ -3,6 +3,11 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- **AI assistant (MCP)**: an MCP server (`mcp/`) and `McpConnect` let Claude or another MCP client
+  model in the app: describe the model, run commands and scripts, capture views and undo.
+
 ## 0.6.0
 
 Stairwells, quantities, terrain, wall layers, curtain walls and scripts.

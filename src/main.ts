@@ -2,6 +2,7 @@ import './style.css'
 import { FileManager, isDesktop } from './app/files'
 import { Autosaver, desktopFolder, setAutosaver } from './app/autosave'
 import { setScriptHost } from './app/scripting'
+import { AssistantBridge, setAssistantBridge } from './app/assistantBridge'
 import { HistoryManager } from './app/historyManager'
 import { copyObjects, readClipboard, rememberCopied } from './app/clipboard'
 import { pasteNext } from './commands/clipboard'
@@ -46,6 +47,10 @@ setScriptHost(ctx, runner)
 const commandLine = new CommandLine(runner, input)
 const statusBar = new StatusBar(document.getElementById('status-bar')!, doc, settings)
 onKernelBusy((busy) => statusBar.setKernelBusy(busy))
+const assistant = new AssistantBridge(ctx, runner, display)
+setAssistantBridge(assistant)
+assistant.onChange((state) => statusBar.setAssistant(state))
+statusBar.setAssistant(assistant.state)
 const [propertiesPane, layersPane, materialsPane, blocksPane, viewsPane] = buildTabs(document.getElementById('side')!, ['Properties', 'Layers', 'Materials', 'Blocks', 'Views'])
 new PropertiesPanel(propertiesPane, doc, runner, history)
 new LayersPanel(layersPane, doc, ctx.log)

@@ -882,6 +882,34 @@ input:focus-visible {
   animation: kernel-spin 0.8s linear infinite;
 }
 
+.status-assistant {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--text-faint);
+}
+
+.status-assistant[hidden] {
+  display: none;
+}
+
+.status-assistant::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.status-assistant.connected {
+  color: var(--text);
+}
+
+.status-assistant.connected::before {
+  background: #3fb950;
+}
+
 @keyframes kernel-spin {
   to {
     transform: rotate(360deg);

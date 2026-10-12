@@ -492,6 +492,21 @@ plantas. Los scripts tienen el mismo acceso que la aplicación: ejecuta solo los
 </details>
 
 <details>
+<summary><b>Asistente de IA (MCP)</b></summary>
+<br>
+
+ArchiOpen se puede manejar desde Claude, o desde cualquier otro cliente
+[MCP](https://modelcontextprotocol.io): pides con palabras un edificio o sus planos, y el asistente
+ejecuta los comandos en tu modelo, mira una imagen del resultado y lo corrige. El
+[servidor MCP](mcp/README.md) funciona en tu ordenador; la conexión se activa en la app con
+`McpConnect` (menú *File > Connect AI Assistant*), y la barra de estado indica cuándo hay un
+asistente conectado. Sus herramientas describen el modelo, ejecutan comandos y scripts, capturan
+vistas y deshacen. Consulta [mcp/README.md](mcp/README.md) para configurarlo en Claude Desktop o
+Claude Code.
+
+</details>
+
+<details>
 <summary><b>Otros comandos y alias</b></summary>
 <br>
 
@@ -589,6 +604,7 @@ flowchart LR
 - [x] Muros multicapa
 - [x] Muros cortina
 - [x] Scripts (`RunScript`)
+- [x] Asistente de IA mediante MCP (Claude y otros clientes)
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes
@@ -674,6 +690,8 @@ npm test           # pruebas de geometría y del núcleo
 | `src/io` | `.archi`, `.3dm`, DXF, STEP, STL, OBJ, PDF y láminas |
 | `src/ui` | Menús, barras de herramientas, paneles y línea de comandos |
 | `src-tauri` | Aplicación de escritorio |
+| `mcp` | Servidor MCP para asistentes de IA (Claude y otros clientes) |
+| `examples/scripts` | Scripts de ejemplo para RunScript |
 
 </details>
 
