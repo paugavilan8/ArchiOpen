@@ -58,6 +58,12 @@ export function openingTypes(openings: ScheduledOpening[], levels: readonly Leve
   return sorted
 }
 
+/** The mark of an opening's type (D1, W2, ...), as the doors and windows schedule gives it. */
+export function markOf(types: OpeningType[], opening: Opening): string {
+  const key = typeKey(opening)
+  return types.find((t) => typeKey({ kind: t.kind, width: t.width, height: t.height, sill: t.sill, frame: t.frame, at: 0 }) === key)?.mark ?? ''
+}
+
 /** A length as a whole number of millimeters. */
 const mm = (value: number, toMm: number) => String(Math.round(value * toMm))
 

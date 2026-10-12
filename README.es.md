@@ -316,6 +316,11 @@ Despliega cada apartado para ver los detalles.
   superficie de una cara menos huecos), forjados (superficie menos huecos), cubiertas (superficie en
   planta), pilares, escaleras, barandillas (longitud), pavimentos, rodapiés, puertas y ventanas, con
   sus volúmenes, en metros. `ExportQuantities` las guarda en un CSV para una hoja de cálculo.
+- `Tags` coloca la marca de cada puerta y ventana (D1, W1... como en la tabla de carpintería)
+  junto a ella en planta, en una capa Opening Tags; `UpdateDrawings` las vuelve a colocar y
+  `DrawingSet` las añade si faltan. En las plantas de un juego de planos, los textos como los
+  rótulos de estancias, las etiquetas y las cotas salen solo en la planta de su nivel; las marcas
+  de sección salen en todas.
 - `DrawingSet` coloca de una vez los planos del edificio en láminas A3, cada una con su cajetín
   (proyecto, título, número A-01, A-02..., escala y fecha): una planta por cada nivel con algo
   construido, cortada a 1,2 sobre su suelo y sin los niveles de debajo (todas a la misma escala, con
@@ -617,6 +622,7 @@ flowchart LR
 - [x] Scripts (`RunScript`)
 - [x] Asistente de IA mediante MCP (Claude y otros clientes)
 - [x] Scripts paramétricos con deslizadores
+- [x] Etiquetas de carpintería en planta, enlazadas a la tabla
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

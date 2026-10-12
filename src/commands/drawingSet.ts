@@ -6,7 +6,7 @@ import { drawingArea, STANDARD_SCALES, sheetSize, view, type Detail, type Layout
 import { millimetersPer } from '../core/units'
 import { buildingGeometry, drawElevations, modelBox } from './buildingViews'
 import { layerNamed } from './drawing'
-import { drawSchedules } from './schedules'
+import { drawOpeningTags, drawSchedules } from './schedules'
 import type { Command, CommandContext } from './runner'
 
 /**
@@ -140,6 +140,8 @@ const drawingSet: Command = {
       await drawElevations(ctx)
     }
     if (drawingGroups(ctx, ['Schedules']).length === 0 && drawSchedules(ctx).length > 0) log('Drawing the schedules first…')
+    // Each door and window tagged in plan with its mark in the schedule.
+    if (![...doc.objects.values()].some((o) => o.history?.command === 'OpeningTags')) drawOpeningTags(ctx)
     const schedules = drawingGroups(ctx, ['Schedules'])
     const elevations = drawingGroups(ctx, ['Elevations', 'Elevations Cut', 'Elevations Dimensions'])
     const sections = drawingGroups(ctx, ['Sections', 'Sections Cut', 'Sections Fill', 'Sections Dimensions'])

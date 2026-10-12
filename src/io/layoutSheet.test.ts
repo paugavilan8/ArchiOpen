@@ -223,4 +223,38 @@ describe('layout sheets', () => {
     expect((await hiddenLineDrawing(doc, { ...detail, clipPlanes: upper })).fills).toHaveLength(1)
     expect((await hiddenLineDrawing(doc, { ...detail, clipPlanes: [999] })).fills).toHaveLength(0)
   })
+
+  it('shows texts on the plan of their own level only, and section marks on every plan', () => {
+    const doc = new Document()
+    doc.add(toBrep(box(v(0, 0), v(4000, 0), v(0, 1000), v(0, 0, 6000))))
+    const text = (t: string, z: number) => doc.add({ type: 'annotation', kind: 'text', points: [v(1000, 500, z)], xaxis: v(1, 0), yaxis: v(0, 1), text: t, height: 200, arrow: 'arrow', precision: 0 })
+    text('ground', 0)
+    text('upper', 3000)
+    const marks = doc.addLayer()
+    doc.updateLayer(marks.id, { name: 'Section Marks' })
+    doc.add({ type: 'annotation', kind: 'text', points: [v(0, 0, 0)], xaxis: v(1, 0), yaxis: v(0, 1), text: 'A', height: 200, arrow: 'arrow', precision: 0 }, marks.id)
+    const cut = (z: number, keepBelow: boolean) => doc.add({ type: 'clipping', center: v(2000, 500, z), xaxis: v(1, 0), yaxis: v(0, keepBelow ? -1 : 1), width: 6000, height: 6000, views: [] }).id
+    const ground = [cut(1200, true)]
+    const upper = [cut(4200, true), cut(3001, false)]
+    const layout = newLayout(doc, 1, 'Plans')
+    const detail = fitDetail(doc, { ...layout.details[0], view: view('Top'), clipping: true })
+    // Texts are drawn as strokes: count the layers' lines from each label by where they fall.
+    const shown = (planes: number[]) => {
+      const drawing = wireframeDrawing(doc, { ...detail, clipPlanes: planes }, true)
+      return [...drawing.layers.values()].reduce((n, l) => n + l.lines.length, 0)
+    }
+    const only = (ids: number[]) => {
+      for (const o of doc.objects.values()) if (o.geometry.type === 'annotation') doc.setState(o.id, { hidden: ids.includes(o.id) ? undefined : 'user' })
+    }
+    const [groundText, upperText, mark] = [...doc.objects.values()].filter((o) => o.geometry.type === 'annotation').map((o) => o.id)
+    only([groundText])
+    expect(shown(ground)).toBeGreaterThan(0)
+    expect(shown(upper)).toBe(0)
+    only([upperText])
+    expect(shown(ground)).toBe(0)
+    expect(shown(upper)).toBeGreaterThan(0)
+    only([mark])
+    expect(shown(ground)).toBeGreaterThan(0)
+    expect(shown(upper)).toBeGreaterThan(0)
+  })
 })

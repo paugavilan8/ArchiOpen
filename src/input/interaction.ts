@@ -277,6 +277,13 @@ export class Interaction {
     const option = matchOption(text, request.opts.options ?? [])
     if (option) return this.finish({ kind: 'option', option })
     this.ui.log(`Unknown input: ${text}`)
+    // Run from a script, nobody is there to type again: the command stops, saying why.
+    if (this.unattended > 0) {
+      const request = this.request
+      this.clearRequest()
+      this.script = []
+      request?.reject(new Error(`"${text}" is not an answer to "${request.opts.prompt}"`))
+    }
   }
 
   private parsePoint(match: RegExpExecArray, request: Request): Vector3 {

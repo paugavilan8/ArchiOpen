@@ -303,6 +303,10 @@ Expand a section for details.
   walls (length and the area of one face less openings), slabs (area less openings), roofs (plan
   area), columns, stairs, railings (length), floor finishes, skirting, doors and windows, with
   their volumes, in meters. `ExportQuantities` writes them to a CSV file for a spreadsheet.
+- `Tags` places the mark of each door and window (D1, W1, ... as in the doors and windows
+  schedule) beside it in plan, on an Opening Tags layer; `UpdateDrawings` places them again and
+  `DrawingSet` adds them if missing. On the plans of a drawing set, texts such as room labels,
+  tags and dimensions show on their own level's plan only; section marks show on every plan.
 - `DrawingSet` lays the building's drawings out on A3 sheets in one go, each with its title block
   (project name, drawing title, number A-01, A-02, ..., scale and date): a plan of each level with
   something in it, cut 1.2 above its floor and without the levels under it (all at one scale, with
@@ -601,6 +605,7 @@ flowchart LR
 - [x] Scripts (`RunScript`)
 - [x] AI assistant through MCP (Claude and other clients)
 - [x] Parametric scripts with sliders
+- [x] Door and window tags in plan, linked to the schedule
 - [ ] Signed installers and automatic updates
 
 ## FAQ

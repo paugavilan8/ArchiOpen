@@ -1,7 +1,7 @@
 import { Box3, Vector3 } from 'three'
 import { annotationLines } from './annotation'
 import { flatten } from './blocks'
-import { clipPlaneOf, clipPolyline, drawingClipPlanes, type ClipPlane } from './clipPlanes'
+import { clipPlaneOf, clipPolyline, drawingClipPlanes, planeDistance, type ClipPlane } from './clipPlanes'
 import type { CadObject, Document } from './document'
 import { AnnotationGeometry, Geometry, tessellate, wireframe } from './geometry'
 import { millimetersPer } from './units'
@@ -167,6 +167,22 @@ export function isDrafting(doc: Document, layerId: number, g: Geometry): boolean
 }
 
 /**
+ * Is drafting in what the planes keep? Texts, dimensions and hatches are kept whole, so they are
+ * kept or left out by where they are placed: a level's room labels and tags show on its own plan
+ * only (placed on its floor, they are allowed a little below the cut just above it). Section marks
+ * show on every plan.
+ */
+function draftingKept(doc: Document, layerId: number, g: Geometry, planes: readonly ClipPlane[]): boolean {
+  if (DRAFTING_LAYERS.has(doc.layers.find((l) => l.id === layerId)?.name ?? '')) return true
+  const anchor = g.type === 'annotation' ? g.points[0] : g.type === 'hatch' ? tessellate(g.loops[0] ?? { type: 'polyline', points: [], closed: false })[0] : undefined
+  if (!anchor) return true
+  return planes.every((plane) => planeDistance(plane, anchor) >= -FLOOR_SLACK)
+}
+
+/** How far below a cut drafting placed on a floor may be and still show (in model units). */
+const FLOOR_SLACK = 5
+
+/**
  * The model as a detail shows it in wireframe: every object's lines, and solid hatches filled (only
  * the drafting with `draftingOnly`, for over a hidden line drawing).
  */
@@ -177,6 +193,7 @@ export function wireframeDrawing(doc: Document, detail: Detail, draftingOnly = f
   for (const { layerId, geometry: g } of detailObjects(doc)) {
     const drafting = isDrafting(doc, layerId, g)
     if (draftingOnly && !drafting) continue
+    if (drafting && planes.length > 0 && !draftingKept(doc, layerId, g, planes)) continue
     const cut = (line: Vector3[]) => (planes.length > 0 && !drafting ? clipPolyline(line, planes) : [line])
     let entry = layers.get(layerId)
     if (!entry) layers.set(layerId, (entry = { lines: [], fills: [] }))
