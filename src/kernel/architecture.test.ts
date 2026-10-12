@@ -4,7 +4,8 @@ import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FRAME, wallParams, type Opening } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
-import { columnShape, openingPartShape, roofShape, slabShape, stairShape, wallShape } from './architecture'
+import { columnShape, openingPartShape, railingShape, roofShape, slabShape, stairShape, wallShape } from './architecture'
+import { railingParams, railingPieces } from '../core/railings'
 import { columnOutline, roofParams, stairParams, stairPlan } from '../core/buildingParts'
 
 beforeAll(async () => {
@@ -164,5 +165,14 @@ describe('architectural solids', () => {
     expect(gable.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 2000 * tan30, 3)
     const inner = wallShape({ type: 'polyline', points: [v(10000, 4000), v(4000, 4000)], closed: false }, params, [], roofs)
     expect(inner.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 100 * tan30, 3)
+  })
+
+  it('makes a railing as its pieces kept together', () => {
+    const points = [v(0, 0), v(3000, 0), v(3000, 2000)]
+    const params = railingParams({ height: 1000, style: 'bars' })
+    const shape = railingShape([points], params)
+    const expected = railingPieces(points, params).reduce((sum, b) => sum + Math.abs(b.u.clone().cross(b.v).dot(b.w)), 0)
+    expect(volume(shape)).toBeCloseTo(expected, -2)
+    expect(shape.boundingBox.bounds[1][2]).toBeCloseTo(1000, 6)
   })
 })

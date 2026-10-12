@@ -18,6 +18,8 @@ import { nextOpeningId } from '../app/openingParts'
 import { AnyCurve, isClosed, isCurve, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
+import { MATERIAL_PRESETS } from '../core/materials'
+import { DEFAULT_RAILING, type RailingSides, type RailingStyle } from '../core/railings'
 import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairOutlines, stairPlan, type RoofType } from '../core/buildingParts'
 import { layerNamed } from './drawing'
 import { kernel, readable } from './solids'
@@ -38,6 +40,7 @@ const memory = {
   roof: { ...DEFAULT_ROOF },
   stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers },
   column: { ...DEFAULT_COLUMN },
+  railing: { ...DEFAULT_RAILING },
 }
 
 const JUSTIFICATIONS: Justification[] = ['center', 'left', 'right']
@@ -49,6 +52,16 @@ const slabsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Slabs', '#7a7a7a')
 const roofsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Roofs', '#9c5a43')
 const stairsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Stairs', '#6e6e6e')
 const columnsLayer = (ctx: CommandContext) => layerNamed(ctx, 'Columns', '#666666')
+/** Railings go on their own layer, in brushed steel. */
+const railingsLayer = (ctx: CommandContext) => {
+  const layer = layerNamed(ctx, 'Railings', '#8d9399')
+  if (!layer.material) {
+    const steel = MATERIAL_PRESETS.find((m) => m.name === 'Brushed steel')!
+    if (!ctx.doc.materials.some((m) => m.name === steel.name)) ctx.doc.setMaterials([...ctx.doc.materials, { ...steel }])
+    ctx.doc.updateLayer(layer.id, { material: steel.name })
+  }
+  return layer
+}
 
 /** Is this object a wall (or slab), made from its curve? */
 export const isWall = (ctx: CommandContext, id: number) => ctx.doc.objects.get(id)?.history?.command === 'Wall'
@@ -452,4 +465,82 @@ const column: Command = {
   },
 }
 
-export const architectureCommands: Command[] = [level, wall, slab, roof, stair, column, openingCommand('window'), openingCommand('door')]
+const SIDES: RailingSides[] = ['both', 'left', 'right']
+const STYLES: RailingStyle[] = ['bars', 'rails']
+
+/**
+ * Railings along a line drawn point by point (a slab edge, a balcony), or on stairs (Stair option):
+ * up their flights and round their landings, following the stair when it changes.
+ */
+const railing: Command = {
+  name: 'Railing',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const m = memory.railing
+    const options = () => [valueOption('Height', m.height), `Style=${capital(m.style)}`, `Sides=${capital(m.sides)}`, 'Stair']
+    const handle = async (option: string) => {
+      if (isOption(option, 'Height')) m.height = await askPositive(ctx, 'Railing height', m.height)
+      else if (isOption(option, 'Style')) m.style = STYLES[(STYLES.indexOf(m.style) + 1) % STYLES.length]
+      else if (isOption(option, 'Sides')) m.sides = SIDES[(SIDES.indexOf(m.sides) + 1) % SIDES.length]
+      else return false
+      return true
+    }
+    let start: Vector3 | null = null
+    while (!start) {
+      const r = await input.getPoint({ prompt: 'Start of railing line, or Stair to put railings on stairs', options: options() })
+      if (r.kind === 'point') start = r.point
+      else if (r.kind === 'option' && isOption(r.option, 'Stair')) return railingsOnStairs(ctx)
+      else if (r.kind === 'option') await handle(r.option)
+      else return
+    }
+    const points = [start]
+    let closed = false
+    for (;;) {
+      const r = await input.getPoint({
+        prompt: 'Next point of railing. Press Enter when done',
+        base: points[points.length - 1],
+        options: points.length >= 3 ? ['Close', 'Undo'] : points.length === 2 ? ['Undo'] : [],
+        preview: (p) => [[...points, p]],
+      })
+      if (r.kind === 'point') points.push(r.point)
+      else if (r.kind === 'option' && r.option === 'Undo') points.pop()
+      else if (r.kind === 'option' && r.option === 'Close') {
+        closed = true
+        break
+      } else break
+    }
+    if (points.length < 2) return
+    const id = await addRecorded(ctx, { type: 'polyline', points, closed }, null, { command: 'Railing', params: { height: m.height, style: m.style } }, railingsLayer(ctx).id, 'make the railing')
+    doc.select([id])
+    log(`Railing made, ${formatValue(m.height)} high`)
+  },
+}
+
+/** Railings on stairs picked one by one. */
+async function railingsOnStairs(ctx: CommandContext): Promise<void> {
+  const { doc, input, log } = ctx
+  const m = memory.railing
+  const made: number[] = []
+  for (;;) {
+    const pick = await input.getPick(made.length ? 'Select another stair. Press Enter when done' : 'Select a stair', [`Sides=${capital(m.sides)}`], (id) => doc.objects.get(id)?.history?.command === 'Stair')
+    if (pick.kind === 'option') {
+      m.sides = SIDES[(SIDES.indexOf(m.sides) + 1) % SIDES.length]
+      continue
+    }
+    if (pick.kind !== 'pick') break
+    const stair = doc.objects.get(pick.id)!.history!
+    const line = doc.objects.get(stair.inputs[0])?.geometry
+    if (!line || !isCurve(line)) {
+      log('That stair has lost its line')
+      continue
+    }
+    const params = { height: m.height, style: m.style, sides: m.sides, stair: pick.id, stairParams: stair.params ?? {} }
+    made.push(await addRecorded(ctx, line, stair.inputs[0], { command: 'Railing', params }, railingsLayer(ctx).id, 'make the railings'))
+  }
+  if (made.length > 0) {
+    doc.select(made)
+    log(`Railings put on ${made.length} stair${made.length === 1 ? '' : 's'}; they follow the stair when it changes`)
+  }
+}
+
+export const architectureCommands: Command[] = [level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]

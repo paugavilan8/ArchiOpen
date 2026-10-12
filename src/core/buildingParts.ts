@@ -223,6 +223,10 @@ export function stairParams(p: Record<string, unknown> | undefined, fallbackHeig
 export interface Flight {
   profile: PolylineGeometry
   across: Vector3
+  /** The flight's run on the stair's line, and the height it starts at (above the line). */
+  start: Vector3
+  end: Vector3
+  base: number
   risers: number
   riser: number
   tread: number
@@ -272,7 +276,7 @@ function flight(start: Vector3, end: Vector3, base: number, n: number, riser: nu
   const clean = points.filter((p, i) => i === 0 || p.distanceTo(points[i - 1]) > 1e-9)
   const left = UP.clone().cross(dir).normalize()
   const shift = left.clone().multiplyScalar(-width / 2)
-  return { profile: { type: 'polyline', points: clean.map((p) => p.add(shift)), closed: true }, across: left.multiplyScalar(width), risers: n, riser, tread }
+  return { profile: { type: 'polyline', points: clean.map((p) => p.add(shift)), closed: true }, across: left.multiplyScalar(width), start: start.clone(), end: end.clone(), base, risers: n, riser, tread }
 }
 
 /** Shares `total` risers among flights by their runs (largest remainders), at least one each. */

@@ -3,6 +3,7 @@ import type { HistoryManager } from '../app/historyManager'
 import type { CommandRunner } from '../commands/runner'
 import { slabParams, wallParams, type Justification } from '../core/architecture'
 import { columnParams, roofParams, stairParams, type RoofType } from '../core/buildingParts'
+import { railingParams, type RailingSides, type RailingStyle } from '../core/railings'
 import type { CadObject, Document } from '../core/document'
 import { length } from '../core/curves'
 import { measure } from '../core/annotation'
@@ -165,7 +166,7 @@ export class PropertiesPanel {
         if (g.type === 'hatch') sections.push(this.hatchSection(selected[0].id, g))
         if (g.type === 'clipping') sections.push(this.clippingSection(selected[0].id, g))
         const command = selected[0].history?.command
-        if (command && ['Wall', 'Slab', 'Roof', 'Stair', 'Column'].includes(command)) sections.push(this.architectureSection(selected[0]))
+        if (command && ['Wall', 'Slab', 'Roof', 'Stair', 'Column', 'Railing'].includes(command)) sections.push(this.architectureSection(selected[0]))
       }
     }
     this.body.replaceChildren(...sections)
@@ -305,6 +306,21 @@ export class PropertiesPanel {
       risers.title = '0 picks comfortable steps'
       field('Risers', risers)
       field('Waist', number('waist', p.waist, (waist) => update({ waist })))
+      return section
+    }
+    if (record.command === 'Railing') {
+      const p = railingParams(record.params)
+      field('Height', number('height', p.height, (height) => update({ height })))
+      const style = document.createElement('select')
+      for (const st of ['bars', 'rails'] as RailingStyle[]) style.add(new Option(capitalize(st), st, false, p.style === st))
+      style.addEventListener('change', () => update({ style: style.value }))
+      field('Style', style)
+      if (record.params?.stair !== undefined) {
+        const sides = document.createElement('select')
+        for (const sd of ['both', 'left', 'right'] as RailingSides[]) sides.add(new Option(capitalize(sd), sd, false, p.sides === sd))
+        sides.addEventListener('change', () => update({ sides: sides.value }))
+        field('Sides', sides)
+      }
       return section
     }
     if (record.command === 'Roof') {
