@@ -64,8 +64,11 @@ export function make2DWithMeshes(
         if (loops.length > 0) fills.push(loops)
       })
     })
-    // Where each plane cuts, as far as the other planes keep it.
-    cuts = shapes.flatMap((shape) => clip.flatMap((plane, i) => sectionsOf(shape, plane).flatMap((c) => clipCurve(c, clip.filter((_, k) => k !== i)))))
+    // Where each plane facing the view cuts, as far as the other planes keep it. A plane facing away
+    // (the floor of a level's plan, seen from above) cuts what is seen from behind its cut: no section.
+    cuts = shapes.flatMap((shape) =>
+      clip.flatMap((plane, i) => (plane.normal.dot(toward) > 1e-6 ? [] : sectionsOf(shape, plane).flatMap((c) => clipCurve(c, clip.filter((_, k) => k !== i))))),
+    )
     shapes = shapes.flatMap((shape) => clipShape(shape, clip) ?? [])
     curves = curves.flatMap((c) => clipCurve(c, clip))
     meshes = meshes.flatMap((m) => clipMesh(m, clip) ?? [])

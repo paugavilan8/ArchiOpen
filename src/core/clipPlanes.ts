@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { split } from './curves'
 import type { Document } from './document'
-import { clippingNormal, domain, isClosed, pointAt, samples, type AnyCurve, type MeshGeometry } from './geometry'
+import { clippingNormal, domain, isClosed, pointAt, samples, type AnyCurve, type ClippingGeometry, type MeshGeometry } from './geometry'
 
 /**
  * Clipping planes for drawings (Make2D, layout details, printing), as plain data the kernel worker
@@ -24,10 +24,15 @@ export function drawingClipPlanes(doc: Document, view?: string): ClipPlane[] {
   for (const obj of doc.objects.values()) {
     const g = obj.geometry
     if (g.type !== 'clipping' || !doc.isVisible(obj) || (view !== undefined && !g.views.includes(view))) continue
-    const normal = clippingNormal(g)
-    planes.push({ normal, constant: -normal.dot(g.center), origin: g.center.clone() })
+    planes.push(clipPlaneOf(g))
   }
   return planes
+}
+
+/** A clipping plane object's plane. */
+export function clipPlaneOf(g: ClippingGeometry): ClipPlane {
+  const normal = clippingNormal(g)
+  return { normal, constant: -normal.dot(g.center), origin: g.center.clone() }
 }
 
 /** Signed distance from the plane: negative where it cuts away. */
