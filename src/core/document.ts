@@ -162,6 +162,7 @@ export class Document {
 
   /** Sheets for printing; replaced as a whole on every change. */
   layouts: Layout[] = []
+  private groupDepth = 0
   /** Set while a block is being edited in place. */
   blockEdit: BlockEdit | null = null
   currentLayerId = 1
@@ -332,17 +333,36 @@ export class Document {
    * that step undoes them too. If other steps came after it, the changes get their own undo step.
    */
   beginAmend(step: readonly StepChange[]): void {
+    if (this.groupDepth > 0) return
     this.tx = []
     this.amending = this.undoStack[this.undoStack.length - 1] === step ? (step as Action[]) : null
   }
 
   /** Groups every change until commit() into a single undo step. */
   begin(): void {
+    // Inside a group, the steps of commands are parts of the group's own step.
+    if (this.groupDepth > 0) return
     this.tx = []
     this.amending = null
   }
 
+  /**
+   * Starts a step that takes in the steps of everything done until endGroup(), commands included
+   * (their begin() and commit() add to it), as when a script runs several commands. Groups nest.
+   */
+  beginGroup(): void {
+    if (this.groupDepth === 0) this.begin()
+    this.groupDepth++
+  }
+
+  endGroup(): void {
+    if (this.groupDepth === 0) return
+    this.groupDepth--
+    if (this.groupDepth === 0) this.commit()
+  }
+
   commit(): void {
+    if (this.groupDepth > 0) return
     const tx = this.tx
     const amending = this.amending
     this.tx = null
@@ -679,6 +699,7 @@ export class Document {
     this.undoStack = []
     this.redoStack = []
     this.tx = null
+    this.groupDepth = 0
     this.emit('layers')
     this.emit('objects')
     this.modified = false

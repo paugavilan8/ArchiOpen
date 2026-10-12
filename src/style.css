@@ -1337,3 +1337,51 @@ input:focus-visible {
 .properties .opening-flip {
   padding: 0 6px;
 }
+
+.parametric-panel {
+  position: fixed;
+  bottom: 48px;
+  left: 90px;
+  z-index: 40;
+  width: 330px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-1);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+
+.parametric-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.parametric-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 56px;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.parametric-row output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.parametric-status {
+  margin: 8px 0;
+  color: var(--text-faint);
+}
+
+.parametric-status.error {
+  color: #f85149;
+}
+
+.parametric-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
