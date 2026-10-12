@@ -13,7 +13,7 @@ interoperability, in a lightweight desktop application driven by a command line.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Desktop build](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=installers)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Version](https://img.shields.io/badge/version-0.3.0-2f81f7?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.4.0-2f81f7?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
 
@@ -87,7 +87,7 @@ Releases page (no GitHub account needed):
 What is new in each version is in the [changelog](CHANGELOG.md).
 
 Releases are built by GitHub Actions when a version tag starting with `v` is pushed
-(`git tag v0.3.0 && git push origin v0.3.0`), or created from the Releases page. Builds of the latest code can also be run by hand
+(`git tag v0.4.0 && git push origin v0.4.0`), or created from the Releases page. Builds of the latest code can also be run by hand
 from the [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
 workflow (**Run workflow**); they appear as artifacts of the run, which need a GitHub account.
 

@@ -3,6 +3,20 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## 0.4.0
+
+Interiors and a full set of drawings.
+
+- **Floor finishes** (`Floor`) in wood, tiles, marble or concrete, and **skirting** (`Skirting`)
+  round rooms, along the walls and round columns, broken at doors.
+- **Furniture and fittings** (`Furniture`): beds, sofa, armchair, dining table, chair, desk,
+  wardrobe, kitchen counter, fridge, WC, washbasin, bathtub and shower tray, placed as blocks.
+- **Elevations and sections** (`Elevations`, `Section`): the four elevations of the building and
+  sections along a line drawn in plan, with cut elements filled, ground lines, titles and section
+  marks in plan.
+- Releases now check that their tag matches the project version. (The 0.3.0 installers were built
+  before its version bump and are named 0.2.0.)
+
 ## 0.3.0
 
 Plans that read like architectural drawings.
