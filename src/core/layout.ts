@@ -124,10 +124,13 @@ export function detailProjector(doc: Document, detail: Detail): (p: Vector3) => 
   }
 }
 
-/** The objects a detail shows: visible ones (blocks expanded), by layer. */
+/**
+ * The objects a detail shows: visible ones (blocks expanded), by layer. Clipping planes cut details
+ * but are not drawn on sheets.
+ */
 export function detailObjects(doc: Document): { layerId: number; geometry: Geometry }[] {
   const out: { layerId: number; geometry: Geometry }[] = []
-  const shown = (o: CadObject) => doc.isVisible(o) && doc.blockEdit?.instanceId !== o.id
+  const shown = (o: CadObject) => doc.isVisible(o) && doc.blockEdit?.instanceId !== o.id && o.geometry.type !== 'clipping'
   for (const o of doc.objects.values()) if (shown(o)) for (const g of flatten(o.geometry)) out.push({ layerId: o.layerId, geometry: g })
   return out
 }

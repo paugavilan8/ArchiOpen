@@ -23,7 +23,7 @@ const UP = new Vector3(0, 0, 1)
 const NOT_BUILDING = new Set(['Construction', 'Plan Symbols', 'Dimensions', 'Rooms', 'Elevations', 'Sections', 'Section Marks'])
 
 /** The solids and surfaces of the building that are shown (blocks drawn from what they hold). */
-function buildingGeometry(ctx: CommandContext): Geometry[] {
+export function buildingGeometry(ctx: CommandContext): Geometry[] {
   const { doc } = ctx
   return [...doc.objects.values()]
     .filter((o) => doc.isVisible(o) && !NOT_BUILDING.has(doc.layerOf(o).name) && !doc.layerOf(o).name.startsWith('Make2D'))
@@ -31,7 +31,7 @@ function buildingGeometry(ctx: CommandContext): Geometry[] {
     .filter((g) => g.type === 'brep' || g.type === 'mesh')
 }
 
-function modelBox(objects: Geometry[]): Box3 {
+export function modelBox(objects: Geometry[]): Box3 {
   const box = new Box3()
   for (const g of objects) {
     const v = g.type === 'brep' ? g.display.vertices : g.type === 'mesh' ? g.vertices : []
@@ -88,35 +88,40 @@ const ELEVATIONS: { name: string; look: Vector3 }[] = [
   { name: 'West elevation', look: new Vector3(1, 0, 0) },
 ]
 
+/** Draws the four elevations under the model; returns the new objects' ids. */
+export async function drawElevations(ctx: CommandContext): Promise<number[]> {
+  const objects = buildingGeometry(ctx)
+  if (objects.length === 0) throw new Error('There is nothing to draw: model the building first')
+  const model = modelBox(objects)
+  const size = model.getSize(new Vector3())
+  const gap = Math.max(size.x, size.y, size.z) * 0.3
+  const textHeight = Math.max(size.x, size.y, size.z) * 0.025
+  await kernel(ctx)
+  const drawings = []
+  for (const e of ELEVATIONS) drawings.push({ ...e, drawing: await draw(ctx, objects, lookingAlong(e.look), []) })
+  // In a row under the model, their ground lines level with each other.
+  const boxes = drawings.map((d) => boundsOf([...d.drawing.visible]))
+  const tallest = Math.max(...boxes.map((b) => b.max.y))
+  const ground = model.min.z
+  let x = model.min.x
+  const top = model.min.y - gap
+  const made: number[] = []
+  drawings.forEach((d, i) => {
+    const b = boxes[i]
+    if (b.isEmpty()) return
+    const offset = new Vector3(x - b.min.x, top - tallest, 0)
+    made.push(...place(ctx, d.drawing, offset, ground, d.name, 'Elevations', textHeight))
+    x += b.max.x - b.min.x + gap
+  })
+  return made
+}
+
 const elevations: Command = {
   name: 'Elevations',
   async run(ctx) {
-    const { doc, log } = ctx
-    const objects = buildingGeometry(ctx)
-    if (objects.length === 0) throw new Error('There is nothing to draw: model the building first')
-    const model = modelBox(objects)
-    const size = model.getSize(new Vector3())
-    const gap = Math.max(size.x, size.y, size.z) * 0.3
-    const textHeight = Math.max(size.x, size.y, size.z) * 0.025
-    await kernel(ctx)
-    const drawings = []
-    for (const e of ELEVATIONS) drawings.push({ ...e, drawing: await draw(ctx, objects, lookingAlong(e.look), []) })
-    // In a row under the model, their ground lines level with each other.
-    const boxes = drawings.map((d) => boundsOf([...d.drawing.visible]))
-    const tallest = Math.max(...boxes.map((b) => b.max.y))
-    const ground = model.min.z
-    let x = model.min.x
-    const top = model.min.y - gap
-    const made: number[] = []
-    drawings.forEach((d, i) => {
-      const b = boxes[i]
-      if (b.isEmpty()) return
-      const offset = new Vector3(x - b.min.x, top - tallest, 0)
-      made.push(...place(ctx, d.drawing, offset, ground, d.name, 'Elevations', textHeight))
-      x += b.max.x - b.min.x + gap
-    })
-    doc.select(made)
-    log(`4 elevations drawn under the model, on the Elevations layer`)
+    const made = await drawElevations(ctx)
+    ctx.doc.select(made)
+    ctx.log(`4 elevations drawn under the model, on the Elevations layer`)
   },
 }
 

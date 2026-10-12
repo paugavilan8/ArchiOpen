@@ -292,6 +292,10 @@ Despliega cada apartado para ver los detalles.
   indicado, con los muros, forjados y cubiertas cortados en trazo grueso y rellenos, junto al
   modelo. Cada vista lleva línea de suelo y título y queda agrupada, lista para las láminas; la
   sección añade además su marca en planta (línea de corte, flechas y letras A, B...).
+- `DrawingSet` coloca de una vez los planos del edificio en láminas A3, cada una con su cajetín
+  (proyecto, título, número A-01, A-02..., escala y fecha): la planta del nivel actual, cortada a 1,2
+  sobre su suelo, los cuatro alzados (se dibujan antes si faltan) y las secciones. Cada lámina toma
+  la mayor escala normalizada que cabe, y son láminas normales, para retocarlas o exportarlas a PDF.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -502,7 +506,8 @@ flowchart LR
 - [x] Pavimentos y rodapiés a partir de los contornos de las estancias
 - [x] Biblioteca de mobiliario y equipamiento (bloques)
 - [x] Secciones y alzados del edificio, listos para las láminas
-- [ ] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
+- [x] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
+- [ ] Planos que se actualizan al cambiar el modelo
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes
