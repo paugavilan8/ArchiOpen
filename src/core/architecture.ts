@@ -17,6 +17,8 @@ import { AnyCurve, endPoint, isClosed, pointAt, samples, startPoint, tangentAt }
 export type Justification = 'center' | 'left' | 'right'
 
 export interface Opening {
+  /** Identifies the opening within its wall, so its frame and glass follow it. */
+  id?: number
   kind: 'window' | 'door'
   /** Where the opening's middle is, as a distance along the wall's path from its start. */
   at: number
@@ -24,6 +26,8 @@ export interface Opening {
   height: number
   /** Height of its bottom above the wall's base (0 for doors). */
   sill: number
+  /** False for a bare opening, with no frame, glass or leaf. */
+  frame?: boolean
 }
 
 export interface WallParams {
@@ -188,6 +192,64 @@ export function openingBox(path: AnyCurve, params: WallParams, opening: Opening)
     v: left.multiplyScalar(l + r + 2 * margin),
     w: UP.clone().multiplyScalar(opening.height),
   }
+}
+
+/** The pieces filling an opening: a window's frame and glass, a door's frame and leaf. */
+export type OpeningPart = 'frame' | 'glass' | 'leaf'
+
+export const OPENING_PARTS: Record<Opening['kind'], OpeningPart[]> = { window: ['frame', 'glass'], door: ['frame', 'leaf'] }
+
+/** Sizes of the pieces, in model units (millimeters). */
+export const FRAME = { depth: 70, profile: 60, glass: 20, leaf: 40, gap: 5 }
+
+/** A piece of an opening: a box, less another one (a frame is its outline less its inside). */
+export interface PartBoxes {
+  add: Box
+  cut?: Box
+}
+
+/**
+ * The box spanning ranges in an opening's own directions: along the wall from its middle, across it
+ * (to the left of the path) and up from the wall's base.
+ */
+function boxAt(path: AnyCurve, opening: Opening, along: [number, number], across: [number, number], up: [number, number]): Box {
+  const t = paramAtLength(path, opening.at)
+  const a = tangentAt(path, t)
+  a.z = 0
+  a.normalize()
+  const l = UP.clone().cross(a).normalize()
+  return {
+    origin: pointAt(path, t).addScaledVector(a, along[0]).addScaledVector(l, across[0]).addScaledVector(UP, up[0]),
+    u: a.clone().multiplyScalar(along[1] - along[0]),
+    v: l.clone().multiplyScalar(across[1] - across[0]),
+    w: UP.clone().multiplyScalar(up[1] - up[0]),
+  }
+}
+
+/** The boxes of one piece of an opening, set in the middle of the wall's thickness. */
+export function openingPart(path: AnyCurve, params: WallParams, opening: Opening, part: OpeningPart): PartBoxes {
+  const { left, right } = wallSides(params)
+  // Across: the middle of the wall, from the path.
+  const c = (left - right) / 2
+  const depth = Math.min(FRAME.depth, params.thickness)
+  const profile = Math.min(FRAME.profile, opening.width / 4, opening.height / 4)
+  const w = opening.width / 2
+  const bottom = opening.sill
+  const top = opening.sill + opening.height
+  const door = opening.kind === 'door'
+  // The inside of the frame (doors have no bottom rail).
+  const inside = { along: [-w + profile, w - profile] as [number, number], up: [door ? bottom : bottom + profile, top - profile] as [number, number] }
+  const across = (d: number): [number, number] => [c - d / 2, c + d / 2]
+  if (part === 'frame') {
+    return {
+      add: boxAt(path, opening, [-w, w], across(depth), [bottom, top]),
+      cut: boxAt(path, opening, inside.along, across(depth * 3), [door ? bottom - depth : inside.up[0], inside.up[1]]),
+    }
+  }
+  if (part === 'glass') return { add: boxAt(path, opening, inside.along, across(Math.min(FRAME.glass, depth / 2)), inside.up) }
+  // A door leaf, closed, with a small gap all round.
+  const g = FRAME.gap
+  return { add: boxAt(path, opening, [inside.along[0] + g, inside.along[1] - g], across(Math.min(FRAME.leaf, depth)), [inside.up[0] + g, inside.up[1] - g]) }
 }
 
 /** Checks an opening fits in its wall: along the path and under the wall's top. */

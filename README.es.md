@@ -224,7 +224,10 @@ Despliega cada apartado para ver los detalles.
 - `Slab` crea un forjado o una cubierta plana a partir de esquinas o de curvas cerradas, con la cara
   superior en el contorno y el espesor (`Thickness`) por debajo.
 - `Window` y `Door` abren huecos donde se hace clic en un muro, con `Width` (ancho), `Height`
-  (alto) y `Sill` (altura del alféizar).
+  (alto) y `Sill` (altura del alféizar), y los cierran: las ventanas llevan marco y vidrio y las
+  puertas marco y hoja, cada pieza con su material en las capas *Windows*, *Glazing* y *Doors*
+  (`Frame=No` deja el hueco vacío). Siguen al muro al mover su línea o cambiar sus parámetros, y
+  desaparecen al quitar el hueco.
 - Muros y forjados conservan su línea (en la capa *Construction*): al moverla o editarla se rehacen.
   El espesor, la altura, la justificación y los huecos se cambian en el panel de propiedades, en un
   solo paso de deshacer. Si se mueve el sólido directamente, pasa a ser un sólido normal, como con el
@@ -426,7 +429,8 @@ flowchart LR
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] Modelado SubD
 - [x] Elementos constructivos: muros, forjados, ventanas, puertas y niveles
-- [ ] Más elementos: cubiertas, escaleras, pilares y carpinterías
+- [x] Carpinterías de ventanas y puertas: marcos, vidrios y hojas
+- [ ] Más elementos: uniones de muros, cubiertas, escaleras y pilares
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

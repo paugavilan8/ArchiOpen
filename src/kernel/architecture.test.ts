@@ -2,9 +2,9 @@ import { Vector3 } from 'three'
 import opencascade from 'replicad-opencascadejs'
 import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { wallParams } from '../core/architecture'
+import { FRAME, wallParams, type Opening } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
-import { slabShape, wallShape } from './architecture'
+import { openingPartShape, slabShape, wallShape } from './architecture'
 
 beforeAll(async () => {
   R.setOC(await opencascade())
@@ -41,5 +41,34 @@ describe('architectural solids', () => {
     const box = slab.boundingBox.bounds
     expect(box[1][2]).toBeCloseTo(3000, 6)
     expect(box[0][2]).toBeCloseTo(2750, 6)
+  })
+
+  it('makes a window frame and its glass, in the middle of the wall', () => {
+    const path: AnyCurve = { type: 'polyline', points: [v(0, 0), v(5000, 0)], closed: false }
+    const params = wallParams({ thickness: 300, height: 3000, justification: 'left' })
+    const window: Opening = { id: 1, kind: 'window', at: 2500, width: 1200, height: 1000, sill: 900 }
+    const frame = openingPartShape(path, params, window, 'frame')
+    const p = FRAME.profile
+    const d = FRAME.depth
+    expect(volume(frame)).toBeCloseTo((1200 * 1000 - (1200 - 2 * p) * (1000 - 2 * p)) * d, -2)
+    const b = frame.boundingBox.bounds
+    // Centred in a wall to the left of its path (y from 0 to 300).
+    expect((b[0][1] + b[1][1]) / 2).toBeCloseTo(150, 6)
+    expect(b[0][2]).toBeCloseTo(900, 6)
+    expect(b[1][2]).toBeCloseTo(1900, 6)
+    const glass = openingPartShape(path, params, window, 'glass')
+    expect(volume(glass)).toBeCloseTo((1200 - 2 * p) * (1000 - 2 * p) * FRAME.glass, -2)
+  })
+
+  it('makes a door frame with no bottom rail, and its leaf', () => {
+    const path: AnyCurve = { type: 'polyline', points: [v(0, 0), v(5000, 0)], closed: false }
+    const params = wallParams({ thickness: 200, height: 3000 })
+    const door: Opening = { id: 2, kind: 'door', at: 1000, width: 900, height: 2100, sill: 0 }
+    const p = FRAME.profile
+    const frame = openingPartShape(path, params, door, 'frame')
+    expect(volume(frame)).toBeCloseTo((900 * 2100 - (900 - 2 * p) * (2100 - p)) * FRAME.depth, -2)
+    const leaf = openingPartShape(path, params, door, 'leaf')
+    const g = FRAME.gap
+    expect(volume(leaf)).toBeCloseTo((900 - 2 * p - 2 * g) * (2100 - p - 2 * g) * FRAME.leaf, -2)
   })
 })

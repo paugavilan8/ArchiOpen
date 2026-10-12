@@ -219,7 +219,10 @@ Expand a section for details.
   mitred and curved lines give curved walls. Walls take the height of the current level.
 - `Slab` makes a floor or roof slab from corner points or closed curves, with its top on the
   outline and the `Thickness` below it.
-- `Window` and `Door` cut openings where a wall is clicked, with `Width`, `Height` and `Sill`.
+- `Window` and `Door` cut openings where a wall is clicked, with `Width`, `Height` and `Sill`, and
+  fill them: windows get a frame and glass, doors a frame and a leaf, each with its own material on
+  the *Windows*, *Glazing* and *Doors* layers (`Frame=No` leaves a bare opening). They stay with
+  their wall when its line moves or its parameters change, and go when the opening is removed.
 - Walls and slabs keep their line (on the *Construction* layer): moving or editing it makes them
   again. Thickness, height, justification and openings can be changed in the Properties panel, as
   one undo step. Moving the solid itself turns it into a plain solid, as with construction history.
@@ -418,7 +421,8 @@ flowchart LR
 - [ ] Deformation tools: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] SubD modeling
 - [x] Building elements: walls, slabs, windows, doors and levels
-- [ ] More building elements: roofs, stairs, columns and window frames
+- [x] Window and door frames, glass and leaves
+- [ ] More building elements: wall joins, roofs, stairs and columns
 - [ ] Signed installers and automatic updates
 
 ## FAQ

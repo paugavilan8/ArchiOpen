@@ -3,8 +3,8 @@ import type { AnyShape } from 'replicad'
 import type { AnyCurve } from '../core/geometry'
 import { edgeSurface, networkSurface, patch, pipe, sweep2 } from './advancedSurfaces'
 import { extrudeCurve, loftCurves, planarFace, revolveCurve, sweep } from './brep'
-import { slabParams, wallParams } from '../core/architecture'
-import { slabShape, wallShape } from './architecture'
+import { slabParams, wallParams, type Opening, type OpeningPart } from '../core/architecture'
+import { openingPartShape, slabShape, wallShape } from './architecture'
 
 /**
  * How each command that records history builds its result again from its input curves and
@@ -32,6 +32,7 @@ export const REBUILDERS: Record<string, (curves: AnyCurve[], p: Params) => AnySh
   Patch: (curves) => patch(curves),
   Wall: ([path], p) => wallShape(path, wallParams(p)),
   Slab: ([outline], p) => slabShape(outline, slabParams(p)),
+  OpeningPart: ([path], p) => openingPartShape(path, wallParams(p), p.opening as Opening, p.part as OpeningPart),
 }
 
 export const triple = (v: Vector3): [number, number, number] => [v.x, v.y, v.z]

@@ -13,7 +13,8 @@ import {
   type Opening,
   type WallParams,
 } from '../core/architecture'
-import { formatValue, isOption, valueOption } from './helpers'
+import { formatValue, isOption, valueOption, yesNo } from './helpers'
+import { nextOpeningId } from '../app/openingParts'
 import { AnyCurve, isClosed, isCurve, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
@@ -32,6 +33,7 @@ const memory = {
   justification: DEFAULT_WALL.justification as Justification,
   slab: DEFAULT_SLAB.thickness,
   openings: { window: { ...DEFAULT_OPENINGS.window }, door: { ...DEFAULT_OPENINGS.door } },
+  frame: true,
 }
 
 const JUSTIFICATIONS: Justification[] = ['center', 'left', 'right']
@@ -244,13 +246,14 @@ function openingCommand(kind: Opening['kind']): Command {
     async run(ctx) {
       const { doc, input, display, log } = ctx
       const sizes = memory.openings[kind]
-      const options = () => [valueOption('Width', sizes.width), valueOption('Height', sizes.height), ...(kind === 'window' ? [valueOption('Sill', sizes.sill)] : [])]
+      const options = () => [valueOption('Width', sizes.width), valueOption('Height', sizes.height), ...(kind === 'window' ? [valueOption('Sill', sizes.sill)] : []), yesNo('Frame', memory.frame)]
       let placed = 0
       for (;;) {
         const pick = await input.getPick(`Click a wall where the ${kind} goes${placed ? '. Press Enter when done' : ''}`, options(), (id) => isWall(ctx, id))
         if (pick.kind === 'option') {
           if (isOption(pick.option, 'Width')) sizes.width = await askPositive(ctx, `${capital(kind)} width`, sizes.width)
           else if (isOption(pick.option, 'Height')) sizes.height = await askPositive(ctx, `${capital(kind)} height`, sizes.height)
+          else if (isOption(pick.option, 'Frame')) memory.frame = !memory.frame
           else if (isOption(pick.option, 'Sill')) {
             const v = await input.getNumber('Sill height', sizes.sill)
             if (typeof v === 'number' && v >= 0) sizes.sill = v
@@ -266,7 +269,7 @@ function openingCommand(kind: Opening['kind']): Command {
           continue
         }
         const params = wallParams(record.params)
-        const opening: Opening = { kind, at: lengthAtPoint(path, pick.point), ...sizes }
+        const opening: Opening = { id: nextOpeningId(params.openings), kind, at: lengthAtPoint(path, pick.point), ...sizes, ...(memory.frame ? {} : { frame: false }) }
         const problem = checkOpening(path, params, opening)
         if (problem) {
           log(problem)

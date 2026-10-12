@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import * as R from 'replicad'
-import { openingBox, wallOutline, type SlabParams, type WallParams } from '../core/architecture'
+import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type SlabParams, type WallParams } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
 import { boolean, box, extrudeCurve } from './brep'
 
@@ -33,4 +33,11 @@ export function wallShape(path: AnyCurve, params: WallParams): AnyShape {
 export function slabShape(outline: AnyCurve, params: SlabParams): AnyShape {
   if (!(params.thickness > 0)) throw new Error('The slab thickness must be positive')
   return prism(outline, -params.thickness)
+}
+
+/** A piece of an opening (frame, glass or door leaf). */
+export function openingPartShape(path: AnyCurve, params: WallParams, opening: Opening, part: OpeningPart): AnyShape {
+  const { add, cut } = openingPart(path, params, opening, part)
+  const solid = box(add.origin, add.u, add.v, add.w)
+  return cut ? boolean('difference', solid, [box(cut.origin, cut.u, cut.v, cut.w)]) : solid
 }
