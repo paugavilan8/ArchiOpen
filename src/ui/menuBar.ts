@@ -20,6 +20,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Save As…', 'SaveAs', `${mod}Shift+S`),
         item('Autosave and recover…', 'Autosave'),
         item('Run Script…', 'RunScript'),
+        item('Parametric Script…', 'Parametric'),
         item('Connect AI Assistant (MCP)…', 'McpConnect'),
         'separator',
         item('Import .3dm, .ifc, .dxf, .stl or .obj…', 'Import'),

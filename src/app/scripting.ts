@@ -38,20 +38,40 @@ export interface ScriptApi {
   setLevel(name: string): void
   /** Runs several edits as one undo step. */
   step<T>(edits: () => T | Promise<T>): Promise<T>
+  /**
+   * A parameter of a parametric script (see Parametric): its value, set with a slider from `min`
+   * to `max`. Run any other way, the script gets the default.
+   */
+  param(name: string, value: number, range?: { min?: number; max?: number; step?: number }): number
   /** The document itself, for anything else (advanced). */
   doc: Document
 }
 
-export function scriptApi(ctx: CommandContext, runner: CommandRunner): ScriptApi {
+export interface ParamDef {
+  name: string
+  value: number
+  min: number
+  max: number
+  step: number
+}
+
+/** A parameter's range, from what a script asks for (by default, from 0 to twice its value). */
+export function paramDef(name: string, value: number, range: { min?: number; max?: number; step?: number } = {}): ParamDef {
+  const v = Number(value) || 0
+  const min = Number.isFinite(range.min) ? range.min! : Math.min(0, v)
+  const max = Number.isFinite(range.max) ? range.max! : Math.max(v * 2, min + 1)
+  const step = Number.isFinite(range.step) && range.step! > 0 ? range.step! : Number.isInteger(v) && Number.isInteger(min) && Number.isInteger(max) ? 1 : (max - min) / 100
+  return { name, value: Math.min(max, Math.max(min, v)), min, max, step }
+}
+
+export function scriptApi(ctx: CommandContext, runner: CommandRunner, param: ScriptApi['param'] = (_name, value) => value): ScriptApi {
   const { doc } = ctx
-  let depth = 0
   const inStep = <T>(edit: () => T): T => {
-    if (depth > 0) return edit()
-    doc.begin()
+    doc.beginGroup()
     try {
       return edit()
     } finally {
-      doc.commit()
+      doc.endGroup()
     }
   }
   const info = (o: CadObject): ObjectInfo => ({
@@ -85,15 +105,14 @@ export function scriptApi(ctx: CommandContext, runner: CommandRunner): ScriptApi
       doc.setLevels(doc.levels, name)
     },
     async step(edits) {
-      doc.begin()
-      depth++
+      doc.beginGroup()
       try {
         return await edits()
       } finally {
-        depth--
-        doc.commit()
+        doc.endGroup()
       }
     },
+    param,
     doc,
   }
 }

@@ -485,9 +485,15 @@ función asíncrona, con `archi` y `Vector3` disponibles:
 | `archi.levels()`, `archi.setLevel(nombre)` | Los niveles, y el actual. |
 | `await archi.step(cambios)` | Varios cambios como un solo paso de deshacer. |
 | `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | Un punto, una línea en el historial y el propio documento. |
+| `archi.param(nombre, valor, { min, max, step })` | Un parámetro, con su deslizador al ejecutarlo con `Parametric`. |
 
-Hay ejemplos en [examples/scripts](examples/scripts): una retícula de pilares y una torre de varias
-plantas. Los scripts tienen el mismo acceso que la aplicación: ejecuta solo los que sean de fiar.
+`Parametric` (menú *File*) ejecuta un script cuyos parámetros tienen deslizadores en un pequeño
+panel: al soltar un deslizador, lo que hizo el script se rehace con el nuevo valor, como un solo
+paso de deshacer, al estilo de las herramientas de programación visual. `Bake` conserva el
+resultado como objetos normales y `Discard` lo quita.
+
+Hay ejemplos en [examples/scripts](examples/scripts): una retícula de pilares, una torre de varias
+plantas y una torre que gira, con deslizadores para sus plantas, tamaño y giro. Los scripts tienen el mismo acceso que la aplicación: ejecuta solo los que sean de fiar.
 
 </details>
 
@@ -606,6 +612,7 @@ flowchart LR
 - [x] Muros cortina
 - [x] Scripts (`RunScript`)
 - [x] Asistente de IA mediante MCP (Claude y otros clientes)
+- [x] Scripts paramétricos con deslizadores
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

@@ -5,6 +5,9 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Parametric scripts** (`Parametric`, `archi.param`): sliders for a script's parameters that make
+  its result again as they move, with a twisting tower example. Scripts' `archi.step` now takes in
+  the commands run inside it as one undo step.
 - **AI assistant (MCP)**: an MCP server (`mcp/`) and `McpConnect` let Claude or another MCP client
   model in the app: describe the model, run commands and scripts, change parameters, capture
   views, open, save and export files, and undo. Ready to publish on npm as `archiopen-mcp`.

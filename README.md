@@ -471,9 +471,15 @@ work; `Last` runs the last one again. A script runs as the body of an async func
 | `archi.levels()`, `archi.setLevel(name)` | The levels, and the current one. |
 | `await archi.step(edits)` | Several edits as one undo step. |
 | `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | A point, a line in the history, and the document itself. |
+| `archi.param(name, value, { min, max, step })` | A parameter, with a slider when run with `Parametric`. |
 
-Examples are in [examples/scripts](examples/scripts): a grid of columns and a tower of several
-levels. Scripts have the same access as the application: run only those you trust.
+`Parametric` (*File* menu) runs a script whose parameters get sliders in a small panel: let go of
+a slider and what the script made is made again with the new value, as one undo step, in the
+spirit of visual programming tools. `Bake` keeps the result as ordinary objects and `Discard` takes
+it away.
+
+Examples are in [examples/scripts](examples/scripts): a grid of columns, a tower of several levels
+and a twisting tower with sliders for its floors, size and twist. Scripts have the same access as the application: run only those you trust.
 
 </details>
 
@@ -590,6 +596,7 @@ flowchart LR
 - [x] Curtain walls
 - [x] Scripts (`RunScript`)
 - [x] AI assistant through MCP (Claude and other clients)
+- [x] Parametric scripts with sliders
 - [ ] Signed installers and automatic updates
 
 ## FAQ
