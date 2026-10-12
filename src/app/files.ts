@@ -244,7 +244,15 @@ export class FileManager {
     if (!(await this.confirmDiscard())) return null
     const file = await pickFile([ARCHI, RHINO, IFC, DXF, STL, OBJ])
     if (!file) return null
-    const bytes = await file.read()
+    return this.openFile(file.fileName, await file.read(), file.location)
+  }
+
+  /**
+   * Opens a file's contents in place of the current document (without asking about unsaved
+   * changes). `location` is where Save writes, for an .archi file. Resolves to a message.
+   */
+  async openFile(fileName: string, bytes: Uint8Array, location: Location | null = null): Promise<string> {
+    const file = { fileName, location }
     if (isMeshFile(file.fileName)) {
       // STL and OBJ have no units; millimeters are the usual ones for 3D printing.
       const result = readMeshFile(file.fileName, bytes, 'Millimeters')

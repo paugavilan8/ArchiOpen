@@ -486,7 +486,8 @@ ask in plain words for a building or its drawings, and the assistant runs the co
 model, looks at an image of the result and corrects it. The [MCP server](mcp/README.md) runs on
 your computer; turn the connection on in the app with `McpConnect` (*File > Connect AI
 Assistant*), and the status bar shows when an assistant is connected. Its tools describe the
-model, run commands and scripts, capture views and undo. See [mcp/README.md](mcp/README.md) to
+model, run commands and scripts, change elements' parameters, capture views, open, save and
+export files (IFC, PDF, DXF, quantities) and undo. See [mcp/README.md](mcp/README.md) to
 set it up in Claude Desktop or Claude Code.
 
 </details>
