@@ -84,8 +84,8 @@ página de *Releases* (no hace falta cuenta de GitHub):
 | macOS | `ArchiOpen_x.y.z_aarch64.dmg` |
 | Linux | `ArchiOpen_x.y.z_amd64.AppImage` (o el `.deb`) |
 
-Las versiones se generan en GitHub Actions al publicar una etiqueta de versión
-(`git tag v0.2.0 && git push origin v0.2.0`). También se puede compilar el código más reciente a mano
+Las versiones se generan en GitHub Actions al publicar una etiqueta de versión que empiece por `v`
+(`git tag v0.2.0 && git push origin v0.2.0`), o al crearla desde la página de *Releases*. También se puede compilar el código más reciente a mano
 desde el flujo [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
 (**Run workflow**); el resultado aparece como artefacto de la ejecución, que sí requiere cuenta.
 
@@ -260,6 +260,10 @@ Despliega cada apartado para ver los detalles.
   El espesor, la altura, la justificación y los huecos (y los parámetros de cubiertas, escaleras y
   pilares) se cambian en el panel de propiedades, en un solo paso de deshacer. Si se mueve el sólido directamente, pasa a ser un sólido normal, como con el
   historial de construcción.
+- `WallDimensions` acota los muros en planta, como en un plano de arquitectura: por la cara exterior
+  de cada tramo recto de los muros de fachada, una cadena de esquina a esquina pasando por los bordes
+  de los huecos y, más afuera, la cota total (los muros interiores no se acotan). Las cotas llevan
+  marcas oblicuas, van en la capa *Dimensions* y quedan agrupadas.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -464,7 +468,8 @@ flowchart LR
 - [x] Escaleras con rellano (en L y en U)
 - [x] Cubiertas sobre plantas en L, T y U
 - [x] Barandillas en escaleras y bordes de forjado
-- [ ] Cotas automáticas de muros y huecos en planta
+- [x] Cotas automáticas de muros y huecos en planta
+- [ ] Rótulos de estancias con superficie y abatimiento de puertas en planta
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

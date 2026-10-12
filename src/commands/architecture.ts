@@ -11,6 +11,7 @@ import {
   type Justification,
   type Level,
   type Opening,
+  type SavedJoin,
   type WallParams,
 } from '../core/architecture'
 import { formatValue, isOption, valueOption, yesNo } from './helpers'
@@ -18,6 +19,7 @@ import { nextOpeningId } from '../app/openingParts'
 import { AnyCurve, isClosed, isCurve, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
+import { wallDimensions, type DimensionedWall } from '../core/autoDimensions'
 import { MATERIAL_PRESETS } from '../core/materials'
 import { DEFAULT_RAILING, type RailingSides, type RailingStyle } from '../core/railings'
 import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairOutlines, stairPlan, type RoofType } from '../core/buildingParts'
@@ -41,6 +43,7 @@ const memory = {
   stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers },
   column: { ...DEFAULT_COLUMN },
   railing: { ...DEFAULT_RAILING },
+  dimensions: { offset: 800, height: 200 },
 }
 
 const JUSTIFICATIONS: Justification[] = ['center', 'left', 'right']
@@ -543,4 +546,60 @@ async function railingsOnStairs(ctx: CommandContext): Promise<void> {
   }
 }
 
-export const architectureCommands: Command[] = [level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]
+/**
+ * Plan dimensions of walls: along the outside face of each straight stretch, a chain through the
+ * edges of its openings and, further out, its overall length. The dimensions are grouped, on a
+ * Dimensions layer, with architectural ticks.
+ */
+const wallDimensionsCommand: Command = {
+  name: 'WallDimensions',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const ids = (await input.getObjects('Select walls to dimension')).filter((id) => isWall(ctx, id))
+    if (ids.length === 0) throw new Error('Select walls (made with the Wall command)')
+    const offset = await input.getNumber('Distance of the dimensions from the walls', memory.dimensions.offset)
+    if (typeof offset === 'number' && offset > 0) memory.dimensions.offset = offset
+    const height = await input.getNumber('Text height', memory.dimensions.height)
+    if (typeof height === 'number' && height > 0) memory.dimensions.height = height
+    const walls: DimensionedWall[] = []
+    for (const id of ids) {
+      const record = doc.objects.get(id)!.history!
+      const path = doc.objects.get(record.inputs[0])?.geometry
+      if (!path || !isCurve(path)) continue
+      const params = wallParams(record.params)
+      const joins = (Array.isArray(record.params?.joins) ? (record.params!.joins as SavedJoin[]) : []).flatMap((j) => {
+        const other = doc.objects.get(record.inputs[j.input])?.geometry
+        return other && isCurve(other) ? [{ end: j.end, kind: j.kind, other: { path: other, params: { thickness: j.thickness, justification: j.justification } } }] : []
+      })
+      walls.push({ path, params, outline: wallOutline(path, params, joins) })
+    }
+    const dims = wallDimensions(walls, { offset: memory.dimensions.offset })
+    if (dims.length === 0) {
+      log('No outside wall faces to dimension')
+      return
+    }
+    const layer = layerNamed(ctx, 'Dimensions', '#2b2b2b')
+    const made = dims.map(
+      (d) =>
+        doc.add(
+          {
+            type: 'annotation',
+            kind: 'aligned',
+            points: [d.from, d.to, d.at],
+            xaxis: new Vector3(1, 0, 0),
+            yaxis: new Vector3(0, 1, 0),
+            text: '',
+            height: memory.dimensions.height,
+            arrow: 'tick',
+            precision: 0,
+          },
+          layer.id,
+        ).id,
+    )
+    doc.group(made)
+    doc.select(made)
+    log(`${made.length} dimension${made.length === 1 ? '' : 's'} added (grouped)`)
+  },
+}
+
+export const architectureCommands: Command[] = [wallDimensionsCommand, level, wall, slab, roof, stair, column, railing, openingCommand('window'), openingCommand('door')]
