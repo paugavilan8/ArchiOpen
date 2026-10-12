@@ -13,7 +13,7 @@ DXF, en una aplicación de escritorio ligera que se maneja con la línea de coma
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Instaladores](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=instaladores)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Versión](https://img.shields.io/badge/versi%C3%B3n-0.2.0-2f81f7?style=flat-square)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-0.3.0-2f81f7?style=flat-square)
 ![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-f4c430?style=flat-square)](LICENSE)
 
@@ -82,10 +82,12 @@ página de *Releases* (no hace falta cuenta de GitHub):
 | --- | --- |
 | Windows | `ArchiOpen_x.y.z_x64-setup.exe` (o el `.msi`) |
 | macOS | `ArchiOpen_x.y.z_aarch64.dmg` |
-| Linux | `ArchiOpen_x.y.z_amd64.AppImage` (o el `.deb`) |
+| Linux | `ArchiOpen_x.y.z_amd64.AppImage` (o el `.deb` o el `.rpm`) |
+
+Las novedades de cada versión están en el [registro de cambios](CHANGELOG.md) (en inglés).
 
 Las versiones se generan en GitHub Actions al publicar una etiqueta de versión que empiece por `v`
-(`git tag v0.2.0 && git push origin v0.2.0`), o al crearla desde la página de *Releases*. También se puede compilar el código más reciente a mano
+(`git tag v0.3.0 && git push origin v0.3.0`), o al crearla desde la página de *Releases*. También se puede compilar el código más reciente a mano
 desde el flujo [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
 (**Run workflow**); el resultado aparece como artefacto de la ejecución, que sí requiere cuenta.
 
