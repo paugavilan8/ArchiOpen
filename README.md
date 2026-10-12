@@ -303,6 +303,11 @@ Expand a section for details.
   only by its own level's clipping planes, which cut no view on screen. `UpdateDrawings` draws the
   elevations, sections and schedules again from the model as it is, each in its place, so the
   sheets show the changes.
+- `Terrain` makes the site's ground through point objects and contour lines (curves at their
+  heights, sampled every `Spacing`), as a mesh on a Terrain layer: the Delaunay triangulation of the
+  points in plan, each at its height. `Boundary` cuts it to a closed curve, `MaxEdge` leaves out
+  long triangles at concave edges, and `Base` gives it sides and a bottom some depth below its
+  lowest point, so it is a solid that sections cut and fill.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -533,6 +538,7 @@ flowchart LR
 - [x] IFC export and import
 - [x] Stairs that follow their level's height, with stairwells cut in the slab above
 - [x] Quantities by element, level and material, with CSV export
+- [x] Terrain from contour lines and survey points
 - [ ] Signed installers and automatic updates
 
 ## FAQ
