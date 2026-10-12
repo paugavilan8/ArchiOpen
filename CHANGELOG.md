@@ -3,7 +3,9 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.5.0
+
+Drawing sets, schedules, IFC and autosave.
 
 - **IFC** (IFC4): `ExportIFC` writes the building with its storeys, elements, doors, windows and
   spaces for BIM tools; `Open` and `Import` read IFC files as meshes by class, with storeys as levels.
