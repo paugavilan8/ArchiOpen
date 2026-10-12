@@ -275,6 +275,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         'separator',
         item('Elevations', 'Elevations'),
         item('Section', 'Section'),
+        item('Schedules', 'Schedule'),
+        item('Update Drawings', 'UpdateDrawings'),
       ],
     ],
     [

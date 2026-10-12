@@ -5,6 +5,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Schedules** (`Schedule`): the doors and windows table, by type, and the rooms table with floor
+  areas by level, made again by `UpdateDrawings` and placed on their own sheet by `DrawingSet`.
 - **Autosave to a folder** (`Autosave`, desktop app): copies of the model every few minutes while
   it has unsaved changes, the newest of each kept, and `Recover` to open one.
 - **Drawing set** (`DrawingSet`): a plan of each level, the elevations and the sections laid out on
