@@ -3,7 +3,9 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.7.0
+
+An AI assistant through MCP, and parametric scripts.
 
 - Scripts: `archi.setLevel` moves the construction planes to the level's floor, as `Level` > `Current`
   does, so points typed in commands are measured from it; the tower example now stacks its floors
