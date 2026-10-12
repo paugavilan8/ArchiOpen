@@ -397,6 +397,11 @@ Expand a section for details.
 
 - `.archi` (JSON) is the native format. The session is recovered automatically if the application
   closes unexpectedly.
+- **Autosave to a folder** (desktop app, `Autosave`, *File* menu): every 5 minutes, while there are
+  unsaved changes, a copy of the model goes to `Documents/ArchiOpen/Autosave` as
+  `<name> <date> <time>.archi`. The newest 10 copies of each model are kept. The interval, the
+  number of copies and the folder are options; `SaveNow` writes a copy at once and `Recover` lists
+  the copies and opens one as an unsaved model.
 - **Rhino `.3dm`** (via [rhino3dm](https://github.com/mcneel/rhino3dm)):
   - Reading: curves, polysurfaces, surfaces and extrusions (rebuilt as exact, editable geometry
     with trims and holes), meshes, points, layers, units, blocks (including nested blocks and
