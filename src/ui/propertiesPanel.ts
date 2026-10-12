@@ -2,6 +2,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { HistoryManager } from '../app/historyManager'
 import type { CommandRunner } from '../commands/runner'
 import { slabParams, wallParams, type Justification } from '../core/architecture'
+import { columnParams, roofParams, stairParams, type RoofType } from '../core/buildingParts'
 import type { CadObject, Document } from '../core/document'
 import { length } from '../core/curves'
 import { measure } from '../core/annotation'
@@ -164,7 +165,7 @@ export class PropertiesPanel {
         if (g.type === 'hatch') sections.push(this.hatchSection(selected[0].id, g))
         if (g.type === 'clipping') sections.push(this.clippingSection(selected[0].id, g))
         const command = selected[0].history?.command
-        if (command === 'Wall' || command === 'Slab') sections.push(this.architectureSection(selected[0]))
+        if (command && ['Wall', 'Slab', 'Roof', 'Stair', 'Column'].includes(command)) sections.push(this.architectureSection(selected[0]))
       }
     }
     this.body.replaceChildren(...sections)
@@ -251,8 +252,7 @@ export class PropertiesPanel {
   /** The parameters of a wall or slab, made again when they change. */
   private architectureSection(obj: CadObject): HTMLElement {
     const record = obj.history!
-    const isWall = record.command === 'Wall'
-    const section = this.section(isWall ? 'Wall' : 'Slab', [])
+    const section = this.section(record.command, [])
     const list = section.querySelector('dl')!
     const update = (params: Record<string, unknown>) => {
       if (this.runner.busy || !this.history || this.remaking) return
@@ -289,8 +289,33 @@ export class PropertiesPanel {
       })
       return input
     }
-    if (!isWall) {
+    if (record.command === 'Slab') {
       field('Thickness', number('thickness', slabParams(record.params).thickness, (thickness) => update({ thickness })))
+      return section
+    }
+    if (record.command === 'Column') {
+      field('Height', number('height', columnParams(record.params).height, (height) => update({ height })))
+      return section
+    }
+    if (record.command === 'Stair') {
+      const p = stairParams(record.params)
+      field('Width', number('width', p.width, (width) => update({ width })))
+      field('Height', number('height', p.height, (height) => update({ height })))
+      const risers = number('risers', p.risers, (risers) => update({ risers: Math.round(risers) }))
+      risers.title = '0 picks comfortable steps'
+      field('Risers', risers)
+      field('Waist', number('waist', p.waist, (waist) => update({ waist })))
+      return section
+    }
+    if (record.command === 'Roof') {
+      const p = roofParams(record.params)
+      const type = document.createElement('select')
+      for (const t of ['hip', 'gable', 'shed'] as RoofType[]) type.add(new Option(capitalize(t), t, false, p.type === t))
+      type.addEventListener('change', () => update({ type: type.value }))
+      field('Type', type)
+      field('Pitch', number('pitch', p.pitch, (pitch) => pitch < 80 && update({ pitch })))
+      field('Overhang', number('overhang', p.overhang, (overhang) => update({ overhang })))
+      field('Thickness', number('thickness', p.thickness, (thickness) => update({ thickness })))
       return section
     }
     const p = wallParams(record.params)

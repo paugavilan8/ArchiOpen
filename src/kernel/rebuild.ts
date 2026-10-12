@@ -4,7 +4,8 @@ import type { AnyCurve } from '../core/geometry'
 import { edgeSurface, networkSurface, patch, pipe, sweep2 } from './advancedSurfaces'
 import { extrudeCurve, loftCurves, planarFace, revolveCurve, sweep } from './brep'
 import { slabParams, wallParams, type Opening, type OpeningPart, type SavedJoin } from '../core/architecture'
-import { openingPartShape, slabShape, wallShape } from './architecture'
+import { columnShape, openingPartShape, roofShape, slabShape, stairShape, wallShape } from './architecture'
+import { columnParams, roofParams, stairParams } from '../core/buildingParts'
 
 /**
  * How each command that records history builds its result again from its input curves and
@@ -38,6 +39,9 @@ export const REBUILDERS: Record<string, (curves: AnyCurve[], p: Params) => AnySh
     return wallShape(path, wallParams(p), resolved)
   },
   Slab: ([outline], p) => slabShape(outline, slabParams(p)),
+  Roof: ([outline], p) => roofShape(outline, roofParams(p)),
+  Stair: ([line], p) => stairShape(line, stairParams(p)),
+  Column: ([outline], p) => columnShape(outline, columnParams(p)),
   OpeningPart: ([path], p) => openingPartShape(path, wallParams(p), p.opening as Opening, p.part as OpeningPart),
 }
 

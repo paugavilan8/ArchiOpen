@@ -225,13 +225,20 @@ Expand a section for details.
   thickness and justification. Joins follow when either wall moves or changes, and undo with it.
 - `Slab` makes a floor or roof slab from corner points or closed curves, with its top on the
   outline and the `Thickness` below it.
+- `Roof` makes a pitched roof over a convex outline drawn at the top of the current level's walls
+  (or over closed curves): `Type` `Hip` (every side slopes), `Gable` (the long sides slope) or
+  `Shed` (one slope), with `Pitch`, `Overhang` and `Thickness`.
+- `Stair` makes a straight stair from its bottom step to its top one, climbing the current level's
+  height, with `Width` and `Risers` (automatic: steps of about 175); it says whether the steps are
+  comfortable (two risers and a tread between 600 and 650).
+- `Column` places rectangular or round columns, as high as the current level.
 - `Window` and `Door` cut openings where a wall is clicked, with `Width`, `Height` and `Sill`, and
   fill them: windows get a frame and glass, doors a frame and a leaf, each with its own material on
   the *Windows*, *Glazing* and *Doors* layers (`Frame=No` leaves a bare opening). They stay with
   their wall when its line moves or its parameters change, and go when the opening is removed.
 - Walls and slabs keep their line (on the *Construction* layer): moving or editing it makes them
-  again. Thickness, height, justification and openings can be changed in the Properties panel, as
-  one undo step. Moving the solid itself turns it into a plain solid, as with construction history.
+  again. Thickness, height, justification and openings (and the parameters of roofs, stairs and
+  columns) can be changed in the Properties panel, as one undo step. Moving the solid itself turns it into a plain solid, as with construction history.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -429,7 +436,8 @@ flowchart LR
 - [x] Building elements: walls, slabs, windows, doors and levels
 - [x] Window and door frames, glass and leaves
 - [x] Wall joins (L and T)
-- [ ] More building elements: roofs, stairs and columns
+- [x] Roofs (hip, gable, shed), straight stairs and columns
+- [ ] Walls up to the roof, stairs with landings, and roofs over L-shaped plans
 - [ ] Signed installers and automatic updates
 
 ## FAQ
