@@ -1,7 +1,8 @@
 import { Vector3 } from 'three'
 import * as R from 'replicad'
 import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type ResolvedJoin, type SlabParams, type WallParams } from '../core/architecture'
-import { startPoint, type AnyCurve } from '../core/geometry'
+import { startPoint, tessellate, type AnyCurve } from '../core/geometry'
+import { offset } from '../core/offset'
 import { railingPieces, type RailingParams } from '../core/railings'
 import { roofPlan, stairPlan, type ColumnParams, type Plane, type RoofParams, type RoofPlan, type StairParams } from '../core/buildingParts'
 import { boolean, box, extrudeCurve, planarFace } from './brep'
@@ -190,4 +191,55 @@ export function roomRegion(walls: AnyCurve[][], point: Vector3): RoomRegion {
   // The outside loop first: the longest.
   loops.sort((p, q) => length(q) - length(p))
   return { loops, area: R.measureShapeSurfaceProperties(room as unknown as R.Shape3D).area }
+}
+
+/** A flat region: its outer loop less its holes, as a face. */
+function regionFace(loops: AnyCurve[]): AnyShape {
+  const [outer, ...holes] = loops
+  const face = planarFace(outer)
+  if (!face) throw new Error('The outline must be closed and flat')
+  const cuts = holes.map(planarFace).filter((f): f is R.Face => f !== null)
+  return cuts.length > 0 ? cutFlat(face, cuts) : face
+}
+
+/** A flat face swept up by a height into a solid. */
+function raise(face: AnyShape, height: number): AnyShape {
+  const k = R.getOC()
+  const vec = new k.gp_Vec(0, 0, height)
+  const prism = new k.BRepPrimAPI_MakePrism(face.wrapped, vec, false, true)
+  const result = R.cast(prism.Shape())
+  prism.delete()
+  vec.delete()
+  return result
+}
+
+/** A floor finish over a room: its outline (less holes round columns) raised by its thickness. */
+export function floorShape(loops: AnyCurve[], thickness: number): AnyShape {
+  if (!(thickness > 0)) throw new Error('The floor needs a thickness')
+  return raise(regionFace(loops), thickness)
+}
+
+/**
+ * Skirting round a room: a band of a thickness along the inside of its outline (and round its
+ * holes), as high as asked, less the given boxes (door openings).
+ */
+export function skirtingShape(loops: AnyCurve[], height: number, thickness: number, cuts: { origin: Vector3; u: Vector3; v: Vector3; w: Vector3 }[] = []): AnyShape {
+  if (!(height > 0) || !(thickness > 0)) throw new Error('The skirting needs a height and a thickness')
+  const [outer, ...holes] = loops
+  // The room shrunk by the thickness: the outer loop moved in, the holes grown out.
+  const inside = (c: AnyCurve) => {
+    const pts = tessellate(c)
+    const centre = pts.reduce((sum, p) => sum.add(p), new Vector3()).multiplyScalar(1 / pts.length)
+    return centre
+  }
+  const shrunkOuter = offset(outer, thickness, inside(outer), new Vector3(0, 0, 1))
+  const grown = holes.map((h) => {
+    const box = tessellate(h).reduce((m, p) => m.max(p), new Vector3(-Infinity, -Infinity, -Infinity))
+    return offset(h, thickness, box.clone().add(new Vector3(thickness * 100, thickness * 100, 0)), new Vector3(0, 0, 1))
+  })
+  if (!shrunkOuter || grown.some((g) => !g)) throw new Error('The room is too small for skirting this thick')
+  const band = cutFlat(regionFace(loops), [regionFace([shrunkOuter, ...(grown as AnyCurve[])])])
+  const solid = raise(band, height)
+  const boxes = cuts.map((b) => box(new Vector3(b.origin.x, b.origin.y, b.origin.z), new Vector3(b.u.x, b.u.y, b.u.z), new Vector3(b.v.x, b.v.y, b.v.z), new Vector3(b.w.x, b.w.y, b.w.z)))
+  return boxes.length > 0 ? boolean('difference', solid, boxes) : solid
 }

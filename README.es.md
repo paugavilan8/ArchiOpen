@@ -276,6 +276,11 @@ Despliega cada apartado para ver los detalles.
   con su nombre y su superficie útil (m² o ft² según las unidades), centrado donde se hizo clic y
   agrupado. El contorno sirve para hacer el suelo de la estancia con `Slab` (opción `Curve`). Si la
   estancia no está cerrada, se avisa.
+- `Floor` coloca el pavimento de las estancias en las que se hace clic (o sobre curvas cerradas):
+  `Thickness` (espesor) y `Material` (`Wood`, `CeramicTiles`, `Marble`, `Concrete`), rodeando los
+  pilares. `Skirting` coloca el rodapié de las estancias, a lo largo de los muros y alrededor de los
+  pilares, interrumpido en las puertas, con `Height` (altura) y `Thickness` (espesor). Ambos
+  conservan su contorno en la capa *Construction* y sus parámetros en el panel de propiedades.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -483,7 +488,8 @@ flowchart LR
 - [x] Cotas automáticas de muros y huecos en planta
 - [x] Rótulos de estancias con superficie
 - [x] Abatimiento de puertas y símbolos de ventanas en planta
-- [ ] Pavimentos y rodapiés a partir de los contornos de las estancias
+- [x] Pavimentos y rodapiés a partir de los contornos de las estancias
+- [ ] Biblioteca de mobiliario y equipamiento (bloques)
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

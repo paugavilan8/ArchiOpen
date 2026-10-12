@@ -4,7 +4,7 @@ import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FRAME, findJoins, wallOutline, wallParams, type Opening } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
-import { columnShape, openingPartShape, railingShape, roofShape, roomRegion, slabShape, stairShape, wallShape } from './architecture'
+import { columnShape, floorShape, openingPartShape, railingShape, roofShape, roomRegion, skirtingShape, slabShape, stairShape, wallShape } from './architecture'
 import { railingParams, railingPieces } from '../core/railings'
 import { columnOutline, roofParams, stairParams, stairPlan } from '../core/buildingParts'
 
@@ -204,5 +204,24 @@ describe('architectural solids', () => {
     const withColumn = roomRegion([wallOutline(room, wallParams({ thickness: 200 })), [column]], v(1000, 1000))
     expect(withColumn.area).toBeCloseTo(5800 * 3800 - 200 * 200, 0)
     expect(withColumn.loops).toHaveLength(2)
+  })
+
+  it('makes floor finishes and skirting round a room, with a column and a door', () => {
+    const room: AnyCurve = { type: 'polyline', points: [v(100, 100), v(3900, 100), v(3900, 4900), v(100, 4900)], closed: true }
+    const column: AnyCurve = { type: 'polyline', points: [v(1900, 2400), v(2100, 2400), v(2100, 2600), v(1900, 2600)], closed: true }
+    // Both ways round: the outline as Room makes it may run either way.
+    for (const loops of [[room, column], [{ ...room, points: [...(room as { points: Vector3[] }).points].reverse() } as AnyCurve, column]]) {
+      const floor = floorShape(loops, 20)
+      expect(volume(floor)).toBeCloseTo((3800 * 4800 - 200 * 200) * 20, -2)
+      const skirting = skirtingShape(loops, 80, 15)
+      // A band 15 thick along the four walls and round the column.
+      const walls = (3800 * 4800 - 3770 * 4770) * 80
+      const round = (230 * 230 - 200 * 200) * 80
+      expect(volume(skirting)).toBeCloseTo(walls + round, -2)
+    }
+    // A door in the wall at y = 100: no skirting across it.
+    const door = { origin: v(1000, -200, -1), u: v(900, 0, 0), v: v(0, 600, 0), w: v(0, 0, 2100) }
+    const cut = skirtingShape([room], 80, 15, [door])
+    expect(volume(cut)).toBeCloseTo((3800 * 4800 - 3770 * 4770) * 80 - 900 * 15 * 80, -2)
   })
 })
