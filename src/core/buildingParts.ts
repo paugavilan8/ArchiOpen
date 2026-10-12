@@ -54,7 +54,10 @@ export interface RoofPlan {
   /** Heights the roof stays between, with room to spare. */
   bottom: number
   top: number
-  /** Vertical thickness of the roof (its thickness measured square to the slopes, made vertical). */
+  /**
+   * Vertical thickness of the roof (its thickness measured square to the slopes, made vertical). The
+   * slopes are the roof's underside: it rests on the outline at the eaves height.
+   */
   drop: number
 }
 
@@ -123,8 +126,8 @@ export function roofPlan(outline: AnyCurve, params: RoofParams): RoofPlan {
   return {
     eaves: { type: 'polyline', points: eavesPoints, closed: true },
     slopes,
-    bottom: base - params.overhang * tan - drop - params.thickness - 1,
-    top: base + size * tan + params.thickness + 1,
+    bottom: base - params.overhang * tan - params.thickness - 1,
+    top: base + size * tan + drop + 1,
     drop,
   }
 }

@@ -80,17 +80,19 @@ describe('architectural solids', () => {
     // A layer of vertical thickness t / cos(pitch) over the whole footprint.
     expect(volume(hip) / (1e8 * (200 / cos45))).toBeCloseTo(1, 4)
     const b = hip.boundingBox.bounds
-    expect(b[1][2]).toBeCloseTo(3000 + 5000, 3)
+    // Its underside rests on the outline: the top is a thickness higher.
+    expect(b[1][2]).toBeCloseTo(3000 + 5000 + 200 / cos45, 3)
+    expect(b[0][2]).toBeCloseTo(3000, 3)
     const rect: AnyCurve = { type: 'polyline', points: [v(0, 0, 3000), v(8000, 0, 3000), v(8000, 6000, 3000), v(0, 6000, 3000)], closed: true }
     const gable = roofShape(rect, roofParams({ type: 'gable', pitch: 30, overhang: 500, thickness: 250 }))
     const tan30 = Math.tan(Math.PI / 6)
     const g = gable.boundingBox.bounds
     // The ridge over the middle of the short way; the eaves lower by the overhang's rise.
-    expect(g[1][2]).toBeCloseTo(3000 + 3000 * tan30, 3)
-    expect(g[0][2]).toBeCloseTo(3000 - 500 * tan30 - 250 / Math.cos(Math.PI / 6), 3)
+    expect(g[1][2]).toBeCloseTo(3000 + 3000 * tan30 + 250 / Math.cos(Math.PI / 6), 3)
+    expect(g[0][2]).toBeCloseTo(3000 - 500 * tan30, 3)
     expect(volume(gable) / (9000 * 7000 * (250 / Math.cos(Math.PI / 6)))).toBeCloseTo(1, 4)
     const shed = roofShape(rect, roofParams({ type: 'shed', pitch: 10, overhang: 0, thickness: 200 }))
-    expect(shed.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 6000 * Math.tan(Math.PI / 18), 3)
+    expect(shed.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 6000 * Math.tan(Math.PI / 18) + 200 / Math.cos(Math.PI / 18), 3)
   })
 
   it('makes a stair whose volume is its profile across its width', () => {
@@ -108,5 +110,23 @@ describe('architectural solids', () => {
   it('makes columns', () => {
     expect(volume(columnShape(columnOutline(v(0, 0), 'rectangular', 300, 400), { height: 3000 }))).toBeCloseTo(300 * 400 * 3000, -2)
     expect(volume(columnShape(columnOutline(v(0, 0), 'round', 400, 0), { height: 3000 }))).toBeCloseTo(Math.PI * 200 * 200 * 3000, -2)
+  })
+
+  it('raises walls to the underside of a roof over them', () => {
+    const tan30 = Math.tan(Math.PI / 6)
+    const roofOutline: AnyCurve = { type: 'polyline', points: [v(-100, -100, 3000), v(8100, -100, 3000), v(8100, 6100, 3000), v(-100, 6100, 3000)], closed: true }
+    const roofs = [{ outline: roofOutline, params: roofParams({ type: 'gable', pitch: 30, overhang: 500, thickness: 250 }) }]
+    const params = wallParams({ thickness: 200, height: 3000 })
+    // A gable wall (along y, at x = 0): up to the ridge in the middle, 3000 at its ends.
+    const gable = wallShape({ type: 'polyline', points: [v(0, 0), v(0, 6000)], closed: false }, params, [], roofs)
+    expect(gable.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 3100 * tan30, 3)
+    // Volume: the plain wall plus the triangle over it (between the outer and inner faces).
+    const plain = 6000 * 200 * 3000
+    expect(volume(gable)).toBeGreaterThan(plain + 0.9 * 200 * 6000 * 3000 * tan30 / 2)
+    // An eaves wall (along x, at y = 0): its inner face rises a little under the slope, no more.
+    const eaves = wallShape({ type: 'polyline', points: [v(0, 0), v(8000, 0)], closed: false }, params, [], roofs)
+    expect(eaves.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 200 * tan30, 3)
+    // A wall with no roof over it stays as high as it is.
+    expect(wallShape({ type: 'polyline', points: [v(0, 0), v(0, 6000)], closed: false }, params).boundingBox.bounds[1][2]).toBeCloseTo(3000, 6)
   })
 })

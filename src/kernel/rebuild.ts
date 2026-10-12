@@ -36,7 +36,10 @@ export const REBUILDERS: Record<string, (curves: AnyCurve[], p: Params) => AnySh
     const resolved = joins
       .filter((j) => others[j.input - 1])
       .map((j) => ({ end: j.end, kind: j.kind, other: { path: others[j.input - 1], params: { thickness: j.thickness, justification: j.justification } } }))
-    return wallShape(path, wallParams(p), resolved)
+    const roofs = (Array.isArray(p.roofs) ? (p.roofs as (Record<string, unknown> & { input: number })[]) : [])
+      .filter((r) => others[r.input - 1])
+      .map((r) => ({ outline: others[r.input - 1], params: roofParams(r) }))
+    return wallShape(path, wallParams(p), resolved, roofs)
   },
   Slab: ([outline], p) => slabShape(outline, slabParams(p)),
   Roof: ([outline], p) => roofShape(outline, roofParams(p)),

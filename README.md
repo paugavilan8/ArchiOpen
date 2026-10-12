@@ -227,7 +227,9 @@ Expand a section for details.
   outline and the `Thickness` below it.
 - `Roof` makes a pitched roof over a convex outline drawn at the top of the current level's walls
   (or over closed curves): `Type` `Hip` (every side slopes), `Gable` (the long sides slope) or
-  `Shed` (one slope), with `Pitch`, `Overhang` and `Thickness`.
+  `Shed` (one slope), with `Pitch`, `Overhang` and `Thickness`. The roof rests on the outline (its
+  underside is at the eaves height there), and walls under it whose tops are at that height go up
+  to its underside, closing gables and following the roof as it changes.
 - `Stair` makes a straight stair from its bottom step to its top one, climbing the current level's
   height, with `Width` and `Risers` (automatic: steps of about 175); it says whether the steps are
   comfortable (two risers and a tread between 600 and 650).
@@ -437,7 +439,8 @@ flowchart LR
 - [x] Window and door frames, glass and leaves
 - [x] Wall joins (L and T)
 - [x] Roofs (hip, gable, shed), straight stairs and columns
-- [ ] Walls up to the roof, stairs with landings, and roofs over L-shaped plans
+- [x] Walls up to the roof
+- [ ] Stairs with landings, and roofs over L-shaped plans
 - [ ] Signed installers and automatic updates
 
 ## FAQ

@@ -233,7 +233,9 @@ Despliega cada apartado para ver los detalles.
 - `Roof` crea una cubierta inclinada sobre un contorno convexo, dibujado a la altura de coronación
   de los muros del nivel actual (o sobre curvas cerradas): `Type` `Hip` (a cuatro aguas), `Gable`
   (a dos aguas, inclinados los lados largos) o `Shed` (a un agua), con `Pitch` (pendiente),
-  `Overhang` (vuelo del alero) y `Thickness` (espesor).
+  `Overhang` (vuelo del alero) y `Thickness` (espesor). La cubierta apoya sobre el contorno (su cara
+  inferior queda ahí a la altura del alero), y los muros que quedan debajo con la coronación a esa
+  altura suben hasta su cara inferior, cerrando los hastiales y siguiendo los cambios de la cubierta.
 - `Stair` crea una escalera recta desde el primer peldaño hasta el último, salvando la altura del
   nivel actual, con `Width` (ancho) y `Risers` (contrahuellas; automático: unos 175 de tabica), y
   avisa si los peldaños no son cómodos (dos tabicas y una huella entre 600 y 650).
@@ -447,7 +449,8 @@ flowchart LR
 - [x] Carpinterías de ventanas y puertas: marcos, vidrios y hojas
 - [x] Uniones de muros (L y T)
 - [x] Cubiertas (a cuatro, dos y un agua), escaleras rectas y pilares
-- [ ] Muros hasta la cubierta, escaleras con rellano y cubiertas sobre plantas en L
+- [x] Muros hasta la cubierta
+- [ ] Escaleras con rellano y cubiertas sobre plantas en L
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

@@ -1,8 +1,8 @@
 import { Vector3 } from 'three'
 import * as R from 'replicad'
 import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type ResolvedJoin, type SlabParams, type WallParams } from '../core/architecture'
-import type { AnyCurve } from '../core/geometry'
-import { roofPlan, stairPlan, type ColumnParams, type RoofParams, type StairParams } from '../core/buildingParts'
+import { startPoint, type AnyCurve } from '../core/geometry'
+import { roofPlan, stairPlan, type ColumnParams, type Plane, type RoofParams, type RoofPlan, type StairParams } from '../core/buildingParts'
 import { boolean, box, extrudeCurve } from './brep'
 
 /** The solids of architectural objects (see core/architecture.ts). Needs the kernel. */
@@ -16,13 +16,23 @@ function prism(outline: AnyCurve, height: number): AnyShape {
   return shape
 }
 
-/** A wall: its outline raised by its height, with its openings cut out. */
-export function wallShape(path: AnyCurve, params: WallParams, joins: ResolvedJoin[] = []): AnyShape {
+/** A roof a wall reaches up to: its outline and parameters. */
+export interface RoofOver {
+  outline: AnyCurve
+  params: RoofParams
+}
+
+/** A wall: its outline raised by its height (or to the roofs over it), with its openings cut out. */
+export function wallShape(path: AnyCurve, params: WallParams, joins: ResolvedJoin[] = [], roofs: RoofOver[] = []): AnyShape {
   if (!(params.height > 0)) throw new Error('The wall height must be positive')
-  const [outer, inner] = wallOutline(path, params, joins)
+  const outline = wallOutline(path, params, joins)
+  const [outer, inner] = outline
   let wall = prism(outer, params.height)
   // A closed path makes a ring: the inside taken out.
   if (inner) wall = boolean('difference', wall, [prism(inner, params.height)])
+  // Up to the underside of the roofs over it, where that is higher (gables, inner walls).
+  const base = startPoint(path).z
+  for (const roof of roofs) wall = boolean('union', wall, [raisedTo(outline, base, roofPlan(roof.outline, roof.params))])
   const cuts = params.openings.map((o) => {
     const b = openingBox(path, params, o)
     return box(b.origin, b.u, b.v, b.w)
@@ -43,32 +53,48 @@ export function openingPartShape(path: AnyCurve, params: WallParams, opening: Op
   return cut ? boolean('difference', solid, [box(cut.origin, cut.u, cut.v, cut.w)]) : solid
 }
 
-/** A pitched roof over an outline (see core/buildingParts.ts): the slopes' layer of its thickness. */
+/**
+ * What lies over a closed flat outline, from one height to another, and under every slope (raised
+ * by `raise`): the slopes' planes cut the top.
+ */
+function underSlopes(outline: AnyCurve, bottom: number, top: number, slopes: readonly Plane[], raise: number): AnyShape {
+  const k = R.getOC()
+  const pts = (outline as { points: Vector3[] }).points
+  const lifted = outline.type === 'polyline' ? ({ ...outline, points: pts.map((p) => new Vector3(p.x, p.y, bottom)) } as AnyCurve) : outline
+  let solid = prism(lifted, top - bottom)
+  for (const s of slopes) {
+    const o = s.origin.clone().addScaledVector(new Vector3(0, 0, 1), raise)
+    const n = s.normal
+    const face = new k.BRepBuilderAPI_MakeFace(new k.gp_Pln(new k.gp_Pnt(o.x, o.y, o.z), new k.gp_Dir(n.x, n.y, n.z))).Face()
+    const above = new k.BRepPrimAPI_MakeHalfSpace(face, new k.gp_Pnt(o.x + n.x, o.y + n.y, o.z + n.z)).Solid()
+    const cut = new k.BRepAlgoAPI_Cut(solid.wrapped, above)
+    cut.Build()
+    if (cut.HasErrors()) throw new Error('The cut under the roof failed')
+    solid = R.cast(cut.Shape())
+    cut.delete()
+  }
+  return solid
+}
+
+/**
+ * A pitched roof over an outline (see core/buildingParts.ts): a layer of its thickness whose
+ * underside is the slopes, so it rests on walls whose tops are at the outline.
+ */
 export function roofShape(outline: AnyCurve, params: RoofParams): AnyShape {
   const plan = roofPlan(outline, params)
-  const k = R.getOC()
-  const block = (eaves: AnyCurve, bottom: number, height: number, shift: number) => {
-    const lifted = { ...eaves, points: (eaves as { points: Vector3[] }).points.map((p) => new Vector3(p.x, p.y, bottom - shift)) } as AnyCurve
-    let solid = prism(lifted, height)
-    // Everything above each slope cut away.
-    for (const s of plan.slopes) {
-      const o = s.origin.clone().addScaledVector(new Vector3(0, 0, 1), -shift)
-      const n = s.normal
-      const face = new k.BRepBuilderAPI_MakeFace(new k.gp_Pln(new k.gp_Pnt(o.x, o.y, o.z), new k.gp_Dir(n.x, n.y, n.z))).Face()
-      const above = new k.BRepPrimAPI_MakeHalfSpace(face, new k.gp_Pnt(o.x + n.x, o.y + n.y, o.z + n.z)).Solid()
-      const cut = new k.BRepAlgoAPI_Cut(solid.wrapped, above)
-      cut.Build()
-      if (cut.HasErrors()) throw new Error('The roof could not be made')
-      solid = R.cast(cut.Shape())
-      cut.delete()
-    }
-    return solid
-  }
-  const height = plan.top - plan.bottom
-  const under = block(plan.eaves, plan.bottom, height, 0)
-  // The same, lowered by the roof's thickness, taken out of it: a layer under the slopes.
-  const lowered = block(plan.eaves, plan.bottom, height + plan.drop, plan.drop)
-  return boolean('difference', under, [lowered])
+  const over = underSlopes(plan.eaves, plan.bottom, plan.top, plan.slopes, plan.drop)
+  const under = underSlopes(plan.eaves, plan.bottom - 1, plan.top, plan.slopes, 0)
+  return boolean('difference', over, [under])
+}
+
+/** A wall raised to the underside of a roof over it (where that is higher than the wall). */
+function raisedTo(outline: AnyCurve[], base: number, roof: RoofPlan): AnyShape {
+  const [outer, inner] = outline
+  const lifted = (c: AnyCurve) => ({ ...c, points: (c as { points: Vector3[] }).points.map((p) => new Vector3(p.x, p.y, base)) }) as AnyCurve
+  const level = (c: AnyCurve) => (c.type === 'polyline' ? lifted(c) : c)
+  let raised = underSlopes(level(outer), base, roof.top, roof.slopes, 0)
+  if (inner) raised = boolean('difference', raised, [underSlopes(level(inner), base - 1, roof.top + 1, [], 0)])
+  return raised
 }
 
 /** A straight stair along a line: its side profile swept across its width. */
