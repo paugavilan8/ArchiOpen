@@ -448,9 +448,13 @@ Expand a section for details.
     each door and window one IfcDoor or IfcWindow with its size. Furniture becomes IfcFurniture,
     rooms become spaces with their floor area, and anything else a proxy. Shapes are written as
     triangulated faces, in meters.
-  - `Open` and `Import` read IFC files (through [web-ifc](https://github.com/ThatOpen/engine_web-ifc))
-    as meshes on a layer per class (Wall, Slab, Window, ...), colored as in the file, with spaces
-    on a hidden layer. `Open` also takes the storeys as levels.
+  - `Open` and `Import` read IFC files (through [web-ifc](https://github.com/ThatOpen/engine_web-ifc)).
+    Straight walls of even thickness become ArchiOpen walls on their centre lines, joined where
+    they meet, with the doors and windows in them as their openings (frames and glass made
+    again); flat slabs become slabs on their outlines, with their holes. All are editable as if
+    drawn here. Anything else (curved or sloping walls, roofs, furniture, ...) comes in as meshes
+    on a layer per class, colored as in the file, with spaces on a hidden layer. `Open` also takes
+    the storeys as levels.
 
 </details>
 

@@ -3,6 +3,12 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- **Editable elements from IFC**: straight walls (with their doors and windows) and flat slabs (with
+  their holes) in IFC files come in as ArchiOpen walls and slabs, joined and editable; the rest as
+  meshes.
+
 ## 0.7.0
 
 An AI assistant through MCP, and parametric scripts.

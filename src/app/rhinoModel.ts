@@ -29,7 +29,9 @@ function sameContents(definition: BlockDefinition, objects: BlockDefinition['obj
  * Layer numbers in the file (also those of objects inside blocks) become layer ids from 1.
  */
 export function applyRhinoImport(doc: Document, model: RhinoImport): void {
-  const layers = model.layers.map((layer, i) => ({ id: i + 1, ...layer }))
+  // A file with nothing but what is made later (as an IFC file's walls) still needs a layer.
+  const given = model.layers.length > 0 ? model.layers : [{ name: 'Default', color: '#000000', visible: true, locked: false }]
+  const layers = given.map((layer, i) => ({ id: i + 1, ...layer }))
   const current = layers.find((l) => l.visible && !l.locked) ?? layers[0]
   const blocks = [...definitionsIn(model.objects.map((o) => o.geometry))].map((b) => ({
     name: b.name,
