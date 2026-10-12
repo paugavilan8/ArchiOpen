@@ -7,8 +7,8 @@ import { loadIfc, readIfc, type IfcImport } from '../io/ifcRead'
 import { addNativeElements } from './ifcNative'
 import { kernelJob } from '../kernel/client'
 import type { StepObject } from '../kernel/step'
-import { applyRhinoImport, mergeRhinoImport } from './rhinoModel'
-import type { BlockDefinition, BrepGeometry, Geometry } from '../core/geometry'
+import { applyRhinoImport, archiAsImport, mergeRhinoImport } from './rhinoModel'
+import type { BlockDefinition, BlockLink, BrepGeometry, Geometry } from '../core/geometry'
 
 interface FileType {
   name: string
@@ -415,6 +415,36 @@ export class FileManager {
   async pickImage(): Promise<{ name: string; bytes: Uint8Array } | null> {
     const file = await pickFile([IMAGE])
     return file ? { name: file.fileName, bytes: await file.read() } : null
+  }
+
+  /** How to read linked files again this session (in the browser, only the picker's handle can). */
+  private readonly linkReaders = new Map<string, () => Promise<Uint8Array>>()
+
+  /** Asks for a model to link (.archi or .3dm). Resolves to its name, where it is, and its content. */
+  async pickLinkedFile(): Promise<{ fileName: string; source: string; model: RhinoImport } | null> {
+    const file = await pickFile([ARCHI, RHINO])
+    if (!file) return null
+    const source = file.location?.kind === 'path' ? file.location.path : file.fileName
+    this.linkReaders.set(source, file.read)
+    return { fileName: file.fileName, source, model: await this.linkedModel(file.fileName, await file.read()) }
+  }
+
+  /**
+   * A linked file's content as it is now. Null where it cannot be read again (in the browser, a file
+   * linked in an earlier session); throws if the file is gone or unreadable.
+   */
+  async readLinkedFile(link: BlockLink): Promise<RhinoImport | null> {
+    let read = this.linkReaders.get(link.source)
+    if (!read && isDesktop) {
+      const { invoke } = await import('@tauri-apps/api/core')
+      read = async () => fromBase64(await invoke<string>('read_binary_file', { path: link.source }))
+    }
+    return read ? this.linkedModel(link.fileName, await read()) : null
+  }
+
+  private async linkedModel(fileName: string, bytes: Uint8Array): Promise<RhinoImport> {
+    if (extensionOf(fileName) === ARCHI.extension) return archiAsImport(JSON.parse(new TextDecoder().decode(bytes)))
+    return this.readRhino(bytes)
   }
 
   /** Reads a .3dm; its polysurfaces (also those in blocks) are rebuilt as exact shapes with the geometry kernel. */

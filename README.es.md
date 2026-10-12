@@ -441,6 +441,13 @@ Despliega cada apartado para ver los detalles.
   también las anidadas), `Explode` y `Purge`. El panel *Blocks* lista las definiciones con miniatura
   y número de copias. Las copias se dibujan con instancias en la GPU, así que cientos de copias
   cuestan casi lo mismo que una.
+- Archivos vinculados, para trabajar un proyecto por partes (como sesiones de trabajo o referencias
+  externas): `Link` coloca otro modelo (`.archi` o `.3dm`) en este como un bloque ligado a su
+  archivo, con sus capas bajo el nombre del archivo; `UpdateLinks` vuelve a leer los archivos cuando
+  cambian; `Unlink` los incorpora a este modelo. Los bloques vinculados no se editan aquí (se cambia
+  su archivo), y su contenido también se guarda, así que el modelo los sigue mostrando si falta un
+  archivo. La aplicación de escritorio vuelve a leerlos por su ruta; en el navegador, solo durante la
+  sesión en que se vincularon.
 - Grupos: `Group`, `Ungroup`, `AddToGroup` y `RemoveFromGroup`.
 - `Hide`, `Show`, `HideSwap`, `Isolate`, `Unisolate`, `Lock` y `Unlock`.
 - Comandos de selección: `SelCrv`, `SelSrf`, `SelPolysrf`, `SelClosedPolysrf`, `SelOpenPolysrf`,

@@ -32,6 +32,8 @@ const open: Command = {
     }
     display.fit(display.viewports)
     log(message)
+    const links = [...doc.blocks.values()].filter((b) => b.link).length
+    if (links > 0) log(`This model links ${links} file${links === 1 ? '' : 's'}: UpdateLinks reads them again as they are now`)
   },
 }
 

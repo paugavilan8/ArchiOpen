@@ -25,6 +25,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Connect AI Assistant (MCP)…', 'McpConnect'),
         'separator',
         item('Import .3dm, .ifc, .dxf, .stl or .obj…', 'Import'),
+        item('Link .archi or .3dm…', 'Link'),
+        item('Update Links', 'UpdateLinks'),
         item('Export .3dm…', 'Export'),
         'separator',
         item('Import STEP…', 'ImportSTEP'),

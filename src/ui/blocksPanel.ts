@@ -78,6 +78,11 @@ export class BlocksPanel {
     const name = document.createElement('span')
     name.className = 'layer-name'
     name.textContent = definition.name
+    if (definition.link) {
+      name.classList.add('linked')
+      name.dataset.tip = `Linked from ${definition.link.source}. UpdateLinks reads it again`
+      name.textContent = `${definition.name} (linked)`
+    }
     name.addEventListener('dblclick', () => this.rename(definition, name))
     const objects = document.createElement('span')
     objects.className = 'layer-count'
@@ -119,7 +124,7 @@ export class BlocksPanel {
         if (this.doc.blocks.has(name)) this.log(`There is already a block named "${name}"`)
         else {
           this.doc.begin()
-          redefineBlock(this.doc, { name, objects: definition.objects }, definition.name)
+          redefineBlock(this.doc, { ...definition, name }, definition.name)
           this.doc.commit()
         }
       }
