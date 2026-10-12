@@ -159,6 +159,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Surface from Network of Curves', 'NetworkSrf'),
         item('Patch', 'Patch'),
         item('Blend Surface', 'BlendSrf'),
+        item('Fillet Surfaces', 'FilletSrf'),
         'separator',
         item('Offset Surface', 'OffsetSrf'),
         item('Extrude Surface', 'ExtrudeSrf'),

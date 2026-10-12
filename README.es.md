@@ -184,6 +184,8 @@ Despliega cada apartado para ver los detalles.
   - `Patch`: superficie ajustada a un contorno cerrado y a las curvas interiores;
   - `EdgeSrf` (de dos a cuatro curvas de borde) y `SrfPt` (de tres o cuatro esquinas);
   - `BlendSrf`: superficie de transición entre aristas de dos superficies, tangente a ambas;
+  - `FilletSrf`: empalme de radio constante entre dos superficies o caras, del lado elegido, con
+    opción de recortar ambas hasta él. No hace falta que se toquen;
   - `Pipe`: tubo a lo largo de curvas, con radio inicial y final y opción de cerrarlo como sólido;
   - `RailRevolve`: un perfil girado alrededor de un eje mientras uno de sus extremos sigue una curva
     carril, para cúpulas y cubiertas sobre plantas ovaladas o irregulares.
@@ -392,7 +394,8 @@ flowchart LR
 - [x] Copiar y pegar entre archivos
 - [x] `ChamferEdge` y `UnrollSrf`
 - [x] `Untrim` y `RailRevolve`
-- [ ] Superficies: `FilletSrf`, `MatchSrf`
+- [x] `FilletSrf`
+- [ ] Superficies: `MatchSrf`
 - [ ] Deformaciones: `Bend`, `Twist`, `Taper`, `Flow`, `Cage`
 - [ ] Modelado SubD
 - [ ] Herramientas de arquitectura: muros, forjados, huecos y niveles

@@ -25,6 +25,7 @@ import {
   toBrep,
 } from './brep'
 import { shapeFromRhino } from './fromRhino'
+import { filletSurfaces } from './filletSrf'
 import { make2DWithMeshes } from './make2d'
 import { unrollShape } from './unroll'
 import { checkShape, shapeArea, shapeBounds, shapeVolume } from './measure'
@@ -101,6 +102,7 @@ export const api = {
   intersectionCurves,
   extractFaces,
   untrim,
+  filletSurfaces,
   borderCurves,
   edgeCurves,
   sweep2,
