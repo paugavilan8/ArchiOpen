@@ -50,4 +50,21 @@ describe('deformations', () => {
     expect(bent.type).toBe('curve')
     expect(length(bent)).toBeCloseTo(10, 2)
   })
+
+  it('follows the points of a cage (CageEdit), leaving everything as it was until they move', () => {
+    const grid = (n: number) => {
+      const pts: Vector3[] = []
+      for (let k = 0; k < n; k++) for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) pts.push(v((10 * i) / (n - 1), (10 * j) / (n - 1), (10 * k) / (n - 1)))
+      return pts
+    }
+    for (const n of [2, 3, 4]) {
+      const same = pointMap({ kind: 'cage', min: v(0, 0, 0), max: v(10, 10, 10), counts: [n, n, n], points: grid(n) })
+      near(same(v(3, 7, 2)), v(3, 7, 2))
+    }
+    // The top face of a 2-point cage raised by 5: halfway up rises by 2.5, the bottom stays.
+    const pts = grid(2).map((p) => (p.z > 5 ? p.clone().add(v(0, 0, 5)) : p))
+    const raise = pointMap({ kind: 'cage', min: v(0, 0, 0), max: v(10, 10, 10), counts: [2, 2, 2], points: pts })
+    near(raise(v(4, 4, 5)), v(4, 4, 7.5))
+    near(raise(v(4, 4, 0)), v(4, 4, 0))
+  })
 })

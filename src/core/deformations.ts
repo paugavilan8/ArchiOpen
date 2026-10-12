@@ -16,6 +16,12 @@ export type Deformation =
   | { kind: 'taper'; start: Vector3; end: Vector3; startScale: number; endScale: number; infinite: boolean }
   | { kind: 'bend'; start: Vector3; end: Vector3; toward: Vector3; angle: number }
   | { kind: 'flow'; base: AnyCurve; target: AnyCurve; stretch: boolean; up: Vector3 }
+  /**
+   * CageEdit: a box (`min` to `max`) with a grid of `counts` points across it in x, y and z, where
+   * they are now (x fastest, then y, then z). Space follows the points as a Bézier volume: with the
+   * points where the grid put them, nothing moves.
+   */
+  | { kind: 'cage'; min: Vector3; max: Vector3; counts: [number, number, number]; points: Vector3[] }
 
 /** Where a point is along an axis: 0 at its start, 1 at its end (held to that range unless infinite). */
 function along(start: Vector3, end: Vector3, p: Vector3, infinite: boolean): { t: number; foot: Vector3; axis: Vector3 } {
@@ -77,6 +83,30 @@ export function pointMap(d: Deformation): (p: Vector3) => Vector3 {
         if (s < 0) return onArc.addScaledVector(a, s)
         if (s > L) return onArc.addScaledVector(a.clone().multiplyScalar(Math.cos(th)).addScaledVector(side, Math.sin(th)), s - L)
         return onArc
+      }
+    }
+    case 'cage': {
+      const [nu, nv, nw] = d.counts
+      const size = d.max.clone().sub(d.min)
+      const bern = (n: number, t: number) => {
+        // Bernstein polynomials of degree n - 1.
+        const out = new Array<number>(n).fill(0)
+        if (n === 1) return [1]
+        out[0] = 1
+        for (let k = 1; k < n; k++) {
+          for (let i = k; i > 0; i--) out[i] = out[i] * (1 - t) + out[i - 1] * t
+          out[0] *= 1 - t
+        }
+        return out
+      }
+      const at = (lo: number, extent: number, x: number) => (extent > 0 ? (x - lo) / extent : 0)
+      return (p) => {
+        const [bu, bv, bw] = [bern(nu, at(d.min.x, size.x, p.x)), bern(nv, at(d.min.y, size.y, p.y)), bern(nw, at(d.min.z, size.z, p.z))]
+        const out = new Vector3()
+        for (let k = 0; k < nw; k++)
+          for (let j = 0; j < nv; j++)
+            for (let i = 0; i < nu; i++) out.addScaledVector(d.points[i + nu * (j + nv * k)], bu[i] * bv[j] * bw[k])
+        return out
       }
     }
     case 'flow': {

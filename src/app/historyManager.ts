@@ -1,5 +1,8 @@
 import type { Document, HistoryRecord, StepChange } from '../core/document'
-import { isCurve } from '../core/geometry'
+import { Vector3 } from 'three'
+import { geometryFromJSON, isCurve } from '../core/geometry'
+import { deformGeometry, pointMap, type Deformation } from '../core/deformations'
+import { shapeRef } from '../kernel/wire'
 import type { Settings } from '../core/settings'
 import type { BrepGeometry, Geometry } from '../core/geometry'
 import { kernelJob } from '../kernel/client'
@@ -130,6 +133,7 @@ export class HistoryManager {
    * here for the few records that make curves (plan symbols).
    */
   private async build(record: HistoryRecord): Promise<Geometry> {
+    if (record.command === 'CageEdit') return this.caged(record)
     const curves = record.inputs.map((id) => {
       const g = this.doc.objects.get(id)?.geometry
       if (!g || !isCurve(g)) throw new Error('A history input is no longer a curve')
@@ -137,6 +141,22 @@ export class HistoryManager {
     })
     if (record.command === 'OpeningSymbol') return symbolFromRecord(curves[0], record.params ?? {})
     return kernelJob('rebuild', record.command, curves, record.params ?? {})
+  }
+
+  /** An object held in a cage (CageEdit), deformed as the cage's points are now. */
+  private async caged(record: HistoryRecord): Promise<Geometry> {
+    const points = record.inputs.map((id) => {
+      const g = this.doc.objects.get(id)?.geometry
+      if (g?.type !== 'point') throw new Error('A cage point is no longer a point')
+      return g.point.clone()
+    })
+    const p = record.params as { original: unknown; min: number[]; max: number[]; counts: [number, number, number] }
+    const original = geometryFromJSON(p.original as never, (name) => this.doc.blocks.get(name))
+    const cage: Deformation = { kind: 'cage', min: new Vector3(...p.min), max: new Vector3(...p.max), counts: p.counts, points }
+    if (original.type === 'brep') return kernelJob('deformBy', shapeRef(original), cage)
+    const out = deformGeometry(original, pointMap(cage))
+    if (!out) throw new Error('That object cannot be held in a cage')
+    return out
   }
 
   /**

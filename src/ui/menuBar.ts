@@ -334,6 +334,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Taper', 'Taper'),
         item('Bend', 'Bend'),
         item('Flow Along Curve', 'Flow'),
+        item('Cage Edit', 'CageEdit'),
         'separator',
         item('Orient (2 points)', 'Orient'),
         item('Orient (3 points)', 'Orient3Pt'),
