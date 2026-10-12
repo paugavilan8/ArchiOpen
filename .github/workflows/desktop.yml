@@ -55,7 +55,7 @@ jobs:
           # Only tag pushes publish a release; manual runs just build.
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: ArchiOpen ${{ github.ref_name }}
-          releaseBody: Installers for Windows (.msi, .exe), macOS (.dmg) and Linux (.deb, .AppImage).
+          releaseBody: Installers for Windows (.exe, .msi), macOS (.dmg) and Linux (.AppImage, .deb, .rpm). See the [changelog](https://github.com/paugavilan8/ArchiOpen/blob/master/CHANGELOG.md) for what is new.
           releaseDraft: false
 
       - uses: actions/upload-artifact@v4
