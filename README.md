@@ -280,14 +280,19 @@ Expand a section for details.
   picked, with its cut walls, slabs and roofs heavier and filled, beside the model. Each view gets
   a ground line and a title and is grouped, ready for layout details; a section also gets its
   mark in plan (the cut line, arrows and letters A, B, ...).
+- `Schedule` draws the doors and windows table (one row per type, marked D1, D2, ... and W1,
+  W2, ..., with width, height, sill, levels and count) and the rooms table (each labelled room with
+  its level and floor area, the total of each level and of the building) on a Schedules layer,
+  ready for layout details. `UpdateDrawings` makes them again in place from the model.
 - `DrawingSet` lays the building's drawings out on A3 sheets in one go, each with its title block
   (project name, drawing title, number A-01, A-02, ..., scale and date): a plan of each level with
   something in it, cut 1.2 above its floor and without the levels under it (all at one scale, with
-  hidden lines and filled cuts), the four elevations (drawn first if missing) and the sections.
-  Each sheet picks the largest standard scale that fits, and the sheets are ordinary layouts, to
-  adjust or export to PDF. Each plan detail is cut only by its own level's clipping planes, which
-  cut no view on screen. `UpdateDrawings` draws the elevations and sections again from the model
-  as it is, each in its place, so the sheets show the changes.
+  hidden lines and filled cuts), the four elevations (drawn first if missing), the sections and
+  the schedules (also drawn first if missing). Each sheet picks the largest standard scale that
+  fits, and the sheets are ordinary layouts, to adjust or export to PDF. Each plan detail is cut
+  only by its own level's clipping planes, which cut no view on screen. `UpdateDrawings` draws the
+  elevations, sections and schedules again from the model as it is, each in its place, so the
+  sheets show the changes.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -498,6 +503,7 @@ flowchart LR
 - [x] Section and elevation views of the building, ready for layouts
 - [x] A drawing set: plans, sections and elevations placed on layout sheets in one go
 - [x] Drawings that update from the model (`UpdateDrawings`)
+- [x] Door and window and room area schedules (`Schedule`)
 - [x] Several levels in the drawing set, with a plan for each
 - [ ] Signed installers and automatic updates
 

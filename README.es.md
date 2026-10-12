@@ -293,15 +293,19 @@ Despliega cada apartado para ver los detalles.
   indicado, con los muros, forjados y cubiertas cortados en trazo grueso y rellenos, junto al
   modelo. Cada vista lleva línea de suelo y título y queda agrupada, lista para las láminas; la
   sección añade además su marca en planta (línea de corte, flechas y letras A, B...).
+- `Schedule` dibuja la tabla de carpintería (una fila por tipo, marcados D1, D2... y W1, W2..., con
+  ancho, alto, antepecho, niveles y número de unidades) y la de superficies (cada estancia rotulada
+  con su nivel y superficie útil, el total de cada nivel y el del edificio) en una capa Schedules,
+  listas para las láminas. `UpdateDrawings` las vuelve a hacer en su sitio a partir del modelo.
 - `DrawingSet` coloca de una vez los planos del edificio en láminas A3, cada una con su cajetín
   (proyecto, título, número A-01, A-02..., escala y fecha): una planta por cada nivel con algo
   construido, cortada a 1,2 sobre su suelo y sin los niveles de debajo (todas a la misma escala, con
-  líneas ocultas y el corte relleno), los cuatro alzados (se dibujan antes si faltan) y las
-  secciones. Cada lámina toma la mayor escala normalizada que cabe, y son láminas normales, para
-  retocarlas o exportarlas a PDF. Cada detalle de planta lo cortan solo los planos de corte de su
-  nivel, que no cortan ninguna vista en pantalla.
-  `UpdateDrawings` vuelve a dibujar los alzados y las secciones a partir del modelo tal como está,
-  cada uno en su sitio, para que las láminas muestren los cambios.
+  líneas ocultas y el corte relleno), los cuatro alzados (se dibujan antes si faltan), las
+  secciones y las tablas (también se dibujan antes si faltan). Cada lámina toma la mayor escala
+  normalizada que cabe, y son láminas normales, para retocarlas o exportarlas a PDF. Cada detalle
+  de planta lo cortan solo los planos de corte de su nivel, que no cortan ninguna vista en
+  pantalla. `UpdateDrawings` vuelve a dibujar los alzados, las secciones y las tablas a partir del
+  modelo tal como está, cada uno en su sitio, para que las láminas muestren los cambios.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -514,6 +518,7 @@ flowchart LR
 - [x] Secciones y alzados del edificio, listos para las láminas
 - [x] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
 - [x] Planos que se actualizan a partir del modelo (`UpdateDrawings`)
+- [x] Tablas de carpintería y de superficies (`Schedule`)
 - [x] Varios niveles en el juego de planos, con una planta para cada uno
 - [ ] Instaladores firmados y actualizaciones automáticas
 
