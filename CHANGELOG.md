@@ -3,11 +3,18 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.8.0
 
+Rhino's everyday commands that were missing, deformations, and IFC tested on real files.
+
+- **Example house** (Help > Open Example House, `Example`): a two-storey house with doors and
+  windows, a stair, a roof and rooms, made by `examples/scripts/house.js`.
+- **Getting started guide** in English and Spanish (`docs/getting-started.md`).
+- Scripts: `archi.setParams(id, params)` changes a wall's openings, thickness or height (or any
+  object's parameters made with history).
+- Help > About shows the real version.
 - **Deformations**: `Twist`, `Taper`, `Bend` and `Flow` (along a curve), on curves, points, meshes,
   surfaces and solids. Surfaces and solids stay NURBS, fitted to the deformation.
-
 - IFC: walls drawn as a ring (`Close`) or along several segments are exported as one wall for each
   side, mitred at the corners, so BIM tools (and ArchiOpen, opening the file again) see straight
   walls.
@@ -15,7 +22,6 @@ What changed in each version of ArchiOpen. Installers for every version are on t
   and the message on opening says why any walls or slabs stay meshes (sloping tops, not flat, ...).
   Checked with ArchiCAD's FZK-Haus and a Revit sample: 9 of 13 and 16 of 17 walls come in editable;
   the rest are gables and sloping walls.
-
 - **Stretching surfaces and solids**: `Scale1D` and `Scale2D`, and the gumball's scale along one
   axis, now stretch surfaces and solids too, exactly (their NURBS are stretched with them), and
   they export exactly to `.3dm` and STEP.
@@ -24,7 +30,6 @@ What changed in each version of ArchiOpen. Installers for every version are on t
   clicking inside them) and `ExtendSrf` (a surface made longer past an edge).
 - **glTF export** (`ExportGLTF`, `.glb`) with render materials, for Blender, Unreal, Twinmotion and
   web viewers.
-
 - **Door and window tags** (`Tags`): each opening's mark from the schedule beside it in plan, kept
   up to date by `UpdateDrawings` and added by `DrawingSet`.
 - Plans of a drawing set show texts (room labels, tags, dimensions) on their own level only.

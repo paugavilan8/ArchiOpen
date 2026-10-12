@@ -13,11 +13,11 @@ DXF, en una aplicación de escritorio ligera que se maneja con la línea de coma
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Instaladores](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=instaladores)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Versión](https://img.shields.io/badge/versi%C3%B3n-0.7.0-2f81f7?style=flat-square)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-0.8.0-2f81f7?style=flat-square)
 ![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-f4c430?style=flat-square)](LICENSE)
 
-[Descargar](#descargar) · [Funciones](#funciones) · [Arquitectura](#arquitectura) ·
+[Descargar](#descargar) · [Primeros pasos](docs/getting-started.es.md) · [Funciones](#funciones) · [Arquitectura](#arquitectura) ·
 [Formatos](#formatos-de-archivo) · [Hoja de ruta](#hoja-de-ruta) · [Preguntas](#preguntas-frecuentes) · [Desarrollo](#desarrollo)
 
 <br>
@@ -517,6 +517,7 @@ función asíncrona, con `archi` y `Vector3` disponibles:
 | `archi.add(geometría, capa?)`, `archi.remove(ids)` | Añade geometría (una curva, malla o punto) a una capa por su nombre, o borra objetos. |
 | `archi.objects(filtro?)` | Los objetos: id, tipo, capa, y el comando y los parámetros de los que tienen historial. |
 | `archi.select(ids)` | Selecciona objetos, para los comandos que actúan sobre la selección. |
+| `archi.setParams(id, parámetros)` | Cambia los parámetros de un objeto con historial (`openings`, `thickness` o `height` de un muro, ...); se vuelve a generar, como desde Properties. |
 | `archi.levels()`, `archi.setLevel(nombre)` | Los niveles, y el actual: los puntos que se escriben en los comandos se miden desde su suelo (`w` delante de un punto, como `w0,0,6400`, da coordenadas absolutas). |
 | `await archi.step(cambios)` | Varios cambios como un solo paso de deshacer. |
 | `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | Un punto, una línea en el historial y el propio documento. |

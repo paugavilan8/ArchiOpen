@@ -37,6 +37,11 @@ export interface ScriptApi {
   /** Levels, by name and elevation, and the current one (its floor is where typed points start). */
   levels(): { name: string; elevation: number; height: number }[]
   setLevel(name: string): void
+  /**
+   * Changes the parameters of an object made with history (a wall's openings, thickness or height,
+   * a slab's thickness, ...), as Properties does: it is made again with them.
+   */
+  setParams(id: number, params: Record<string, unknown>): Promise<void>
   /** Runs several edits as one undo step. */
   step<T>(edits: () => T | Promise<T>): Promise<T>
   /**
@@ -106,6 +111,12 @@ export function scriptApi(ctx: CommandContext, runner: CommandRunner, param: Scr
       doc.setLevels(doc.levels, name)
       // As Level > Current: the construction planes go to its floor, so points are typed from it.
       if (ctx.display) goToLevel(ctx, doc.level)
+    },
+    async setParams(id, params) {
+      const record = doc.objects.get(id)?.history
+      if (!record) throw new Error(`Object ${id} has no parameters to change (it was not made with history)`)
+      if (!ctx.history) throw new Error('Construction history is not available here')
+      await ctx.history.remakeStep(id, { ...record, params: { ...(record.params ?? {}), ...params } })
     },
     async step(edits) {
       doc.beginGroup()

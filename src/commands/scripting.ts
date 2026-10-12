@@ -2,6 +2,7 @@ import { runScript, scriptApi, scriptHost } from '../app/scripting'
 import { ParametricSession } from '../app/parametric'
 import { showParametricPanel } from '../ui/parametricPanel'
 import type { Command } from './runner'
+import houseScript from '../../examples/scripts/house.js?raw'
 
 /**
  * RunScript: runs a JavaScript file that drives the modeler through the `archi` API (see the
@@ -70,4 +71,29 @@ const parametric: Command = {
   },
 }
 
-export const scriptingCommands: Command[] = [runScriptCommand, parametric]
+/**
+ * Example: a new model with the example house (walls, doors and windows, floors, a stair, a roof
+ * and rooms), made by its script, to try the commands on.
+ */
+const example: Command = {
+  name: 'Example',
+  history: false,
+  repeat: false,
+  async run({ files, log }) {
+    const host = scriptHost()
+    if (!host) throw new Error('The example cannot be made here')
+    if (!(await files.newFile())) return
+    setTimeout(async () => {
+      log('Making the example house…')
+      try {
+        await runScript(houseScript, scriptApi(host.ctx, host.runner))
+        await host.ctx.history?.settled
+        host.ctx.doc.modified = false
+      } catch (error) {
+        log(`Error in the example: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    })
+  },
+}
+
+export const scriptingCommands: Command[] = [runScriptCommand, parametric, example]

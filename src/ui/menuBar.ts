@@ -1,3 +1,4 @@
+import { version } from '../../package.json'
 import type { CommandContext, CommandRunner } from '../commands/runner'
 import { closeMenu, isMenuOpen, menuAnchor, MenuEntry, openMenu } from './menu'
 
@@ -362,6 +363,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
     [
       'Help',
       [
+        item('Open Example House', 'Example'),
+        'separator',
         { label: 'Command List', action: () => log(`Commands: ${runner.names.join(', ')}`) },
         {
           label: 'Mouse and Keyboard',
@@ -373,7 +376,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
             ),
         },
         'separator',
-        { label: 'About ArchiOpen', action: () => log('ArchiOpen 0.1 — open source NURBS modeler. github.com/paugavilan8/ArchiOpen') },
+        { label: 'About ArchiOpen', action: () => log(`ArchiOpen ${version} — open source NURBS and architecture modeler. github.com/paugavilan8/ArchiOpen`) },
       ],
     ],
   ]
