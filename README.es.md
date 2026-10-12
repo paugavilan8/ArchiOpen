@@ -287,6 +287,11 @@ Despliega cada apartado para ver los detalles.
   `Washbasin` (lavabo), `Bathtub` (bañera) y `ShowerTray` (plato de ducha). Cada pieza se crea como
   bloque la primera vez y se coloca por el centro de su parte trasera (contra la pared), girándola
   después hacia un punto o un ángulo; los sanitarios van en la capa *Sanitary* en cerámica.
+- `Elevations` dibuja los cuatro alzados del edificio (sur, este, norte y oeste) en fila bajo el
+  modelo, y `Section` dibuja una sección por una línea trazada en planta, mirando hacia el lado
+  indicado, con los muros, forjados y cubiertas cortados en trazo grueso y rellenos, junto al
+  modelo. Cada vista lleva línea de suelo y título y queda agrupada, lista para las láminas; la
+  sección añade además su marca en planta (línea de corte, flechas y letras A, B...).
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -496,7 +501,8 @@ flowchart LR
 - [x] Abatimiento de puertas y símbolos de ventanas en planta
 - [x] Pavimentos y rodapiés a partir de los contornos de las estancias
 - [x] Biblioteca de mobiliario y equipamiento (bloques)
-- [ ] Secciones y alzados del edificio, listos para las láminas
+- [x] Secciones y alzados del edificio, listos para las láminas
+- [ ] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

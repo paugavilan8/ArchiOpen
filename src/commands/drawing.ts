@@ -34,7 +34,7 @@ function viewOf(vp: Viewport): DrawingView {
   }
 }
 
-function boundsOf(curves: AnyCurve[]): Box3 {
+export function boundsOf(curves: AnyCurve[]): Box3 {
   const box = new Box3()
   for (const c of curves) for (const p of tessellate(c)) box.expandByPoint(p)
   return box
@@ -61,7 +61,7 @@ export function layerNamed(ctx: CommandContext, name: string, color: string, lin
 }
 
 /** A solid hatch over a cut face: its outline loops in the drawing's plane, moved by m. */
-function sectionFill(loops: Vector3[][], m: Matrix4): HatchGeometry {
+export function sectionFill(loops: Vector3[][], m: Matrix4): HatchGeometry {
   return {
     type: 'hatch',
     loops: loops.map((loop) => ({ type: 'polyline', points: loop.map((p) => p.clone().applyMatrix4(m)), closed: true })),
@@ -75,7 +75,7 @@ function sectionFill(loops: Vector3[][], m: Matrix4): HatchGeometry {
 }
 
 /** Print width of Make2D's cut lines, in millimeters. */
-const SECTION_PEN = 0.5
+export const SECTION_PEN = 0.5
 
 /**
  * Lays out the drawings of the views. A single view keeps its own coordinates; four views are

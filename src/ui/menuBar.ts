@@ -270,6 +270,9 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Skirting', 'Skirting'),
         'separator',
         item('Furniture…', 'Furniture'),
+        'separator',
+        item('Elevations', 'Elevations'),
+        item('Section', 'Section'),
       ],
     ],
     [
