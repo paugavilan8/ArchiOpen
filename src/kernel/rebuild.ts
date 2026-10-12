@@ -4,10 +4,10 @@ import type { AnyCurve } from '../core/geometry'
 import { edgeSurface, networkSurface, patch, pipe, sweep2 } from './advancedSurfaces'
 import { extrudeCurve, loftCurves, planarFace, revolveCurve, sweep } from './brep'
 import { slabParams, wallParams, type Opening, type OpeningPart, type SavedJoin } from '../core/architecture'
-import { columnShape, floorShape, openingPartShape, railingShape, roofShape, skirtingShape, slabShape, stairShape, wallShape } from './architecture'
+import { columnShape, curtainWallShape, floorShape, openingPartShape, railingShape, roofShape, skirtingShape, slabShape, stairShape, wallShape } from './architecture'
 import { railingParams, stairRailingLines } from '../core/railings'
 import { tessellate } from '../core/geometry'
-import { columnParams, roofParams, stairParams } from '../core/buildingParts'
+import { columnParams, curtainWallParams, roofParams, stairParams } from '../core/buildingParts'
 
 /**
  * How each command that records history builds its result again from its input curves and
@@ -55,6 +55,7 @@ export const REBUILDERS: Record<string, (curves: AnyCurve[], p: Params) => AnySh
   Skirting: (loops, p) =>
     skirtingShape(loops, num(p.height ?? 80), num(p.thickness ?? 15), Array.isArray(p.cuts) ? (p.cuts as { origin: Vector3; u: Vector3; v: Vector3; w: Vector3 }[]) : []),
   Column: ([outline], p) => columnShape(outline, columnParams(p)),
+  CurtainWall: ([line], p) => curtainWallShape(line, curtainWallParams(p), p.part === 'glass' ? 'glass' : 'frame'),
   OpeningPart: ([path], p) => openingPartShape(path, wallParams(p), p.opening as Opening, p.part as OpeningPart),
 }
 

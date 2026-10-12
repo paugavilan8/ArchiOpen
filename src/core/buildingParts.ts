@@ -406,3 +406,89 @@ export function columnOutline(center: Vector3, shape: ColumnShape, width: number
   const corner = (x: number, y: number) => new Vector3(center.x + x, center.y + y, center.z)
   return { type: 'polyline', points: [corner(-w, -d), corner(w, -d), corner(w, d), corner(-w, d)], closed: true }
 }
+
+// --- Curtain walls -------------------------------------------------------------------------
+
+export interface CurtainWallParams {
+  height: number
+  /** Distance between mullions (upright), at most; each stretch is divided evenly. */
+  spacing: number
+  /** Distance between transoms (across), at most; 0 for none. */
+  rows: number
+  /** Size of the mullions and transoms across the face, and their depth through it. */
+  mullion: number
+  depth: number
+  /** Thickness of the glass. */
+  glass: number
+}
+
+export const DEFAULT_CURTAIN_WALL: Omit<CurtainWallParams, 'height'> = { spacing: 1500, rows: 1500, mullion: 60, depth: 150, glass: 24 }
+
+export function curtainWallParams(p: Record<string, unknown> | undefined, fallbackHeight = 3000): CurtainWallParams {
+  const n = (key: keyof CurtainWallParams, fallback: number) => {
+    const v = Number(p?.[key])
+    return Number.isFinite(v) && v >= 0 ? v : fallback
+  }
+  return {
+    height: n('height', fallbackHeight),
+    spacing: n('spacing', DEFAULT_CURTAIN_WALL.spacing),
+    rows: n('rows', DEFAULT_CURTAIN_WALL.rows),
+    mullion: n('mullion', DEFAULT_CURTAIN_WALL.mullion),
+    depth: n('depth', DEFAULT_CURTAIN_WALL.depth),
+    glass: n('glass', DEFAULT_CURTAIN_WALL.glass),
+  }
+}
+
+/** Divisions of a length into equal parts no longer than `step` (at least one). */
+export function divisions(length: number, step: number): number[] {
+  const n = step > 0 ? Math.max(1, Math.ceil(length / step - 1e-9)) : 1
+  return Array.from({ length: n + 1 }, (_, i) => (length * i) / n)
+}
+
+/**
+ * A curtain wall along a line drawn point by point: on each straight stretch, mullions at even
+ * spacing (and at its ends), transoms at even heights (and at the bottom and top), and a glass
+ * pane in each cell, all centred on the line.
+ */
+export function curtainWallParts(points: readonly Vector3[], p: CurtainWallParams): { frame: Landing[]; glass: Landing[] } {
+  if (!(p.height > 0) || !(p.mullion > 0) || !(p.depth > 0)) throw new Error('The curtain wall needs a height and mullions')
+  const frame: Landing[] = []
+  const glass: Landing[] = []
+  const heights = divisions(p.height, p.rows > 0 ? p.rows : p.height)
+  const w = p.mullion
+  for (let k = 1; k < points.length; k++) {
+    const a = points[k - 1]
+    const run = points[k].clone().sub(a).setZ(0)
+    const length = run.length()
+    if (length < w * 2) continue
+    const dir = run.normalize()
+    const left = UP.clone().cross(dir).normalize()
+    const at = (s: number, across: number, z: number) => a.clone().addScaledVector(dir, s).addScaledVector(left, across).addScaledVector(UP, z)
+    const along = divisions(length, p.spacing)
+    // Mullions: at the ends, kept within the stretch.
+    for (const s of along) {
+      const s0 = Math.min(Math.max(s - w / 2, 0), length - w)
+      frame.push({ origin: at(s0, -p.depth / 2, 0), u: dir.clone().multiplyScalar(w), v: left.clone().multiplyScalar(p.depth), w: UP.clone().multiplyScalar(p.height) })
+    }
+    // Transoms between the mullions, at each height (the top and bottom within the height).
+    for (const z of heights) {
+      const z0 = Math.min(Math.max(z - w / 2, 0), p.height - w)
+      for (let i = 1; i < along.length; i++) {
+        const [s0, s1] = [Math.max(along[i - 1] + w / 2, along[i - 1] === 0 ? w : 0), along[i] === length ? length - w : along[i] - w / 2]
+        if (s1 - s0 > 1e-6) frame.push({ origin: at(s0, -p.depth / 2, z0), u: dir.clone().multiplyScalar(s1 - s0), v: left.clone().multiplyScalar(p.depth), w: UP.clone().multiplyScalar(w) })
+      }
+    }
+    // A pane in each cell, between the frame's inner edges.
+    for (let i = 1; i < along.length; i++) {
+      const s0 = along[i - 1] === 0 ? w : along[i - 1] + w / 2
+      const s1 = along[i] === length ? length - w : along[i] - w / 2
+      for (let j = 1; j < heights.length; j++) {
+        const z0 = heights[j - 1] === 0 ? w : heights[j - 1] + w / 2
+        const z1 = heights[j] === p.height ? p.height - w : heights[j] - w / 2
+        if (s1 - s0 > 1e-6 && z1 - z0 > 1e-6) glass.push({ origin: at(s0, -p.glass / 2, z0), u: dir.clone().multiplyScalar(s1 - s0), v: left.clone().multiplyScalar(p.glass), w: UP.clone().multiplyScalar(z1 - z0) })
+      }
+    }
+  }
+  if (frame.length === 0) throw new Error('The curtain wall is too short for its mullions')
+  return { frame, glass }
+}

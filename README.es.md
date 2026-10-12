@@ -228,6 +228,10 @@ Despliega cada apartado para ver los detalles.
   cara vista, aislamiento, ladrillo hueco, yeso), hormigón con aislamiento, tabique o entramado de
   madera. El muro se divide en un sólido por capa, así que las plantas y secciones dibujan las líneas
   entre ellas, y las mediciones cuentan cada capa por su material.
+- `CurtainWall` dibuja un muro cortina a lo largo de una línea punto a punto, de la altura del
+  nivel actual: montantes como mucho a `Spacing`, travesaños como mucho a `Rows` (`Mullion` y
+  `Depth` dan su tamaño) y vidrio entre ellos. Su perfilería y su vidrio son dos objetos hechos de
+  la misma línea, que se rehacen al cambiarla; al exportar a IFC son un solo IfcCurtainWall.
 - `Wall` dibuja muros punto a punto (`Close` para cerrar un recinto) o a lo largo de curvas ya
   dibujadas (`Curve`), con `Thickness` (espesor) y `Justification` (`Center`, `Left` o `Right`
   respecto a la línea). Las esquinas se ingletean y las líneas curvas dan muros curvos. Los muros
@@ -560,6 +564,7 @@ flowchart LR
 - [x] Mediciones por elemento, nivel y material, exportables a CSV
 - [x] Terreno a partir de curvas de nivel y puntos topográficos
 - [x] Muros multicapa
+- [x] Muros cortina
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

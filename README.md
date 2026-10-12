@@ -225,6 +225,10 @@ Expand a section for details.
   brick, plaster), insulated concrete, partition or timber frame. The wall is split into one solid
   per layer, so plans and sections draw the lines between them, and the quantities measure each
   layer by its material.
+- `CurtainWall` draws a glazed wall along a line point by point, as high as the current level:
+  mullions at most `Spacing` apart, transoms at most `Rows` apart (`Mullion` and `Depth` size
+  them) and glass between. Its frame and glass are two objects made from the same line, and are
+  made again when it changes; IFC export writes them as one IfcCurtainWall.
 - `Wall` draws walls point by point (`Close` for a room) or along curves already drawn (`Curve`),
   with `Thickness` and `Justification` (`Center`, `Left` or `Right` of the line). Corners are
   mitred and curved lines give curved walls. Walls take the height of the current level.
@@ -545,6 +549,7 @@ flowchart LR
 - [x] Quantities by element, level and material, with CSV export
 - [x] Terrain from contour lines and survey points
 - [x] Walls with layers (build-ups)
+- [x] Curtain walls
 - [ ] Signed installers and automatic updates
 
 ## FAQ

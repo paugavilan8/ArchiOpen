@@ -5,6 +5,7 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Curtain walls** (`CurtainWall`): mullions, transoms and glass along a line, following it.
 - **Wall layers** (`WallType`, `Wall` > `Type`): build-ups of brick, insulation, concrete, plaster or
   timber, drawn layer by layer in plans and sections and measured by material.
 - **Terrain** (`Terrain`): the ground through contour lines and survey points, cut to a boundary and
