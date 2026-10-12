@@ -3,7 +3,9 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.6.0
+
+Stairwells, quantities, terrain, wall layers, curtain walls and scripts.
 
 - **Scripts** (`RunScript`): JavaScript files that run commands, read and add geometry through the
   `archi` API, with examples in `examples/scripts`.
