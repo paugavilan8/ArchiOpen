@@ -1,5 +1,6 @@
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
+import { Autosaver, desktopFolder, setAutosaver } from './app/autosave'
 import { HistoryManager } from './app/historyManager'
 import { copyObjects, readClipboard, rememberCopied } from './app/clipboard'
 import { pasteNext } from './commands/clipboard'
@@ -125,6 +126,17 @@ doc.on((kind) => {
 })
 files.onChange(scheduleSessionSave)
 
+// --- Autosave to a folder ---------------------------------------------------------
+// In the desktop app, copies of the model go to a folder every few minutes while it has unsaved
+// changes (see the Autosave command).
+
+const saver = new Autosaver({ name: () => files.name, modified: () => doc.modified, data: () => files.archiData() }, isDesktop ? desktopFolder() : null)
+setAutosaver(saver)
+doc.on((kind) => {
+  if (kind !== 'selection') saver.touch()
+})
+saver.start()
+
 // --- Closing with unsaved changes ------------------------------------------------
 
 if (isDesktop) {
@@ -240,4 +252,4 @@ commandLine.log('ArchiOpen 0.1. Type a command name, or pick one from the menus 
 commandLine.focus()
 updateTitle()
 
-if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings, files, history, kernel: { kernelMemory, setKernelMemoryLimit } } })
+if (import.meta.env.DEV) Object.assign(window, { cad: { doc, display, runner, settings, files, history, autosave: saver, kernel: { kernelMemory, setKernelMemoryLimit } } })

@@ -277,11 +277,28 @@ export class FileManager {
     return `Opened ${file.fileName}`
   }
 
+  /**
+   * Opens an autosaved copy in place of the current document, as an unsaved model under its own
+   * name (Save asks where, so the copy never overwrites the model's file by surprise).
+   */
+  async openCopy(name: string, bytes: Uint8Array): Promise<boolean> {
+    if (!(await this.confirmDiscard())) return false
+    this.doc.load(JSON.parse(new TextDecoder().decode(bytes)))
+    this.doc.modified = true
+    this.setLocation(name, null)
+    return true
+  }
+
+  /** The document as an .archi file. */
+  archiData(): Uint8Array {
+    return new TextEncoder().encode(JSON.stringify(this.doc.toJSON(), null, 1))
+  }
+
   /** Saves to the current file, or asks for one if there is none yet (or if `saveAs` is set). */
   async save(saveAs = false): Promise<boolean> {
     const location = !saveAs && this.location ? this.location : await pickSaveLocation(this.name, ARCHI)
     if (!location) return false
-    const data = new TextEncoder().encode(JSON.stringify(this.doc.toJSON(), null, 1))
+    const data = this.archiData()
     await writeFile(location, data, `${this.name}.${ARCHI.extension}`, ARCHI)
     this.doc.modified = false
     if (location === 'download') this.emit()

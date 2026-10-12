@@ -7,7 +7,12 @@ import { kernelJob } from '../kernel/client'
 import type { Drawing2D, DrawingView } from '../kernel/make2d'
 import { shapeRef } from '../kernel/wire'
 import { textShape } from '../text/strokeFont'
+import { openingBox, wallParams } from '../core/architecture'
+import { heightMarks, marksReach, type HeightsInView } from '../core/heightMarks'
+import { isCurve } from '../core/geometry'
+import { millimetersPer } from '../core/units'
 import { boundsOf, layerNamed, SECTION_PEN, sectionFill } from './drawing'
+import { updateSchedules } from './schedules'
 import type { Command, CommandContext } from './runner'
 import { kernel, readable } from './solids'
 
@@ -75,7 +80,43 @@ export interface DrawingRecord {
   textHeight: number
 }
 
-function place(ctx: CommandContext, drawing: Drawing2D, offset: Vector3, ground: number, name: string, layerName: string, textHeight: number, record?: DrawingRecord): number[] {
+/**
+ * The levels and the openings a view along `look` shows: openings in walls across it, past a
+ * section's cut through `origin`, or (an elevation, with no cut) on the near half of the building.
+ */
+function heightsInView(ctx: CommandContext, look: Vector3, origin?: Vector3): HeightsInView {
+  const near = origin ? null : modelBox(buildingGeometry(ctx)).getCenter(new Vector3())
+  const { doc } = ctx
+  const openings: HeightsInView['openings'] = []
+  for (const obj of doc.objects.values()) {
+    if (obj.history?.command !== 'Wall' || !doc.isVisible(obj)) continue
+    const path = doc.objects.get(obj.history.inputs[0])?.geometry
+    if (!path || !isCurve(path)) continue
+    const params = wallParams(obj.history.params)
+    for (const opening of params.openings) {
+      const box = openingBox(path, params, opening)
+      // Seen in the view: its wall runs across the view, and it is not cut away.
+      if (Math.abs(box.u.clone().normalize().dot(look)) > 0.5) continue
+      const middle = box.origin.clone().addScaledVector(box.u, 0.5).addScaledVector(box.v, 0.5)
+      if (origin && middle.clone().sub(origin).dot(look) < 0) continue
+      if (near && middle.clone().sub(near).dot(look) > 0) continue
+      openings.push({ sill: box.origin.z, head: box.origin.z + box.w.z })
+    }
+  }
+  return { levels: doc.levels.map((l) => ({ name: l.name, z: l.elevation })), openings }
+}
+
+function place(
+  ctx: CommandContext,
+  drawing: Drawing2D,
+  offset: Vector3,
+  ground: number,
+  name: string,
+  layerName: string,
+  textHeight: number,
+  record?: DrawingRecord,
+  heights?: HeightsInView,
+): number[] {
   const { doc } = ctx
   const m = new Matrix4().makeTranslation(offset.x, offset.y, offset.z)
   const lines = layerNamed(ctx, layerName, '#000000')
@@ -89,6 +130,14 @@ function place(ctx: CommandContext, drawing: Drawing2D, offset: Vector3, ground:
   const reach = (box.max.x - box.min.x) * 0.08
   const y = ground + offset.y
   ids.push(doc.add({ type: 'polyline', points: [new Vector3(box.min.x - reach + offset.x, y, 0), new Vector3(box.max.x + reach + offset.x, y, 0)], closed: false } as AnyCurve, cut?.id ?? lines.id).id)
+  if (heights) {
+    // Only the levels the drawing reaches (with a little slack), heights from the model's zero.
+    const levels = heights.levels.filter((l) => l.z >= box.min.y - textHeight && l.z <= box.max.y + textHeight)
+    const m = new Matrix4().makeTranslation(offset.x, offset.y, 0)
+    const marks = heightMarks({ ...heights, levels }, box.min.x, box.max.x, box.max.y, textHeight * 0.8, millimetersPer(doc.units) / 1000)
+    const dims = layerNamed(ctx, `${layerName} Dimensions`, '#000000')
+    for (const g of marks) ids.push(doc.add(g.type === 'annotation' ? { ...g, points: g.points.map((p) => p.clone().applyMatrix4(m)) } : transform(g as AnyCurve, m), dims.id).id)
+  }
   const titleId = doc.add(title(name, new Vector3((box.min.x + box.max.x) / 2 + offset.x, y - textHeight * 3, 0), textHeight), lines.id).id
   // No inputs: construction history never makes it again by itself; UpdateDrawings does.
   if (record) doc.setHistory(titleId, { command: 'DrawingView', inputs: [], params: { ...record } })
@@ -119,7 +168,9 @@ export async function drawElevations(ctx: CommandContext): Promise<number[]> {
   const boxes = drawings.map((d) => boundsOf([...d.drawing.visible]))
   const tallest = Math.max(...boxes.map((b) => b.max.y))
   const ground = model.min.z
-  let x = model.min.x
+  // Apart enough for the level marks and height dimensions on both sides of each.
+  const reach = marksReach(heightsInView(ctx, UP), textHeight * 0.8)
+  let x = model.min.x + reach.left
   const top = model.min.y - gap
   const made: number[] = []
   drawings.forEach((d, i) => {
@@ -127,8 +178,8 @@ export async function drawElevations(ctx: CommandContext): Promise<number[]> {
     if (b.isEmpty()) return
     const offset = new Vector3(x - b.min.x, top - tallest, 0)
     const record: DrawingRecord = { kind: 'elevation', name: d.name, look: d.look.toArray() as [number, number, number], offset: offset.toArray() as [number, number, number], textHeight }
-    made.push(...place(ctx, d.drawing, offset, ground, d.name, 'Elevations', textHeight, record))
-    x += b.max.x - b.min.x + gap
+    made.push(...place(ctx, d.drawing, offset, ground, d.name, 'Elevations', textHeight, record, heightsInView(ctx, d.look)))
+    x += b.max.x - b.min.x + gap + reach.left + reach.right
   })
   return made
 }
@@ -194,10 +245,10 @@ const section: Command = {
     }
     const letter = nextLetter(ctx)
     // Beside the model, its ground line level with the model's floor.
-    const offset = new Vector3(model.max.x + gap - box.min.x, model.min.y - box.min.y, 0)
+    const offset = new Vector3(model.max.x + gap + marksReach(heightsInView(ctx, look), textHeight * 0.8).left - box.min.x, model.min.y - box.min.y, 0)
     const name = `Section ${letter}-${letter}`
     const record: DrawingRecord = { kind: 'section', name, look: look.toArray() as [number, number, number], offset: offset.toArray() as [number, number, number], origin: origin.toArray() as [number, number, number], textHeight }
-    const made = place(ctx, drawing, offset, model.min.z, name, 'Sections', textHeight, record)
+    const made = place(ctx, drawing, offset, model.min.z, name, 'Sections', textHeight, record, heightsInView(ctx, look, origin))
     // The mark in plan: the cut line past the building, arrows to the look side and the letters.
     const marks = layerNamed(ctx, 'Section Marks', '#c0392b', 'Center')
     const z = model.min.z
@@ -225,8 +276,10 @@ const updateDrawings: Command = {
   async run(ctx) {
     const { doc, log } = ctx
     const titles = [...doc.objects.values()].filter((o) => o.history?.command === 'DrawingView')
+    const schedules = updateSchedules(ctx)
     if (titles.length === 0) {
-      log('There are no elevations or sections to update (draw them with Elevations or Section)')
+      if (schedules > 0) log(`${schedules} schedule${schedules === 1 ? '' : 's'} updated from the model`)
+      else log('There are no elevations, sections or schedules to update (draw them with Elevations, Section or Schedule)')
       return
     }
     const objects = buildingGeometry(ctx)
@@ -247,10 +300,12 @@ const updateDrawings: Command = {
       const group = t.groups?.[0]
       const old = group === undefined ? [t.id] : [...doc.objects.values()].filter((o) => o.groups?.includes(group)).map((o) => o.id)
       for (const id of old) doc.remove(id)
-      place(ctx, drawing, new Vector3(...record.offset), ground, record.name, record.kind === 'section' ? 'Sections' : 'Elevations', record.textHeight, record)
+      const seen = heightsInView(ctx, look, record.kind === 'section' && record.origin ? new Vector3(...record.origin) : undefined)
+      place(ctx, drawing, new Vector3(...record.offset), ground, record.name, record.kind === 'section' ? 'Sections' : 'Elevations', record.textHeight, record, seen)
       updated++
     }
-    log(`${updated} drawing${updated === 1 ? '' : 's'} updated from the model`)
+    const also = schedules > 0 ? ` and ${schedules} schedule${schedules === 1 ? '' : 's'}` : ''
+    log(`${updated} drawing${updated === 1 ? '' : 's'}${also} updated from the model`)
   },
 }
 
