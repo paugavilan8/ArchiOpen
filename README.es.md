@@ -292,7 +292,10 @@ Despliega cada apartado para ver los detalles.
   modelo, y `Section` dibuja una sección por una línea trazada en planta, mirando hacia el lado
   indicado, con los muros, forjados y cubiertas cortados en trazo grueso y rellenos, junto al
   modelo. Cada vista lleva línea de suelo y título y queda agrupada, lista para las láminas; la
-  sección añade además su marca en planta (línea de corte, flechas y letras A, B...).
+  sección añade además su marca en planta (línea de corte, flechas y letras A, B...). Cada vista
+  lleva también sus alturas: una cota de nivel (nombre y altura, ±0.00 en el cero) en cada nivel y
+  en la coronación a la izquierda, y a la derecha una cadena de cotas por los antepechos y dinteles
+  de los huecos que se ven y otra de nivel a nivel.
 - `Schedule` dibuja la tabla de carpintería (una fila por tipo, marcados D1, D2... y W1, W2..., con
   ancho, alto, antepecho, niveles y número de unidades) y la de superficies (cada estancia rotulada
   con su nivel y superficie útil, el total de cada nivel y el del edificio) en una capa Schedules,
@@ -523,6 +526,7 @@ flowchart LR
 - [x] Secciones y alzados del edificio, listos para las láminas
 - [x] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
 - [x] Planos que se actualizan a partir del modelo (`UpdateDrawings`)
+- [x] Cotas de nivel y de altura en alzados y secciones
 - [x] Tablas de carpintería y de superficies (`Schedule`)
 - [x] Varios niveles en el juego de planos, con una planta para cada uno
 - [ ] Instaladores firmados y actualizaciones automáticas

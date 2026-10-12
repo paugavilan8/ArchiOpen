@@ -135,14 +135,14 @@ const drawingSet: Command = {
     const project = (await input.getString(`Project name <${memory.project || 'Project'}>`))?.trim() || memory.project || 'Project'
     memory.project = project
     const box = modelBox(building as Geometry[])
-    if (drawingGroups(ctx, ['Elevations', 'Elevations Cut']).length === 0) {
+    if (drawingGroups(ctx, ['Elevations', 'Elevations Cut', 'Elevations Dimensions']).length === 0) {
       log('Drawing the elevations first…')
       await drawElevations(ctx)
     }
     if (drawingGroups(ctx, ['Schedules']).length === 0 && drawSchedules(ctx).length > 0) log('Drawing the schedules first…')
     const schedules = drawingGroups(ctx, ['Schedules'])
-    const elevations = drawingGroups(ctx, ['Elevations', 'Elevations Cut'])
-    const sections = drawingGroups(ctx, ['Sections', 'Sections Cut', 'Sections Fill'])
+    const elevations = drawingGroups(ctx, ['Elevations', 'Elevations Cut', 'Elevations Dimensions'])
+    const sections = drawingGroups(ctx, ['Sections', 'Sections Cut', 'Sections Fill', 'Sections Dimensions'])
     // A plan for each level with something in it, the building cut above its floor. Each reaches out
     // to the section marks and door swings round the building; all are at the same scale.
     const marks = drawingGroups(ctx, ['Section Marks', 'Plan Symbols'])

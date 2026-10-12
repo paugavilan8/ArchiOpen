@@ -279,7 +279,10 @@ Expand a section for details.
   under the model, and `Section` draws a section along a line drawn in plan, looking to the side
   picked, with its cut walls, slabs and roofs heavier and filled, beside the model. Each view gets
   a ground line and a title and is grouped, ready for layout details; a section also gets its
-  mark in plan (the cut line, arrows and letters A, B, ...).
+  mark in plan (the cut line, arrows and letters A, B, ...). Each view also gets its heights: a
+  level mark (name and height, ±0.00 at zero) at each level and at the top on the left, and on the
+  right a chain of dimensions through the sills and heads of the openings it shows and another
+  from level to level.
 - `Schedule` draws the doors and windows table (one row per type, marked D1, D2, ... and W1,
   W2, ..., with width, height, sill, levels and count) and the rooms table (each labelled room with
   its level and floor area, the total of each level and of the building) on a Schedules layer,
@@ -508,6 +511,7 @@ flowchart LR
 - [x] Section and elevation views of the building, ready for layouts
 - [x] A drawing set: plans, sections and elevations placed on layout sheets in one go
 - [x] Drawings that update from the model (`UpdateDrawings`)
+- [x] Level marks and height dimensions on elevations and sections
 - [x] Door and window and room area schedules (`Schedule`)
 - [x] Several levels in the drawing set, with a plan for each
 - [ ] Signed installers and automatic updates
