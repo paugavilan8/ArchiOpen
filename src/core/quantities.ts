@@ -41,7 +41,7 @@ export function planArea(points: [number, number][]): number {
 }
 
 /** Elements in the order a bill of quantities lists them (others after, by name). */
-const ORDER = ['Slab', 'Wall', 'Wall layer', 'Column', 'Stair', 'Roof', 'Railing', 'Door', 'Window', 'Floor finish', 'Skirting', 'Furniture']
+const ORDER = ['Slab', 'Wall', 'Wall layer', 'Curtain wall', 'Column', 'Stair', 'Roof', 'Railing', 'Door', 'Window', 'Floor finish', 'Skirting', 'Furniture']
 
 export interface QuantityRow extends QuantityItem {
   count: number

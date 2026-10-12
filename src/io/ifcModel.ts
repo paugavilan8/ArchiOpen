@@ -97,6 +97,20 @@ export function ifcModel(doc: Document, project: string): IfcModel {
       continue
     }
     if (command === 'OpeningSymbol') continue
+    // A curtain wall's frame and glass together, by their line.
+    if (command === 'CurtainWall') {
+      const mesh = meshOf(obj.geometry)
+      if (!mesh) continue
+      const key = `curtain:${obj.history!.inputs[0]}`
+      let entry = openings.get(key)
+      if (!entry) {
+        const element: IfcElement = { type: 'IfcCurtainWall', name: named('Curtain wall'), level: '', meshes: [] }
+        openings.set(key, (entry = { element, meshes: element.meshes }))
+        elements.push(element)
+      }
+      entry.meshes.push(mesh)
+      continue
+    }
     const known = command ? BY_COMMAND[command] : undefined
     if (obj.geometry.type === 'instance') {
       const meshes = flatten(obj.geometry).flatMap((g) => meshOf(g) ?? [])

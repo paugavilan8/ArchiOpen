@@ -4,7 +4,7 @@ import { layerBoundaries, offsetLeft, openingBox, openingPart, wallOutline, type
 import { startPoint, tessellate, type AnyCurve } from '../core/geometry'
 import { offset } from '../core/offset'
 import { railingPieces, type RailingParams } from '../core/railings'
-import { roofPlan, stairPlan, type ColumnParams, type Plane, type RoofParams, type RoofPlan, type StairParams } from '../core/buildingParts'
+import { curtainWallParts, roofPlan, stairPlan, type ColumnParams, type CurtainWallParams, type Plane, type RoofParams, type RoofPlan, type StairParams } from '../core/buildingParts'
 import { boolean, box, extrudeCurve, planarFace } from './brep'
 import { closestOn, splitShape } from './surfaceEdit'
 import { edgeToCurve } from './edges'
@@ -148,6 +148,13 @@ export function stairShape(line: AnyCurve, params: StairParams): AnyShape {
   const plan = stairPlan(line, params)
   const parts = [...plan.flights.map((f) => prism2(f.profile, f.across)), ...plan.landings.map((l) => box(l.origin, l.u, l.v, l.w))]
   return parts.length === 1 ? parts[0] : boolean('union', parts[0], parts.slice(1))
+}
+
+/** A curtain wall's frame (mullions and transoms) or its glass, as one compound of boxes. */
+export function curtainWallShape(line: AnyCurve, params: CurtainWallParams, part: 'frame' | 'glass'): AnyShape {
+  const parts = curtainWallParts(tessellate(line), params)[part]
+  if (parts.length === 0) throw new Error('The curtain wall has no glass')
+  return R.makeCompound(parts.map((b) => box(b.origin, b.u, b.v, b.w) as R.Shape3D))
 }
 
 /** A column: its outline raised by its height. */

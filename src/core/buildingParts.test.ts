@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { columnOutline, comfortable, roofPlan, roofParams, stairPlan, stairParams } from './buildingParts'
+import { columnOutline, comfortable, curtainWallParams, curtainWallParts, divisions, roofPlan, roofParams, stairPlan, stairParams } from './buildingParts'
 import type { AnyCurve } from './geometry'
 
 const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
@@ -137,5 +137,29 @@ describe('columns', () => {
     ])
     const c = columnOutline(v(0, 0, 0), 'round', 400, 0)
     expect(c.type === 'circle' && c.radius).toBe(200)
+  })
+})
+
+describe('curtain walls', () => {
+  it('divides each stretch into mullions, transoms and panes', () => {
+    const params = curtainWallParams({ height: 3000, spacing: 1500, rows: 1500, mullion: 60, depth: 150, glass: 24 })
+    expect(divisions(4000, 1500)).toEqual([0, 4000 / 3, 8000 / 3, 4000])
+    // A 4 m stretch and a 3 m one: 4 + 3 mullions, 3 + 2 cells across, 2 rows.
+    const { frame, glass } = curtainWallParts([new Vector3(0, 0, 0), new Vector3(4000, 0, 0), new Vector3(4000, 3000, 0)], params)
+    const upright = frame.filter((b) => b.w.z === 3000)
+    expect(upright).toHaveLength(7)
+    expect(glass).toHaveLength((3 + 2) * 2)
+    // Transoms at the bottom, middle and top of each cell.
+    expect(frame.length - upright.length).toBe((3 + 2) * 3)
+    // The panes fill the cells between the frame's inner edges, and lie on the line.
+    const first = glass[0]
+    expect(first.origin.x).toBeCloseTo(60, 6)
+    expect(first.u.length()).toBeCloseTo(4000 / 3 - 60 - 30, 6)
+    expect(first.origin.z).toBeCloseTo(60, 6)
+    expect(first.w.z).toBeCloseTo(1500 - 60 - 30, 6)
+    expect(first.origin.y + first.v.y / 2).toBeCloseTo(0, 6)
+    // No transoms but top and bottom: one pane a cell.
+    expect(curtainWallParts([new Vector3(0, 0, 0), new Vector3(3000, 0, 0)], { ...params, rows: 0 }).glass).toHaveLength(2)
+    expect(() => curtainWallParts([new Vector3(0, 0, 0), new Vector3(50, 0, 0)], params)).toThrow()
   })
 })

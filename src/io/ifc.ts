@@ -9,6 +9,7 @@
 
 export type IfcClass =
   | 'IfcWall'
+  | 'IfcCurtainWall'
   | 'IfcSlab'
   | 'IfcRoof'
   | 'IfcStair'

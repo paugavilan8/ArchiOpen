@@ -27,7 +27,7 @@ import { LINE_SPACING, textShape } from '../text/strokeFont'
 import { wallDimensions, type DimensionedWall } from '../core/autoDimensions'
 import { MATERIAL_PRESETS } from '../core/materials'
 import { DEFAULT_RAILING, type RailingSides, type RailingStyle } from '../core/railings'
-import { columnOutline, comfortable, DEFAULT_COLUMN, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairFootprint, stairOutlines, stairParams, stairPlan, type RoofType } from '../core/buildingParts'
+import { columnOutline, comfortable, curtainWallParts, DEFAULT_COLUMN, DEFAULT_CURTAIN_WALL, DEFAULT_ROOF, DEFAULT_STAIR, roofPlan, stairFootprint, stairOutlines, stairParams, stairPlan, type RoofType } from '../core/buildingParts'
 import { layerNamed } from './drawing'
 import { kernel, readable } from './solids'
 import type { Command, CommandContext } from './runner'
@@ -47,6 +47,7 @@ const memory = {
   hinge: 'start' as 'start' | 'end',
   roof: { ...DEFAULT_ROOF },
   wallType: 'Single',
+  curtain: { ...DEFAULT_CURTAIN_WALL },
   stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers, opening: true },
   column: { ...DEFAULT_COLUMN },
   railing: { ...DEFAULT_RAILING },
@@ -518,6 +519,66 @@ const wallType: Command = {
   },
 }
 
+/**
+ * CurtainWall: a glazed wall along a line drawn point by point, as high as the current level:
+ * mullions at most `Spacing` apart, transoms at most `Rows` apart, and glass between. Its frame and
+ * its glass are two objects made from the same line, and follow it.
+ */
+const curtainWall: Command = {
+  name: 'CurtainWall',
+  async run(ctx) {
+    const { doc, input, log } = ctx
+    const m = memory.curtain
+    const params = () => ({ ...m, height: doc.level.height })
+    const options = () => [valueOption('Spacing', m.spacing), m.rows > 0 ? valueOption('Rows', m.rows) : 'Rows=None', valueOption('Mullion', m.mullion), valueOption('Depth', m.depth)]
+    const handle = async (option: string) => {
+      if (isOption(option, 'Spacing')) m.spacing = await askPositive(ctx, 'Most distance between mullions', m.spacing)
+      else if (isOption(option, 'Rows')) {
+        const v = await input.getNumber('Most distance between transoms (0 for none)', m.rows)
+        if (typeof v === 'number' && v >= 0) m.rows = v
+      } else if (isOption(option, 'Mullion')) m.mullion = await askPositive(ctx, 'Width of mullions and transoms', m.mullion)
+      else if (isOption(option, 'Depth')) m.depth = await askPositive(ctx, 'Depth of mullions and transoms', m.depth)
+    }
+    const points: Vector3[] = []
+    for (;;) {
+      const r = await input.getPoint({
+        prompt: points.length === 0 ? 'Start of curtain wall' : points.length === 1 ? 'Next point' : 'Next point. Press Enter when done',
+        ...(points.length > 0 ? { base: points[points.length - 1] } : {}),
+        options: [...options(), ...(points.length >= 2 ? ['Undo'] : [])],
+        preview: (p) => {
+          if (points.length === 0) return []
+          try {
+            const { frame } = curtainWallParts([...points, p], params())
+            // In plan: the mullions' footprints.
+            return frame.filter((b) => b.w.z > b.u.length()).map((b) => [b.origin, b.origin.clone().add(b.u), b.origin.clone().add(b.u).add(b.v), b.origin.clone().add(b.v), b.origin])
+          } catch {
+            return [[...points, p]]
+          }
+        },
+      })
+      if (r.kind === 'point') points.push(r.point)
+      else if (r.kind === 'option' && r.option === 'Undo') points.pop()
+      else if (r.kind === 'option') await handle(r.option)
+      else break
+    }
+    if (points.length < 2) return
+    const line: AnyCurve = { type: 'polyline', points, closed: false }
+    const frames = layerNamed(ctx, 'Curtain walls', '#59626e')
+    const glazing = layerNamed(ctx, 'Curtain wall glass', '#9fc6d4')
+    if (!glazing.material) {
+      const glass = MATERIAL_PRESETS.find((x) => x.name === 'Glass')!
+      if (!doc.materials.some((x) => x.name === glass.name)) doc.setMaterials([...doc.materials, { ...glass }])
+      doc.updateLayer(glazing.id, { material: glass.name })
+    }
+    const frame = await addRecorded(ctx, line, null, { command: 'CurtainWall', params: { ...params(), part: 'frame' } }, frames.id, 'make the curtain wall')
+    const lineId = doc.objects.get(frame)!.history!.inputs[0]
+    const glass = await addRecorded(ctx, line, lineId, { command: 'CurtainWall', params: { ...params(), part: 'glass' } }, glazing.id, 'make the glass')
+    doc.select([frame, glass])
+    const { glass: panes } = curtainWallParts(points, params())
+    log(`Curtain wall made, ${formatValue(doc.level.height)} high, with ${panes.length} pane${panes.length === 1 ? '' : 's'}. Edit its line on the Construction layer to change it`)
+  },
+}
+
 /** How far a stairwell reaches past the stair all round. */
 const STAIRWELL_MARGIN = 50
 
@@ -957,4 +1018,4 @@ const skirtingLayer = (ctx: CommandContext) => {
   return layer
 }
 
-export const architectureCommands: Command[] = [wallDimensionsCommand, room, floor, skirting, level, wall, wallType, slab, roof, stair, stairOpening, column, railing, openingCommand('window'), openingCommand('door')]
+export const architectureCommands: Command[] = [wallDimensionsCommand, room, floor, skirting, level, wall, wallType, curtainWall, slab, roof, stair, stairOpening, column, railing, openingCommand('window'), openingCommand('door')]

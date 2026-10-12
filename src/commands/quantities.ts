@@ -86,6 +86,14 @@ export function quantityItems(ctx: CommandContext): QuantityItem[] {
         add('Roof', 0, outline ? planArea(planLoop(outline)) * m2 : 0)
         break
       }
+      case 'CurtainWall': {
+        // Measured once, on its glass: its length along the line and its face.
+        if (record.params?.part !== 'glass') break
+        const line = curve(record.inputs[0])
+        const run = line ? length(line) : 0
+        add('Curtain wall', run * m, run * Number(record.params?.height ?? 0) * m2)
+        break
+      }
       case 'Column':
         add('Column', Number(record.params?.height ?? 0) * m, 0)
         break
