@@ -292,7 +292,10 @@ Despliega cada apartado para ver los detalles.
   modelo, y `Section` dibuja una sección por una línea trazada en planta, mirando hacia el lado
   indicado, con los muros, forjados y cubiertas cortados en trazo grueso y rellenos, junto al
   modelo. Cada vista lleva línea de suelo y título y queda agrupada, lista para las láminas; la
-  sección añade además su marca en planta (línea de corte, flechas y letras A, B...).
+  sección añade además su marca en planta (línea de corte, flechas y letras A, B...). Cada vista
+  lleva también sus alturas: una cota de nivel (nombre y altura, ±0.00 en el cero) en cada nivel y
+  en la coronación a la izquierda, y a la derecha una cadena de cotas por los antepechos y dinteles
+  de los huecos que se ven y otra de nivel a nivel.
 - `DrawingSet` coloca de una vez los planos del edificio en láminas A3, cada una con su cajetín
   (proyecto, título, número A-01, A-02..., escala y fecha): una planta por cada nivel con algo
   construido, cortada a 1,2 sobre su suelo y sin los niveles de debajo (todas a la misma escala, con
@@ -514,6 +517,7 @@ flowchart LR
 - [x] Secciones y alzados del edificio, listos para las láminas
 - [x] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
 - [x] Planos que se actualizan a partir del modelo (`UpdateDrawings`)
+- [x] Cotas de nivel y de altura en alzados y secciones
 - [x] Varios niveles en el juego de planos, con una planta para cada uno
 - [ ] Instaladores firmados y actualizaciones automáticas
 
