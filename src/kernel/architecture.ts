@@ -82,18 +82,26 @@ function underSlopes(outline: AnyCurve, bottom: number, top: number, slopes: rea
  */
 export function roofShape(outline: AnyCurve, params: RoofParams): AnyShape {
   const plan = roofPlan(outline, params)
-  const over = underSlopes(plan.eaves, plan.bottom, plan.top, plan.slopes, plan.drop)
-  const under = underSlopes(plan.eaves, plan.bottom - 1, plan.top, plan.slopes, 0)
-  return boolean('difference', over, [under])
+  // Over (and under) the union of the parts' slopes: where parts overlap, the higher one wins.
+  const fused = (raise: number, bottom: number) => {
+    const parts = plan.pieces.map((p) => underSlopes(p.eaves, bottom, plan.top, p.slopes, raise))
+    return parts.length === 1 ? parts[0] : boolean('union', parts[0], parts.slice(1))
+  }
+  return boolean('difference', fused(plan.drop, plan.bottom), [fused(0, plan.bottom - 1)])
 }
 
 /** A wall raised to the underside of a roof over it (where that is higher than the wall). */
 function raisedTo(outline: AnyCurve[], base: number, roof: RoofPlan): AnyShape {
   const [outer, inner] = outline
-  const lifted = (c: AnyCurve) => ({ ...c, points: (c as { points: Vector3[] }).points.map((p) => new Vector3(p.x, p.y, base)) }) as AnyCurve
-  const level = (c: AnyCurve) => (c.type === 'polyline' ? lifted(c) : c)
-  let raised = underSlopes(level(outer), base, roof.top, roof.slopes, 0)
-  if (inner) raised = boolean('difference', raised, [underSlopes(level(inner), base - 1, roof.top + 1, [], 0)])
+  const lifted = (c: AnyCurve, z: number) => (c.type === 'polyline' ? ({ ...c, points: c.points.map((p) => new Vector3(p.x, p.y, z)) } as AnyCurve) : c)
+  const parts = roof.pieces.map((piece) => {
+    let raised = underSlopes(lifted(outer, base), base, roof.top, piece.slopes, 0)
+    // Only under this part of the roof (a gable part does not slope at its ends).
+    raised = boolean('intersection', raised, [underSlopes(piece.eaves, base - 1, roof.top + 1, [], 0)])
+    return raised
+  })
+  let raised = parts.length === 1 ? parts[0] : boolean('union', parts[0], parts.slice(1))
+  if (inner) raised = boolean('difference', raised, [underSlopes(lifted(inner, base - 1), base - 1, roof.top + 1, [], 0)])
   return raised
 }
 

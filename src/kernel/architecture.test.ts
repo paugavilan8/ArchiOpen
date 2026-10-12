@@ -144,4 +144,25 @@ describe('architectural solids', () => {
     // A wall with no roof over it stays as high as it is.
     expect(wallShape({ type: 'polyline', points: [v(0, 0), v(0, 6000)], closed: false }, params).boundingBox.bounds[1][2]).toBeCloseTo(3000, 6)
   })
+
+  it('makes hip and cross-gable roofs over an L plan, and raises walls under them', () => {
+    // Arms 4000 wide: along x to 10000, along y to 9000.
+    const ell: AnyCurve = { type: 'polyline', points: [v(0, 0, 3000), v(10000, 0, 3000), v(10000, 4000, 3000), v(4000, 4000, 3000), v(4000, 9000, 3000), v(0, 9000, 3000)], closed: true }
+    const area = 10000 * 4000 + 4000 * 5000
+    const tan30 = Math.tan(Math.PI / 6)
+    const drop = 200 / Math.cos(Math.PI / 6)
+    for (const type of ['hip', 'gable'] as const) {
+      const roof = roofShape(ell, roofParams({ type, pitch: 30, overhang: 0, thickness: 200 }))
+      // A layer of the same vertical thickness over the whole L: no gaps or overlaps at the valley.
+      expect(volume(roof) / (area * drop)).toBeCloseTo(1, 4)
+      expect(roof.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 2000 * tan30 + drop, 3)
+    }
+    // The gable wall closing the end of the y arm reaches its ridge; the inside corner wall does not.
+    const roofs = [{ outline: ell, params: roofParams({ type: 'gable', pitch: 30, overhang: 0, thickness: 200 }) }]
+    const params = wallParams({ thickness: 200, height: 3000 })
+    const gable = wallShape({ type: 'polyline', points: [v(0, 9000), v(4000, 9000)], closed: false }, params, [], roofs)
+    expect(gable.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 2000 * tan30, 3)
+    const inner = wallShape({ type: 'polyline', points: [v(10000, 4000), v(4000, 4000)], closed: false }, params, [], roofs)
+    expect(inner.boundingBox.bounds[1][2]).toBeCloseTo(3000 + 100 * tan30, 3)
+  })
 })
