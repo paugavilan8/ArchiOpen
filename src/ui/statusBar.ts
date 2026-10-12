@@ -30,6 +30,7 @@ export class StatusBar {
   private readonly selection = document.createElement('span')
   private readonly units = document.createElement('span')
   private readonly kernel = document.createElement('span')
+  private readonly assistant = document.createElement('span')
   private kernelTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
@@ -61,9 +62,12 @@ export class StatusBar {
     this.kernel.hidden = true
     this.kernel.textContent = 'Computing… Esc to stop'
 
+    this.assistant.className = 'status-assistant'
+    this.assistant.hidden = true
+
     const spacer = document.createElement('span')
     spacer.className = 'status-spacer'
-    bar.append(coordsGroup, layerGroup, this.selection, this.kernel, spacer, snapGroup, toggleGroup)
+    bar.append(coordsGroup, layerGroup, this.selection, this.kernel, this.assistant, spacer, snapGroup, toggleGroup)
 
     doc.on(() => this.renderDocument())
     settings.onChange(() => bar.classList.toggle('osnap-off', !settings.osnap))
@@ -78,6 +82,14 @@ export class StatusBar {
     this.kernelTimer = null
     if (busy) this.kernelTimer = setTimeout(() => (this.kernel.hidden = false), 300)
     else this.kernel.hidden = true
+  }
+
+  /** Shows whether an AI assistant is connected (or being waited for). */
+  setAssistant(state: 'off' | 'waiting' | 'connected'): void {
+    this.assistant.hidden = state === 'off'
+    this.assistant.textContent = state === 'connected' ? 'AI assistant connected' : 'Waiting for AI assistant'
+    this.assistant.classList.toggle('connected', state === 'connected')
+    this.assistant.dataset.tip = 'McpConnect to change'
   }
 
   setCoords(x: number, y: number, z: number): void {

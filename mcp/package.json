@@ -1,0 +1,21 @@
+{
+  "name": "archiopen-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets Claude (or another MCP client) model in a running ArchiOpen",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "archiopen-mcp": "server.mjs"
+  },
+  "files": [
+    "server.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.1",
+    "ws": "8.22.0"
+  }
+}
