@@ -84,8 +84,8 @@ Releases page (no GitHub account needed):
 | macOS | `ArchiOpen_x.y.z_aarch64.dmg` |
 | Linux | `ArchiOpen_x.y.z_amd64.AppImage` (or the `.deb`) |
 
-Releases are built by GitHub Actions when a version tag is pushed
-(`git tag v0.2.0 && git push origin v0.2.0`). Builds of the latest code can also be run by hand
+Releases are built by GitHub Actions when a version tag starting with `v` is pushed
+(`git tag v0.2.0 && git push origin v0.2.0`), or created from the Releases page. Builds of the latest code can also be run by hand
 from the [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
 workflow (**Run workflow**); they appear as artifacts of the run, which need a GitHub account.
 
@@ -250,6 +250,10 @@ Expand a section for details.
 - Walls and slabs keep their line (on the *Construction* layer): moving or editing it makes them
   again. Thickness, height, justification and openings (and the parameters of roofs, stairs and
   columns) can be changed in the Properties panel, as one undo step. Moving the solid itself turns it into a plain solid, as with construction history.
+- `WallDimensions` dimensions walls in plan, as on an architectural drawing: along the outside
+  face of each straight stretch of the outside walls, a chain from corner to corner through the
+  edges of the openings and, further out, the overall length (inside walls are left alone). The
+  dimensions use architectural ticks, go on a *Dimensions* layer and are grouped.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -452,7 +456,8 @@ flowchart LR
 - [x] Stairs with landings (L and U)
 - [x] Roofs over L, T and U plans
 - [x] Railings for stairs and slab edges
-- [ ] Automatic plan dimensions for walls and openings
+- [x] Automatic plan dimensions for walls and openings
+- [ ] Room labels with areas, and door swings in plan
 - [ ] Signed installers and automatic updates
 
 ## FAQ
