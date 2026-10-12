@@ -225,9 +225,11 @@ Expand a section for details.
   thickness and justification. Joins follow when either wall moves or changes, and undo with it.
 - `Slab` makes a floor or roof slab from corner points or closed curves, with its top on the
   outline and the `Thickness` below it.
-- `Roof` makes a pitched roof over a convex outline drawn at the top of the current level's walls
-  (or over closed curves): `Type` `Hip` (every side slopes), `Gable` (the long sides slope) or
-  `Shed` (one slope), with `Pitch`, `Overhang` and `Thickness`. The roof rests on the outline (its
+- `Roof` makes a pitched roof over an outline drawn at the top of the current level's walls (or
+  over closed curves). `Type`: `Hip` (every side slopes), `Gable` (the long sides slope, the ends
+  are gables) or `Shed` (one slope); options `Pitch`, `Overhang` and `Thickness`. Convex outlines
+  take any type; square-cornered plans such as L, T and U shapes take hip roofs, with valleys at
+  their inside corners, and gable roofs, with crossing ridges. The roof rests on the outline (its
   underside is at the eaves height there), and walls under it whose tops are at that height go up
   to its underside, closing gables and following the roof as it changes.
 - `Stair` makes a stair from its bottom step to its top one, climbing the current level's height.
@@ -443,7 +445,8 @@ flowchart LR
 - [x] Roofs (hip, gable, shed), straight stairs and columns
 - [x] Walls up to the roof
 - [x] Stairs with landings (L and U)
-- [ ] Roofs over L-shaped plans
+- [x] Roofs over L, T and U plans
+- [ ] Railings for stairs and slab edges
 - [ ] Signed installers and automatic updates
 
 ## FAQ

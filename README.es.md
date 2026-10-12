@@ -230,12 +230,15 @@ Despliega cada apartado para ver los detalles.
   cualquiera de los dos muros, y se deshacen con ellos.
 - `Slab` crea un forjado o una cubierta plana a partir de esquinas o de curvas cerradas, con la cara
   superior en el contorno y el espesor (`Thickness`) por debajo.
-- `Roof` crea una cubierta inclinada sobre un contorno convexo, dibujado a la altura de coronación
-  de los muros del nivel actual (o sobre curvas cerradas): `Type` `Hip` (a cuatro aguas), `Gable`
-  (a dos aguas, inclinados los lados largos) o `Shed` (a un agua), con `Pitch` (pendiente),
-  `Overhang` (vuelo del alero) y `Thickness` (espesor). La cubierta apoya sobre el contorno (su cara
-  inferior queda ahí a la altura del alero), y los muros que quedan debajo con la coronación a esa
-  altura suben hasta su cara inferior, cerrando los hastiales y siguiendo los cambios de la cubierta.
+- `Roof` crea una cubierta inclinada sobre un contorno dibujado a la altura de coronación de los
+  muros del nivel actual (o sobre curvas cerradas). `Type`: `Hip` (a cuatro aguas), `Gable` (a dos
+  aguas, inclinados los lados largos, con hastiales en los extremos) o `Shed` (a un agua); opciones
+  `Pitch` (pendiente), `Overhang` (vuelo del alero) y `Thickness` (espesor). Los contornos convexos
+  admiten cualquier tipo; las plantas de esquinas en ángulo recto, como en L, T o U, admiten
+  cubiertas a cuatro aguas, con limahoyas en las esquinas interiores, y a dos aguas, con cumbreras
+  que se cruzan. La cubierta apoya sobre el contorno (su cara inferior queda ahí a la altura del
+  alero), y los muros que quedan debajo con la coronación a esa altura suben hasta su cara inferior,
+  cerrando los hastiales y siguiendo los cambios de la cubierta.
 - `Stair` crea una escalera desde el primer peldaño hasta el último, salvando la altura del nivel
   actual. Una línea recta da un tramo; cada quiebro de la línea es un rellano cuadrado entre tramos
   (una escalera en L tiene uno; una en U, dos juntos, dibujada como una línea que sube, cruza y
@@ -453,7 +456,8 @@ flowchart LR
 - [x] Cubiertas (a cuatro, dos y un agua), escaleras rectas y pilares
 - [x] Muros hasta la cubierta
 - [x] Escaleras con rellano (en L y en U)
-- [ ] Cubiertas sobre plantas en L
+- [x] Cubiertas sobre plantas en L, T y U
+- [ ] Barandillas en escaleras y bordes de forjado
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

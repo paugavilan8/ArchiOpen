@@ -46,11 +46,22 @@ export interface Plane {
   normal: Vector3
 }
 
-export interface RoofPlan {
-  /** The roof's outline at the eaves (the outline grown by the overhang), as a closed polyline. */
+/** A convex part of a roof: its eaves outline and the planes of its slopes. */
+export interface RoofPiece {
+  /** The part's outline at the eaves (grown by the overhang), as a closed polyline. */
   eaves: PolylineGeometry
-  /** The planes of the slopes: the roof is under all of them. */
+  /** The planes of the slopes: this part of the roof is under all of them. */
   slopes: Plane[]
+}
+
+export interface RoofPlan {
+  /**
+   * Convex parts covering the outline (one for a convex outline; the largest rectangles inside it
+   * for L, T, U and other square-cornered plans). The roof is the union of the parts' roofs: where
+   * they overlap the higher one wins, which makes the valleys at inside corners and the crossing
+   * ridges of cross gables.
+   */
+  pieces: RoofPiece[]
   /** Heights the roof stays between, with room to spare. */
   bottom: number
   top: number
@@ -79,10 +90,79 @@ function crossing(p: Vector3, d: Vector3, q: Vector3, e: Vector3): Vector3 | nul
   return p.clone().addScaledVector(d, t)
 }
 
+const isConvex = (pts: Vector3[]) =>
+  pts.every((a, i) => {
+    const b = pts[(i + 1) % pts.length]
+    const c = pts[(i + 2) % pts.length]
+    return b.clone().sub(a).cross(c.clone().sub(b)).z >= -1e-9 * a.distanceTo(b) * b.distanceTo(c)
+  })
+
+/** The roof over a convex outline (counterclockwise, flat): its slopes rise from its sides. */
+function convexPiece(pts: Vector3[], base: number, params: RoofParams): RoofPiece {
+  const n = pts.length
+  const edges = pts.map((a, i) => {
+    const b = pts[(i + 1) % n]
+    const dir = b.clone().sub(a).normalize()
+    return { a, b, dir, inward: UP.clone().cross(dir).normalize(), length: a.distanceTo(b) }
+  })
+  const longest = edges.reduce((x, y) => (y.length > x.length + 1e-9 ? y : x))
+  const sloped = edges.filter((e) => (params.type === 'hip' ? true : params.type === 'gable' ? Math.abs(e.dir.dot(longest.dir)) > 0.99 : e === longest))
+  const angle = (params.pitch * Math.PI) / 180
+  const slopes: Plane[] = sloped.map((e) => ({
+    origin: new Vector3(e.a.x, e.a.y, base),
+    normal: UP.clone().multiplyScalar(Math.cos(angle)).addScaledVector(e.inward, -Math.sin(angle)).normalize(),
+  }))
+  // The eaves: each side moved out by the overhang, corners where they meet.
+  const moved = edges.map((e) => ({ p: e.a.clone().addScaledVector(e.inward, -params.overhang), d: e.dir }))
+  const eaves = moved.map((m, i) => {
+    const prev = moved[(i - 1 + n) % n]
+    const hit = crossing(prev.p, prev.d, m.p, m.d) ?? m.p
+    return new Vector3(hit.x, hit.y, base)
+  })
+  return { eaves: { type: 'polyline', points: eaves, closed: true }, slopes }
+}
+
+/** Is a flat point inside a polygon? */
+function inside(p: Vector3, poly: Vector3[]): boolean {
+  let result = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]
+    const b = poly[j]
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) result = !result
+  }
+  return result
+}
+
 /**
- * The planes and extents of a pitched roof over a closed convex outline: each sloping side rises
- * from its edge of the outline at the pitch; the roof reaches out past the outline by the overhang
- * (so its eaves sit a little lower).
+ * The largest rectangles inside a polygon whose sides all run along two square directions (u and
+ * the one left of it): every rectangle on the grid of its corners' coordinates that is inside it
+ * and not inside a bigger one. They cover the polygon, overlapping.
+ */
+export function maximalRectangles(pts: Vector3[], u: Vector3): Vector3[][] {
+  const v = UP.clone().cross(u).normalize()
+  const local = pts.map((p) => new Vector3(p.dot(u), p.dot(v), 0))
+  const xs = [...new Set(local.map((p) => +p.x.toFixed(9)))].sort((a, b) => a - b)
+  const ys = [...new Set(local.map((p) => +p.y.toFixed(9)))].sort((a, b) => a - b)
+  const cell = xs.slice(1).map((_, i) => ys.slice(1).map((_, j) => inside(new Vector3((xs[i] + xs[i + 1]) / 2, (ys[j] + ys[j + 1]) / 2, 0), local)))
+  const full = (i0: number, i1: number, j0: number, j1: number) => {
+    for (let i = i0; i < i1; i++) for (let j = j0; j < j1; j++) if (!cell[i][j]) return false
+    return true
+  }
+  const rects: [number, number, number, number][] = []
+  for (let i0 = 0; i0 < xs.length - 1; i0++)
+    for (let i1 = i0 + 1; i1 < xs.length; i1++)
+      for (let j0 = 0; j0 < ys.length - 1; j0++)
+        for (let j1 = j0 + 1; j1 < ys.length; j1++) if (full(i0, i1, j0, j1)) rects.push([i0, i1, j0, j1])
+  const maximal = rects.filter(([a, b, c, d]) => !rects.some(([e, f, g, h]) => (e !== a || f !== b || g !== c || h !== d) && e <= a && f >= b && g <= c && h >= d))
+  const back = (x: number, y: number) => u.clone().multiplyScalar(x).addScaledVector(v, y)
+  return maximal.map(([i0, i1, j0, j1]) => [back(xs[i0], ys[j0]), back(xs[i1], ys[j0]), back(xs[i1], ys[j1]), back(xs[i0], ys[j1])])
+}
+
+/**
+ * The parts and extents of a pitched roof over a closed outline: each sloping side rises from its
+ * side of the outline at the pitch; the roof reaches out past the outline by the overhang (so its
+ * eaves sit a little lower). Convex outlines take any roof; square-cornered plans (L, T, U, ...)
+ * take hip and gable roofs, made of the roofs over their largest rectangles.
  */
 export function roofPlan(outline: AnyCurve, params: RoofParams): RoofPlan {
   if (outline.type !== 'polyline' || !outline.closed || outline.points.length < 3) throw new Error('A roof needs a closed outline of straight sides')
@@ -90,44 +170,27 @@ export function roofPlan(outline: AnyCurve, params: RoofParams): RoofPlan {
   if (!(params.thickness > 0) || !(params.overhang >= 0)) throw new Error('The roof needs a thickness, and an overhang of 0 or more')
   const base = outline.points[0].z
   const pts = counterclockwise(outline.points.map(flat)).filter((p, i, all) => p.distanceTo(all[(i + 1) % all.length]) > 1e-9)
-  const n = pts.length
-  for (let i = 0; i < n; i++) {
-    const a = pts[i]
-    const b = pts[(i + 1) % n]
-    const c = pts[(i + 2) % n]
-    const turn = b.clone().sub(a).cross(c.clone().sub(b)).z
-    if (turn < -1e-9 * a.distanceTo(b) * b.distanceTo(c)) throw new Error('Pitched roofs need a convex outline (no inside corners)')
+  let pieces: RoofPiece[]
+  if (isConvex(pts)) pieces = [convexPiece(pts, base, params)]
+  else {
+    if (params.type === 'shed') throw new Error('Shed roofs need a convex outline (no inside corners)')
+    const u = pts[1].clone().sub(pts[0]).normalize()
+    const square = pts.every((a, i) => {
+      const d = pts[(i + 1) % pts.length].clone().sub(a).normalize()
+      return Math.abs(d.dot(u)) < 1e-6 || Math.abs(Math.abs(d.dot(u)) - 1) < 1e-6
+    })
+    if (!square) throw new Error('Roofs over plans with inside corners need square corners (L, T, U shapes); other shapes need a convex outline')
+    pieces = maximalRectangles(pts, u).map((r) => convexPiece(counterclockwise(r), base, params))
   }
-  const edges = pts.map((a, i) => {
-    const b = pts[(i + 1) % n]
-    const dir = b.clone().sub(a).normalize()
-    return { a, b, dir, inward: UP.clone().cross(dir).normalize(), length: a.distanceTo(b) }
-  })
-  const longest = edges.reduce((x, y) => (y.length > x.length ? y : x))
-  const sloped = edges.filter((e) =>
-    params.type === 'hip' ? true : params.type === 'gable' ? Math.abs(e.dir.dot(longest.dir)) > 0.99 : e === longest,
-  )
-  const tan = Math.tan((params.pitch * Math.PI) / 180)
-  const cos = Math.cos((params.pitch * Math.PI) / 180)
-  const slopes: Plane[] = sloped.map((e) => ({
-    origin: new Vector3(e.a.x, e.a.y, base),
-    normal: UP.clone().multiplyScalar(cos).addScaledVector(e.inward, -Math.sin((params.pitch * Math.PI) / 180)).normalize(),
-  }))
-  // The eaves: each side moved out by the overhang, corners where they meet.
-  const moved = edges.map((e) => ({ p: e.a.clone().addScaledVector(e.inward, -params.overhang), d: e.dir }))
-  const eavesPoints = moved.map((m, i) => {
-    const prev = moved[(i - 1 + n) % n]
-    const hit = crossing(prev.p, prev.d, m.p, m.d) ?? m.p
-    return new Vector3(hit.x, hit.y, base)
-  })
   let size = 0
-  for (const p of eavesPoints) for (const q of eavesPoints) size = Math.max(size, p.distanceTo(q))
-  const drop = params.thickness / cos
+  const all = pieces.flatMap((p) => p.eaves.points)
+  for (const p of all) for (const q of all) size = Math.max(size, p.distanceTo(q))
+  const angle = (params.pitch * Math.PI) / 180
+  const drop = params.thickness / Math.cos(angle)
   return {
-    eaves: { type: 'polyline', points: eavesPoints, closed: true },
-    slopes,
-    bottom: base - params.overhang * tan - params.thickness - 1,
-    top: base + size * tan + drop + 1,
+    pieces,
+    bottom: base - params.overhang * Math.tan(angle) - params.thickness - 1,
+    top: base + size * Math.tan(angle) + drop + 1,
     drop,
   }
 }

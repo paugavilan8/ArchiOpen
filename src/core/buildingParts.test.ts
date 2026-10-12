@@ -9,30 +9,54 @@ const rect = (w: number, d: number, z = 0): AnyCurve => ({ type: 'polyline', poi
 describe('roof plans', () => {
   it('slopes every side of a hip roof, and reaches out by the overhang', () => {
     const plan = roofPlan(rect(10000, 8000, 3000), roofParams({ type: 'hip', pitch: 30, overhang: 500 }))
-    expect(plan.slopes).toHaveLength(4)
-    const xs = plan.eaves.points.map((p) => p.x)
+    expect(plan.pieces).toHaveLength(1)
+    expect(plan.pieces[0].slopes).toHaveLength(4)
+    const xs = plan.pieces[0].eaves.points.map((p) => p.x)
     expect(Math.min(...xs)).toBeCloseTo(-500, 9)
     expect(Math.max(...xs)).toBeCloseTo(10500, 9)
     // Each slope rises inward at the pitch from its side, at the outline's height.
-    for (const s of plan.slopes) {
+    for (const s of plan.pieces[0].slopes) {
       expect(s.origin.z).toBe(3000)
       expect(Math.acos(s.normal.z) * (180 / Math.PI)).toBeCloseTo(30, 9)
     }
   })
 
   it('slopes only the long sides of a gable roof, and one side of a shed roof', () => {
-    expect(roofPlan(rect(10000, 6000), roofParams({ type: 'gable' })).slopes).toHaveLength(2)
-    const shed = roofPlan(rect(10000, 6000), roofParams({ type: 'shed' })).slopes
+    expect(roofPlan(rect(10000, 6000), roofParams({ type: 'gable' })).pieces[0].slopes).toHaveLength(2)
+    const shed = roofPlan(rect(10000, 6000), roofParams({ type: 'shed' })).pieces[0].slopes
     expect(shed).toHaveLength(1)
     // Rising from the long side at y = 0 towards y = 6000 (either way round the outline is drawn).
     expect(shed[0].normal.y).toBeLessThan(0)
     const reversed: AnyCurve = { type: 'polyline', points: [v(0, 6000), v(10000, 6000), v(10000, 0), v(0, 0)], closed: true }
-    expect(roofPlan(reversed, roofParams({ type: 'gable' })).slopes).toHaveLength(2)
+    expect(roofPlan(reversed, roofParams({ type: 'gable' })).pieces[0].slopes).toHaveLength(2)
+  })
+
+  it('covers L, T and U plans with their largest rectangles', () => {
+    const ell: AnyCurve = { type: 'polyline', points: [v(0, 0), v(10000, 0), v(10000, 4000), v(4000, 4000), v(4000, 9000), v(0, 9000)], closed: true }
+    const pieces = roofPlan(ell, roofParams({ type: 'hip', overhang: 0 })).pieces
+    expect(pieces).toHaveLength(2)
+    const spans = pieces.map((p) => {
+      const xs = p.eaves.points.map((q) => q.x)
+      const ys = p.eaves.points.map((q) => q.y)
+      return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)].map(Math.round)
+    })
+    expect(spans).toContainEqual([0, 10000, 0, 4000])
+    expect(spans).toContainEqual([0, 4000, 0, 9000])
+    const tee: AnyCurve = { type: 'polyline', points: [v(0, 0), v(9000, 0), v(9000, 3000), v(6000, 3000), v(6000, 8000), v(3000, 8000), v(3000, 3000), v(0, 3000)], closed: true }
+    expect(roofPlan(tee, roofParams({ type: 'gable' })).pieces).toHaveLength(2)
+    const you: AnyCurve = { type: 'polyline', points: [v(0, 0), v(9000, 0), v(9000, 8000), v(6000, 8000), v(6000, 3000), v(3000, 3000), v(3000, 8000), v(0, 8000)], closed: true }
+    expect(roofPlan(you, roofParams({ type: 'hip' })).pieces).toHaveLength(3)
+    // Rotated plans work the same.
+    const turn = (p: Vector3) => new Vector3(p.x * Math.cos(0.5) - p.y * Math.sin(0.5), p.x * Math.sin(0.5) + p.y * Math.cos(0.5), 0)
+    const rotated: AnyCurve = { ...ell, points: (ell as { points: Vector3[] }).points.map(turn) } as AnyCurve
+    expect(roofPlan(rotated, roofParams({ type: 'hip' })).pieces).toHaveLength(2)
   })
 
   it('refuses outlines it cannot roof', () => {
     const ell: AnyCurve = { type: 'polyline', points: [v(0, 0), v(6000, 0), v(6000, 3000), v(3000, 3000), v(3000, 6000), v(0, 6000)], closed: true }
-    expect(() => roofPlan(ell, roofParams({}))).toThrow(/convex/)
+    expect(() => roofPlan(ell, roofParams({ type: 'shed' }))).toThrow(/convex/)
+    const arrow: AnyCurve = { type: 'polyline', points: [v(0, 0), v(6000, 0), v(3000, 1000), v(3000, 6000)], closed: true }
+    expect(() => roofPlan(arrow, roofParams({}))).toThrow(/square corners/)
     expect(() => roofPlan({ type: 'polyline', points: [v(0, 0), v(1, 0)], closed: false }, roofParams({}))).toThrow()
   })
 })
