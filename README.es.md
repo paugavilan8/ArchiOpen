@@ -13,7 +13,7 @@ DXF, en una aplicación de escritorio ligera que se maneja con la línea de coma
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Instaladores](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=instaladores)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Versión](https://img.shields.io/badge/versi%C3%B3n-0.1.0-2f81f7?style=flat-square)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-0.2.0-2f81f7?style=flat-square)
 ![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-f4c430?style=flat-square)](LICENSE)
 
@@ -75,16 +75,19 @@ superficies, no como mallas.
 > El instalador no necesita nada más: la interfaz, el núcleo geométrico y el lector de archivos de
 > Rhino van dentro del ejecutable. Ver [¿Qué incluye el instalador?](#instalador)
 
-Los instaladores se generan en GitHub Actions:
+**[Descarga la última versión](https://github.com/paugavilan8/ArchiOpen/releases/latest)** desde la
+página de *Releases* (no hace falta cuenta de GitHub):
 
-1. Abre el flujo [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-   en la pestaña **Actions**.
-2. Pulsa **Run workflow**, o abre la última ejecución terminada.
-3. Descarga el artefacto de tu sistema, por ejemplo `ArchiOpen-Windows`, que contiene los
-   instaladores `.msi` y `.exe`.
+| Sistema | Archivo |
+| --- | --- |
+| Windows | `ArchiOpen_x.y.z_x64-setup.exe` (o el `.msi`) |
+| macOS | `ArchiOpen_x.y.z_aarch64.dmg` |
+| Linux | `ArchiOpen_x.y.z_amd64.AppImage` (o el `.deb`) |
 
-Al publicar una etiqueta de versión (`git tag v0.1.0 && git push --tags`) los instaladores también
-se adjuntan a un borrador de *release*.
+Las versiones se generan en GitHub Actions al publicar una etiqueta de versión
+(`git tag v0.2.0 && git push origin v0.2.0`). También se puede compilar el código más reciente a mano
+desde el flujo [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
+(**Run workflow**); el resultado aparece como artefacto de la ejecución, que sí requiere cuenta.
 
 ## Funciones
 
@@ -221,6 +224,10 @@ Despliega cada apartado para ver los detalles.
   dibujadas (`Curve`), con `Thickness` (espesor) y `Justification` (`Center`, `Left` o `Right`
   respecto a la línea). Las esquinas se ingletean y las líneas curvas dan muros curvos. Los muros
   toman la altura del nivel actual.
+- Los muros se unen solos: dos muros cuyos extremos coinciden se ingletean en una esquina limpia
+  (L), y un muro que acaba sobre otro (en su línea o en su cara) se detiene en esa cara (T), sean
+  cuales sean sus espesores y justificaciones. Las uniones se actualizan al mover o cambiar
+  cualquiera de los dos muros, y se deshacen con ellos.
 - `Slab` crea un forjado o una cubierta plana a partir de esquinas o de curvas cerradas, con la cara
   superior en el contorno y el espesor (`Thickness`) por debajo.
 - `Window` y `Door` abren huecos donde se hace clic en un muro, con `Width` (ancho), `Height`
@@ -430,7 +437,8 @@ flowchart LR
 - [ ] Modelado SubD
 - [x] Elementos constructivos: muros, forjados, ventanas, puertas y niveles
 - [x] Carpinterías de ventanas y puertas: marcos, vidrios y hojas
-- [ ] Más elementos: uniones de muros, cubiertas, escaleras y pilares
+- [x] Uniones de muros (L y T)
+- [ ] Más elementos: cubiertas, escaleras y pilares
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

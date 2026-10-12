@@ -172,4 +172,43 @@ describe('construction history', () => {
     expect(parts()).toHaveLength(0)
     expect([...doc.objects.values()].filter((o) => o.geometry.type === 'brep')).toHaveLength(4)
   })
+
+  it('joins walls that meet, and keeps them joined as they change', async () => {
+    const doc = new Document()
+    const history = new HistoryManager(doc, new Settings(), vi.fn())
+    const line = (a: Vector3, b: Vector3) => ({ type: 'polyline' as const, points: [a, b], closed: false })
+    const makeWall = async (a: Vector3, b: Vector3) => {
+      doc.begin()
+      const path = doc.add(line(a, b)).id
+      const wall = doc.add(line(v(0, 0), v(1, 0))).id
+      await history.remake(wall, { command: 'Wall', inputs: [path], params: { thickness: 200, height: 3000 } })
+      doc.commit()
+      await history.settled
+      return { path, wall }
+    }
+    const bounds = (id: number) => shapeBounds(shapeOf(doc.objects.get(id)!.geometry as BrepGeometry))
+    const a = await makeWall(v(0, 0), v(4000, 0))
+    expect(bounds(a.wall).max.x).toBeCloseTo(4000, 6)
+    // A second wall from a's end: both are mitred, so a now reaches the corner's far side.
+    const b = await makeWall(v(4000, 0), v(4000, 3000))
+    expect(bounds(a.wall).max.x).toBeCloseTo(4100, 6)
+    expect(bounds(b.wall).min.y).toBeCloseTo(-100, 6)
+    expect((doc.objects.get(a.wall)!.history!.params!.joins as unknown[]).length).toBe(1)
+    // b made thicker: a's mitre follows.
+    await history.remakeStep(b.wall, { ...doc.objects.get(b.wall)!.history!, params: { ...doc.objects.get(b.wall)!.history!.params, thickness: 400 } })
+    await history.settled
+    expect(bounds(a.wall).max.x).toBeCloseTo(4200, 6)
+    // A wall meeting a's side stops at its face.
+    const c = await makeWall(v(2000, 0), v(2000, -2000))
+    expect(bounds(c.wall).max.y).toBeCloseTo(-100, 6)
+    // b's line moved away: a's end is square again.
+    doc.setGeometry(b.path, line(v(6000, 0), v(6000, 3000)))
+    await history.settled
+    expect(bounds(a.wall).max.x).toBeCloseTo(4000, 6)
+    expect(doc.objects.get(a.wall)!.history!.params!.joins).toBeUndefined()
+    // c deleted: a keeps its history.
+    doc.remove(c.wall)
+    await history.settled
+    expect(doc.objects.get(a.wall)!.history).toBeDefined()
+  })
 })

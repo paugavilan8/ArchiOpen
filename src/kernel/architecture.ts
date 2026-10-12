@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import * as R from 'replicad'
-import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type SlabParams, type WallParams } from '../core/architecture'
+import { openingBox, openingPart, wallOutline, type Opening, type OpeningPart, type ResolvedJoin, type SlabParams, type WallParams } from '../core/architecture'
 import type { AnyCurve } from '../core/geometry'
 import { boolean, box, extrudeCurve } from './brep'
 
@@ -16,9 +16,9 @@ function prism(outline: AnyCurve, height: number): AnyShape {
 }
 
 /** A wall: its outline raised by its height, with its openings cut out. */
-export function wallShape(path: AnyCurve, params: WallParams): AnyShape {
+export function wallShape(path: AnyCurve, params: WallParams, joins: ResolvedJoin[] = []): AnyShape {
   if (!(params.height > 0)) throw new Error('The wall height must be positive')
-  const [outer, inner] = wallOutline(path, params)
+  const [outer, inner] = wallOutline(path, params, joins)
   let wall = prism(outer, params.height)
   // A closed path makes a ring: the inside taken out.
   if (inner) wall = boolean('difference', wall, [prism(inner, params.height)])

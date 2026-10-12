@@ -3,7 +3,7 @@ import type { AnyShape } from 'replicad'
 import type { AnyCurve } from '../core/geometry'
 import { edgeSurface, networkSurface, patch, pipe, sweep2 } from './advancedSurfaces'
 import { extrudeCurve, loftCurves, planarFace, revolveCurve, sweep } from './brep'
-import { slabParams, wallParams, type Opening, type OpeningPart } from '../core/architecture'
+import { slabParams, wallParams, type Opening, type OpeningPart, type SavedJoin } from '../core/architecture'
 import { openingPartShape, slabShape, wallShape } from './architecture'
 
 /**
@@ -30,7 +30,13 @@ export const REBUILDERS: Record<string, (curves: AnyCurve[], p: Params) => AnySh
   EdgeSrf: (curves) => edgeSurface(curves),
   NetworkSrf: (curves) => networkSurface(curves),
   Patch: (curves) => patch(curves),
-  Wall: ([path], p) => wallShape(path, wallParams(p)),
+  Wall: ([path, ...others], p) => {
+    const joins = Array.isArray(p.joins) ? (p.joins as SavedJoin[]) : []
+    const resolved = joins
+      .filter((j) => others[j.input - 1])
+      .map((j) => ({ end: j.end, kind: j.kind, other: { path: others[j.input - 1], params: { thickness: j.thickness, justification: j.justification } } }))
+    return wallShape(path, wallParams(p), resolved)
+  },
   Slab: ([outline], p) => slabShape(outline, slabParams(p)),
   OpeningPart: ([path], p) => openingPartShape(path, wallParams(p), p.opening as Opening, p.part as OpeningPart),
 }
