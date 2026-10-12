@@ -487,7 +487,12 @@ Despliega cada apartado para ver los detalles.
   unidades del modelo.
 - **DXF** (ASCII, de R12 a 2018): capas con color, tipo de línea y grosor; líneas, polilíneas con
   arcos, círculos, arcos, elipses, splines, caras 3D, textos, cotas (que siguen midiendo),
-  directrices, sombreados y bloques (que siguen siendo bloques). No se leen DXF binarios ni DWG.
+  directrices, sombreados y bloques (que siguen siendo bloques). No se leen DXF binarios.
+- **DWG** (aplicación de escritorio): `Open` e `Import` leen planos DWG mediante el
+  [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter), gratuito y que se
+  instala aparte: ArchiOpen lo encuentra, convierte el plano a DXF por detrás y lo lee. DWG es un
+  formato cerrado; así ArchiOpen queda libre de sus licencias. Si el conversor está instalado en
+  otro sitio, se indica su ruta en la variable `ARCHIOPEN_ODA_CONVERTER`.
 - Importación y exportación de **STL** y **OBJ**.
 - Exportación a **glTF** (`.glb`) con `ExportGLTF`: superficies, sólidos, mallas y bloques con sus
   materiales de render, en metros y con Y hacia arriba, para visores web, Blender, Unreal, Unity,
@@ -611,6 +616,7 @@ flowchart LR
 | `.3dm` de Rhino | Sí | Sí | Superficies y sólidos exactos en los dos sentidos, bloques como bloques, textos al abrir; SubD y cotas aún no se leen |
 | STEP `.step` `.stp` | Sí | Sí | AP242, B-rep exacto, con capas, colores y unidades |
 | DXF | Sí | Sí | ASCII R12–2018: capas, bloques, cotas, textos, sombreados |
+| DWG | Sí | — | Aplicación de escritorio, mediante el ODA File Converter gratuito |
 | STL / OBJ | Sí | Sí | Mallas; las superficies se exportan trianguladas |
 | glTF `.glb` | — | Sí | Triángulos con materiales de render, en metros |
 | PDF | — | Sí | Vectorial, con grosores y tipos de línea; láminas en varias páginas |

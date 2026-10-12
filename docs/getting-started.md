@@ -86,7 +86,8 @@ to `Rendered`. `Render` saves an image of up to 4K.
 ## 9. Files
 
 - `Save` writes the native `.archi` file. `Autosave` keeps copies in a folder.
-- `Open` and `Import` read `.3dm` (Rhino), `.ifc`, `.dxf`, `.step`, `.stl` and `.obj`.
+- `Open` and `Import` read `.3dm` (Rhino), `.ifc`, `.dxf`, `.step`, `.stl` and `.obj`; `.dwg` too in the
+  desktop app, with the free ODA File Converter installed.
 - `Export` writes `.3dm` with exact surfaces; also `ExportIFC`, `ExportSTEP`, `ExportGLTF`,
   `ExportSTL`, `ExportOBJ`.
 

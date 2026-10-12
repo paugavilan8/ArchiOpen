@@ -5,6 +5,9 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **DWG** in the desktop app: `Open` and `Import` read DWG drawings through the free ODA File
+  Converter (installed apart), which turns them into DXF in the background.
+
 - `CageEdit`: objects held in a cage of points, reshaped smoothly as the points move.
 
 - **Linked files** (`Link`, `UpdateLinks`, `Unlink`): other models (.archi or .3dm) shown in this one

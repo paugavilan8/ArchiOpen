@@ -152,7 +152,7 @@ const TOOLS = [
   },
   {
     name: 'open_model',
-    description: 'Opens a file from this computer in place of the open model: .archi, .3dm, .ifc, .dxf, .stl or .obj (absolute path). Refused while the open model has unsaved changes unless discard_changes is true.',
+    description: 'Opens a file from this computer in place of the open model: .archi, .3dm, .ifc, .dxf, .dwg (desktop app with the ODA File Converter), .stl or .obj (absolute path). Refused while the open model has unsaved changes unless discard_changes is true.',
     inputSchema: {
       type: 'object',
       properties: { path: { type: 'string' }, discard_changes: { type: 'boolean' } },

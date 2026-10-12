@@ -15,7 +15,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
       'File',
       [
         item('New', 'New', `${mod}N`),
-        item('Open (.archi, .3dm, .ifc, .dxf, .stl, .obj)…', 'Open', `${mod}O`),
+        item('Open (.archi, .3dm, .ifc, .dxf, .dwg, .stl, .obj)…', 'Open', `${mod}O`),
         'separator',
         item('Save', 'Save', `${mod}S`),
         item('Save As…', 'SaveAs', `${mod}Shift+S`),
@@ -24,7 +24,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Parametric Script…', 'Parametric'),
         item('Connect AI Assistant (MCP)…', 'McpConnect'),
         'separator',
-        item('Import .3dm, .ifc, .dxf, .stl or .obj…', 'Import'),
+        item('Import .3dm, .ifc, .dxf, .dwg, .stl or .obj…', 'Import'),
         item('Link .archi or .3dm…', 'Link'),
         item('Update Links', 'UpdateLinks'),
         item('Export .3dm…', 'Export'),
