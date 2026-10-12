@@ -1,7 +1,7 @@
 import { Matrix4 } from 'three'
 import { transform } from '../core/curves'
 import type { Document } from '../core/document'
-import { BlockDefinition, Geometry, geometryToJSON } from '../core/geometry'
+import { BlockDefinition, Geometry, geometryFromJSON, geometryToJSON } from '../core/geometry'
 import type { RhinoImport } from '../io/rhino3dm'
 import { METERS } from '../core/units'
 
@@ -52,11 +52,21 @@ export function applyRhinoImport(doc: Document, model: RhinoImport): void {
  * different block get a number. Returns the new object ids and the units it was scaled from.
  */
 export function mergeRhinoImport(doc: Document, model: RhinoImport): { ids: number[]; scaledFrom: string | null } {
+  const { objects, scaledFrom } = adoptModel(doc, model)
+  return { ids: objects.map((o) => doc.add(o.geometry, o.layerId).id), scaledFrom }
+}
+
+/**
+ * A file's content made ready for the document, without adding it: its layers reused or made
+ * (named by `layerName`), its geometry and blocks scaled into the document's units.
+ */
+export function adoptModel(doc: Document, model: RhinoImport, layerName = (name: string) => name): { objects: BlockDefinition['objects']; scaledFrom: string | null } {
   const layerIds = model.layers.map((layer) => {
-    const existing = doc.layers.find((l) => l.name === layer.name)
+    const name = layerName(layer.name)
+    const existing = doc.layers.find((l) => l.name === name)
     if (existing) return existing.id
     const created = doc.addLayer()
-    doc.updateLayer(created.id, layer)
+    doc.updateLayer(created.id, { ...layer, name })
     return created.id
   })
 
@@ -92,6 +102,41 @@ export function mergeRhinoImport(doc: Document, model: RhinoImport): { ids: numb
     return { type: 'instance', definition: adoptDefinition(g.definition), matrix: matrix.toArray() }
   }
 
-  const ids = model.objects.map((o) => doc.add(adopt(o.geometry), layerIds[o.layer]).id)
-  return { ids, scaledFrom: factor === 1 ? null : model.units }
+  const objects = model.objects.map((o) => ({ layerId: layerIds[o.layer] ?? doc.currentLayerId, geometry: adopt(o.geometry) }))
+  return { objects, scaledFrom: factor === 1 ? null : model.units }
+}
+
+/**
+ * An .archi file's model as imported content: its visible objects and the blocks they use, with
+ * layer ids turned into indices. (Drawings, layouts and history stay in that file.)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function archiAsImport(json: any): RhinoImport {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fileLayers: any[] = Array.isArray(json?.layers) ? json.layers : []
+  const index = new Map<number, number>(fileLayers.map((l, i) => [Number(l.id), i]))
+  const layerOf = (id: unknown) => index.get(Number(id)) ?? 0
+  const blocks = new Map<string, BlockDefinition>()
+  for (const b of json?.blocks ?? []) blocks.set(b.name, { name: b.name, objects: [] })
+  const lookup = (name: string) => blocks.get(name)
+  for (const b of json?.blocks ?? []) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    blocks.get(b.name)!.objects.push(...(b.objects ?? []).map((o: any) => ({ layerId: layerOf(o.layerId), geometry: geometryFromJSON(o.geometry, lookup) })))
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hiddenLayers = new Set(fileLayers.filter((l) => l.visible === false).map((l: any) => Number(l.id)))
+  const objects = (json?.objects ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((o: any) => !o.hidden && !hiddenLayers.has(Number(o.layerId)))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((o: any) => ({ layer: layerOf(o.layerId), geometry: geometryFromJSON(o.geometry, lookup) }))
+  return {
+    units: String(json?.units ?? 'Millimeters'),
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    layers: fileLayers.length > 0 ? fileLayers.map(({ id, ...rest }) => rest) : [{ name: 'Default', color: '#000000', visible: true, locked: false }],
+    objects,
+    breps: [],
+    tolerance: 0,
+    skipped: new Map(),
+  }
 }

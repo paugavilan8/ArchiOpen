@@ -625,6 +625,7 @@ export class Document {
       currentLayerId: this.currentLayerId,
       blocks: [...this.blocks.values()].map((b) => ({
         name: b.name,
+        ...(b.link ? { link: b.link } : {}),
         objects: b.objects.map((o) => ({ layerId: o.layerId, geometry: geometryToJSON(o.geometry) })),
       })),
       objects: [...this.objects.values()].map((o) => ({
@@ -653,7 +654,7 @@ export class Document {
     const layers: Layer[] = json.layers?.length ? json.layers : defaultLayers()
     // Definitions first, empty, so that blocks nested in blocks find each other in any order.
     const blocks = new Map<string, BlockDefinition>()
-    for (const b of json.blocks ?? []) blocks.set(b.name, { name: b.name, objects: [] })
+    for (const b of json.blocks ?? []) blocks.set(b.name, { name: b.name, objects: [], ...(typeof b.link?.source === 'string' ? { link: { source: b.link.source, fileName: String(b.link.fileName ?? b.link.source) } } : {}) })
     const lookup = (name: string) => blocks.get(name)
     for (const b of json.blocks ?? []) {
       blocks.get(b.name)!.objects.push(...b.objects.map((o: any) => ({ layerId: o.layerId, geometry: geometryFromJSON(o.geometry, lookup) })))

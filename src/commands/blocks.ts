@@ -113,6 +113,7 @@ const blockEdit: Command = {
       if (!instanceOf(obj)) log('That is not a block')
     }
     const g = instanceOf(obj)!
+    if (g.definition.link) throw new Error(`"${g.definition.name}" is linked from ${g.definition.link.fileName}: change that file and run UpdateLinks, or Unlink it to edit it here`)
     doc.setBlockEdit({ block: g.definition.name, instanceId: obj!.id, matrix: g.matrix, startId: doc.nextId })
     const ids = placedContents(ctx, obj!).map((o) => doc.add(o.geometry, o.layerId).id)
     doc.select(ids)

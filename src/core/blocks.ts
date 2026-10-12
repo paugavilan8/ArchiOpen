@@ -96,7 +96,7 @@ export function redefineBlock(doc: Document, definition: BlockDefinition, oldNam
     for (const def of [...doc.blocks.values()]) {
       const objects = rewire(def.objects, replaced)
       if (!objects) continue
-      const next = { name: def.name, objects }
+      const next = { ...def, objects }
       replaced.set(def, next)
       doc.setBlock(def.name, next)
       changed = true

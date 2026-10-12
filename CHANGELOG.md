@@ -3,6 +3,11 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- **Linked files** (`Link`, `UpdateLinks`, `Unlink`): other models (.archi or .3dm) shown in this one
+  as blocks tied to their files, read again when they change, to work on a project in parts.
+
 ## 0.8.0
 
 Rhino's everyday commands that were missing, deformations, and IFC tested on real files.

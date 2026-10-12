@@ -173,6 +173,18 @@ export interface BlockObject {
 export interface BlockDefinition {
   name: string
   objects: BlockObject[]
+  /**
+   * A linked file (Link): where its contents come from, read again by UpdateLinks. The objects are
+   * kept too, so the model still shows them when the file cannot be found.
+   */
+  link?: BlockLink
+}
+
+export interface BlockLink {
+  /** The file's path on the desktop; in the browser, its name. */
+  source: string
+  /** The file name, to show. */
+  fileName: string
 }
 
 /** A block definition placed with a transform (column-major 4×4). Drawn with the instance's layer. */

@@ -1,3 +1,4 @@
+import { linkCommands } from './links'
 import { deformCommands } from './deform'
 import { annotationCommands } from './annotate'
 import { blockCommands } from './blocks'
@@ -80,6 +81,6 @@ const ALIASES: Record<string, string> = {
 }
 
 export function registerCommands(runner: CommandRunner): void {
-  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...deformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...layoutCommands, ...organizeCommands, ...viewSetupCommands, ...meshCommands, ...analyzeCommands, ...analysisDisplayCommands, ...advancedSurfaceCommands, ...renderCommands, ...historyCommands, ...pointCommands, ...clippingCommands, ...orientCommands, ...clipboardCommands, ...unrollCommands, ...architectureCommands, ...furnitureCommands, ...buildingViewCommands, ...drawingSetCommands, ...scheduleCommands, ...quantityCommands, ...terrainCommands, ...scriptingCommands, ...assistantCommands, ...viewCommands)
+  runner.register(...fileCommands, ...drawCommands, ...curveCommands, ...editCommands, ...transformCommands, ...deformCommands, ...curveEditCommands, ...solidCommands, ...surfaceCommands, ...drawingCommands, ...annotationCommands, ...hatchCommands, ...plotCommands, ...blockCommands, ...linkCommands, ...layoutCommands, ...organizeCommands, ...viewSetupCommands, ...meshCommands, ...analyzeCommands, ...analysisDisplayCommands, ...advancedSurfaceCommands, ...renderCommands, ...historyCommands, ...pointCommands, ...clippingCommands, ...orientCommands, ...clipboardCommands, ...unrollCommands, ...architectureCommands, ...furnitureCommands, ...buildingViewCommands, ...drawingSetCommands, ...scheduleCommands, ...quantityCommands, ...terrainCommands, ...scriptingCommands, ...assistantCommands, ...viewCommands)
   for (const [alias, macro] of Object.entries(ALIASES)) runner.alias(alias, macro)
 }
