@@ -26,6 +26,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Import STEP…', 'ImportSTEP'),
         item('Export STEP…', 'ExportSTEP'),
         item('Export IFC…', 'ExportIFC'),
+        item('Export Quantities (CSV)…', 'ExportQuantities'),
         'separator',
         item('Print to PDF… (view or layouts)', 'ExportPDF'),
         item('Export DXF…', 'ExportDXF'),

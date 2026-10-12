@@ -302,7 +302,11 @@ Despliega cada apartado para ver los detalles.
 - `Schedule` dibuja la tabla de carpintería (una fila por tipo, marcados D1, D2... y W1, W2..., con
   ancho, alto, antepecho, niveles y número de unidades) y la de superficies (cada estancia rotulada
   con su nivel y superficie útil, el total de cada nivel y el del edificio) en una capa Schedules,
-  listas para las láminas. `UpdateDrawings` las vuelve a hacer en su sitio a partir del modelo.
+  listas para las láminas. `UpdateDrawings` las vuelve a hacer en su sitio a partir del modelo. Su
+  opción `Quantities` dibuja las mediciones de los elementos por nivel y material: muros (longitud y
+  superficie de una cara menos huecos), forjados (superficie menos huecos), cubiertas (superficie en
+  planta), pilares, escaleras, barandillas (longitud), pavimentos, rodapiés, puertas y ventanas, con
+  sus volúmenes, en metros. `ExportQuantities` las guarda en un CSV para una hoja de cálculo.
 - `DrawingSet` coloca de una vez los planos del edificio en láminas A3, cada una con su cajetín
   (proyecto, título, número A-01, A-02..., escala y fecha): una planta por cada nivel con algo
   construido, cortada a 1,2 sobre su suelo y sin los niveles de debajo (todas a la misma escala, con
@@ -543,6 +547,7 @@ flowchart LR
 - [x] Varios niveles en el juego de planos, con una planta para cada uno
 - [x] Exportación e importación IFC
 - [x] Escaleras que siguen la altura de su nivel, con su hueco en el forjado de encima
+- [x] Mediciones por elemento, nivel y material, exportables a CSV
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

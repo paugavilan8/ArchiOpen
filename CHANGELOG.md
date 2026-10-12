@@ -5,6 +5,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Quantities**: lengths, areas and volumes of the building's elements by level and material, as a
+  table (`Schedule` > `Quantities`) or a CSV file (`ExportQuantities`).
 - **Stairwells**: stairs cut their opening through the slab above (`Opening` option and
   `StairOpening`), and are made again when their level's height changes.
 
