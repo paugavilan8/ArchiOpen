@@ -1,3 +1,6 @@
+import { IFC } from '../app/files'
+import { writeIfc } from '../io/ifc'
+import { ifcModel } from '../io/ifcModel'
 import { autosaver } from '../app/autosave'
 import { isOption, valueOption, yesNo } from './helpers'
 import type { Command } from './runner'
@@ -96,6 +99,23 @@ const importStep: Command = {
   },
 }
 
+/** Writes the building to an IFC4 file, for BIM tools (Revit, ArchiCAD, BIMcollab, ...). */
+const exportIfc: Command = {
+  name: 'ExportIFC',
+  history: false,
+  repeat: false,
+  async run({ doc, files, log }) {
+    const model = ifcModel(doc, files.name)
+    if (model.elements.length === 0 && model.spaces.length === 0) throw new Error('There is nothing to export: the model has no solids, surfaces or meshes')
+    const fileName = await files.exportFile(IFC, () => new TextEncoder().encode(writeIfc(model)))
+    if (!fileName) return
+    const counts = new Map<string, number>()
+    for (const e of model.elements) counts.set(e.type, (counts.get(e.type) ?? 0) + 1)
+    if (model.spaces.length > 0) counts.set('IfcSpace', model.spaces.length)
+    log(`Exported ${fileName}: ${[...counts].map(([type, n]) => `${n} ${type.replace(/^Ifc/, '')}`).join(', ')} on ${model.levels.length} storey${model.levels.length === 1 ? '' : 's'}`)
+  },
+}
+
 /**
  * Autosave: copies of the model in a folder every few minutes while there are unsaved changes (the
  * desktop app only). Options set it up; Recover opens one of the copies.
@@ -149,4 +169,4 @@ const autosave: Command = {
   },
 }
 
-export const fileCommands: Command[] = [newFile, open, save, saveAs, autosave, importModel, exportRhino, importStep, exportStep]
+export const fileCommands: Command[] = [newFile, open, save, saveAs, autosave, exportIfc, importModel, exportRhino, importStep, exportStep]

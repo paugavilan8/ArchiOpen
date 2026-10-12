@@ -5,6 +5,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **IFC** (IFC4): `ExportIFC` writes the building with its storeys, elements, doors, windows and
+  spaces for BIM tools; `Open` and `Import` read IFC files as meshes by class, with storeys as levels.
 - **Heights on elevations and sections**: level marks at each level and the top, and chains of
   height dimensions through the openings seen and from level to level.
 - **Schedules** (`Schedule`): the doors and windows table, by type, and the rooms table with floor

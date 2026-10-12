@@ -421,6 +421,15 @@ Expand a section for details.
   arcs, circles, arcs, ellipses, splines, 3D faces, text, dimensions (kept associative), leaders,
   hatches and blocks (kept as blocks). Binary DXF and DWG are not supported.
 - **STL** and **OBJ** import and export.
+- **IFC** (IFC4), for BIM tools such as Revit, ArchiCAD or BIMcollab:
+  - `ExportIFC` writes a project with a site, a building and a storey per level. Walls, slabs,
+    roofs, stairs, columns, railings, floor finishes and skirting become their IFC entities, and
+    each door and window one IfcDoor or IfcWindow with its size. Furniture becomes IfcFurniture,
+    rooms become spaces with their floor area, and anything else a proxy. Shapes are written as
+    triangulated faces, in meters.
+  - `Open` and `Import` read IFC files (through [web-ifc](https://github.com/ThatOpen/engine_web-ifc))
+    as meshes on a layer per class (Wall, Slab, Window, ...), colored as in the file, with spaces
+    on a hidden layer. `Open` also takes the storeys as levels.
 
 </details>
 
@@ -514,6 +523,7 @@ flowchart LR
 - [x] Level marks and height dimensions on elevations and sections
 - [x] Door and window and room area schedules (`Schedule`)
 - [x] Several levels in the drawing set, with a plan for each
+- [x] IFC export and import
 - [ ] Signed installers and automatic updates
 
 ## FAQ
