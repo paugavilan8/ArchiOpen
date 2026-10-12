@@ -297,6 +297,8 @@ Despliega cada apartado para ver los detalles.
   (proyecto, título, número A-01, A-02..., escala y fecha): la planta del nivel actual, cortada a 1,2
   sobre su suelo, los cuatro alzados (se dibujan antes si faltan) y las secciones. Cada lámina toma
   la mayor escala normalizada que cabe, y son láminas normales, para retocarlas o exportarlas a PDF.
+  `UpdateDrawings` vuelve a dibujar los alzados y las secciones a partir del modelo tal como está,
+  cada uno en su sitio, para que las láminas muestren los cambios.
 - `Level` añade, edita y elimina niveles (nombre, cota y altura entre plantas) y elige el actual, lo
   que lleva los planos de construcción a su cota. Los niveles se guardan con el modelo.
 - Para todo lo demás son sólidos normales: los planos de corte los convierten en plantas y secciones
@@ -508,7 +510,8 @@ flowchart LR
 - [x] Biblioteca de mobiliario y equipamiento (bloques)
 - [x] Secciones y alzados del edificio, listos para las láminas
 - [x] Juego de planos: plantas, secciones y alzados colocados en láminas de una vez
-- [ ] Planos que se actualizan al cambiar el modelo
+- [x] Planos que se actualizan a partir del modelo (`UpdateDrawings`)
+- [ ] Varios niveles en el juego de planos, con una planta para cada uno
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes
