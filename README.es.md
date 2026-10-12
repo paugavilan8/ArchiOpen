@@ -13,7 +13,7 @@ DXF, en una aplicación de escritorio ligera que se maneja con la línea de coma
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Instaladores](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=instaladores)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Versión](https://img.shields.io/badge/versi%C3%B3n-0.5.0-2f81f7?style=flat-square)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-0.6.0-2f81f7?style=flat-square)
 ![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-f4c430?style=flat-square)](LICENSE)
 
