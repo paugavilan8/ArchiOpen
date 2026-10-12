@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import * as R from 'replicad'
+import { pointMap, type Deformation } from '../core/deformations'
 
 /**
  * Deforming surfaces and solids: each face's surface and each edge's curve made a NURBS (B-spline)
@@ -153,6 +154,83 @@ export function surfaceOf(face: ReturnType<ReturnType<typeof oc>['TopoDS']['Face
   return bs
 }
 
+/** The p + 1 basis functions non-zero on span `i` of a knot vector, at t (also past the span's ends). */
+export function basisOn(knots: number[], p: number, i: number, t: number): number[] {
+  const N = [1]
+  const left: number[] = []
+  const right: number[] = []
+  for (let j = 1; j <= p; j++) {
+    left[j] = t - knots[i + 1 - j]
+    right[j] = knots[i + j] - t
+    let saved = 0
+    for (let r = 0; r < j; r++) {
+      const temp = N[r] / (right[r + 1] + left[j - r])
+      N[r] = saved + right[r + 1] * temp
+      saved = left[j - r] * temp
+    }
+    N[j] = saved
+  }
+  return N
+}
+
+/** The span a parameter is in, the last one for anything past the end. */
+export function spanOf(knots: number[], p: number, n: number, t: number): number {
+  if (t >= knots[n]) return n - 1
+  let i = p
+  while (i < n - 1 && t >= knots[i + 1]) i++
+  return i
+}
+
+/** A B-spline surface's knots, each repeated by its multiplicity. */
+function flatKnots(count: number, knot: (i: number) => number, mult: (i: number) => number): number[] {
+  const out: number[] = []
+  for (let i = 1; i <= count; i++) for (let m = 0; m < mult(i); m++) out.push(knot(i))
+  return out
+}
+
+/** The least-squares projector onto B-splines with these knots, from samples at `params`. */
+function projector(knots: number[], p: number, n: number, params: number[]): number[][] {
+  const A = params.map((t) => {
+    const row = new Array<number>(n).fill(0)
+    const i = spanOf(knots, p, n, t)
+    basisOn(knots, p, i, t).forEach((b, r) => (row[i - p + r] = b))
+    return row
+  })
+  const AtA = Array.from({ length: n }, (_, a) => Array.from({ length: n }, (_, b) => A.reduce((s, r) => s + r[a] * r[b], 0)))
+  const At = Array.from({ length: n }, (_, a) => A.map((r) => r[a]))
+  return solve(AtA, At)
+}
+
+/**
+ * A (non-rational) B-spline surface fitted, with its own knots, to its own points moved by a
+ * mapping: much closer to the deformed surface than moving its control points.
+ */
+function fitMapped(bs: { NbUPoles(): number; NbVPoles(): number; UDegree(): number; VDegree(): number; NbUKnots(): number; NbVKnots(): number; UKnot(i: number): number; VKnot(i: number): number; UMultiplicity(i: number): number; VMultiplicity(i: number): number; Value(u: number, v: number): { X(): number; Y(): number; Z(): number; delete(): void }; SetPole(i: number, j: number, p: unknown): void }, map: PointMap): void {
+  const k = oc()
+  const [nu, nv, p, q] = [bs.NbUPoles(), bs.NbVPoles(), bs.UDegree(), bs.VDegree()]
+  const U = flatKnots(bs.NbUKnots(), (i) => bs.UKnot(i), (i) => bs.UMultiplicity(i))
+  const V = flatKnots(bs.NbVKnots(), (i) => bs.VKnot(i), (i) => bs.VMultiplicity(i))
+  const params = (K: number[], n: number) => Array.from({ length: 3 * n }, (_, i) => K[0] + ((K[K.length - 1] - K[0]) * i) / (3 * n - 1))
+  const [us, vs] = [params(U, nu), params(V, nv)]
+  const [Fu, Fv] = [projector(U, p, nu, us), projector(V, q, nv, vs)]
+  const grid = us.map((u) =>
+    vs.map((v) => {
+      const pt = bs.Value(u, v)
+      const m = map(xyz(pt))
+      pt.delete()
+      return [m.x, m.y, m.z]
+    }),
+  )
+  const half = grid.map((row) => Fv.map((f) => [0, 1, 2].map((c) => f.reduce((s, w, j) => s + w * row[j][c], 0))))
+  for (let i = 0; i < nu; i++)
+    for (let j = 0; j < nv; j++) {
+      const x = [0, 1, 2].map((c) => Fu[i].reduce((s, w, r) => s + w * half[r][j][c], 0))
+      const g = new k.gp_Pnt(x[0], x[1], x[2])
+      bs.SetPole(i + 1, j + 1, g)
+      g.delete()
+    }
+}
+
 /** Moves a B-spline surface's or curve's control points. */
 function mapPoles(bs: { NbPoles?: () => number; Pole: (...a: number[]) => unknown; SetPole: (...a: unknown[]) => void; NbUPoles?: () => number; NbVPoles?: () => number }, map: PointMap): void {
   const k = oc()
@@ -224,7 +302,9 @@ export function deformShape(shape: AnyShape, map: PointMap, options: DeformOptio
     // Its wires as on its surface (a reversed face's edges come reversed), turned back at the end.
     const f = k.TopoDS.Face(original.Oriented(k.TopAbs_Orientation.TopAbs_FORWARD))
     const surface = surfaceOf(f, refine)
-    mapPoles(surface as never, map)
+    // Exact for an affine mapping; otherwise fitted to the moved surface.
+    if (refine > 0 && !surface.IsURational() && !surface.IsVRational()) fitMapped(surface as never, map)
+    else mapPoles(surface as never, map)
     const outer = k.BRepTools.OuterWire(f)
     const built: { wire: unknown; outer: boolean }[] = []
     const wires = new k.TopExp_Explorer(f, k.TopAbs_ShapeEnum.TopAbs_WIRE, k.TopAbs_ShapeEnum.TopAbs_SHAPE)
@@ -301,4 +381,9 @@ export function deformShape(shape: AnyShape, map: PointMap, options: DeformOptio
     }
   }
   return R.cast(result)
+}
+
+/** A surface or solid deformed by Twist, Taper, Bend or Flow: refined so it follows closely. */
+export function deformBy(shape: AnyShape, deformation: Deformation): AnyShape {
+  return deformShape(shape, pointMap(deformation), { refine: 6 })
 }

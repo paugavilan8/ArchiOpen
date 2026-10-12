@@ -173,7 +173,13 @@ Despliega cada apartado para ver los detalles.
   - `ArrayCrv`: copias a lo largo de una curva, por número o por distancia, girando con ella
     (`Freeform`), de pie respecto a la normal del plano de construcción (`Roadlike`) o sin girar;
   - `ProjectToCPlane`: aplana curvas, puntos, mallas, textos y sombreados sobre el plano de
-    construcción.
+    construcción;
+  - deformaciones: `Twist` (torsión alrededor de un eje), `Taper` (de una escala a otra a lo largo
+    de un eje), `Bend` (flexión de un eje en un arco de la misma longitud) y `Flow` (de lo largo de
+    una curva base a lo largo de una curva destino, estirando o no). Funcionan con curvas, puntos,
+    mallas, superficies y sólidos; las superficies y sólidos siguen siendo NURBS, refinadas y
+    ajustadas para seguir la deformación de cerca (una barra torcida o doblada conserva su volumen
+    con un error menor de 1e-6).
 
   Y herramientas para colocar objetos respecto a otros (menú *Transform*):
   - `Orient`: lleva un punto de referencia a un punto de destino y, con un segundo par, gira la

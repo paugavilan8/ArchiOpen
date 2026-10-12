@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import opencascade from 'replicad-opencascadejs'
 import * as R from 'replicad'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { deformShape } from './deform'
+import { deformBy, deformShape } from './deform'
 
 beforeAll(async () => {
   R.setOC(await opencascade())
@@ -46,5 +46,19 @@ describe('deformShape', () => {
     // A frustum of square sections 10 and 5, height 40.
     const exact = (40 / 3) * (100 + 25 + 50)
     expect(volumeOf(out) / exact).toBeCloseTo(1, 2)
+  })
+
+  it('twists, tapers and bends solids (Twist, Taper, Bend)', () => {
+    const v = (x: number, y: number, z: number) => new Vector3(x, y, z)
+    const bar = () => R.makeBaseBox(4, 4, 40)
+    const twisted = deformBy(bar(), { kind: 'twist', start: v(0, 0, 0), end: v(0, 0, 40), angle: Math.PI / 2, infinite: false })
+    expect((twisted as R.Shape3D).solids?.length ?? 0).toBe(1)
+    expect(volumeOf(twisted) / 640).toBeCloseTo(1, 2)
+    // The top square turned a quarter: still 4 wide, now along y as x.
+    const tapered = deformBy(bar(), { kind: 'taper', start: v(0, 0, 0), end: v(0, 0, 40), startScale: 1, endScale: 0.5, infinite: false })
+    expect(volumeOf(tapered) / ((40 / 3) * (16 + 4 + 8))).toBeCloseTo(1, 2)
+    const bent = deformBy(bar(), { kind: 'bend', start: v(0, 0, 0), end: v(0, 0, 40), toward: v(1, 0, 0), angle: Math.PI / 2 })
+    expect(volumeOf(bent) / 640).toBeCloseTo(1, 2)
+    expect(bent.boundingBox.bounds[1][0]).toBeGreaterThan(20)
   })
 })

@@ -5,6 +5,9 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Deformations**: `Twist`, `Taper`, `Bend` and `Flow` (along a curve), on curves, points, meshes,
+  surfaces and solids. Surfaces and solids stay NURBS, fitted to the deformation.
+
 - IFC: walls drawn as a ring (`Close`) or along several segments are exported as one wall for each
   side, mitred at the corners, so BIM tools (and ArchiOpen, opening the file again) see straight
   walls.

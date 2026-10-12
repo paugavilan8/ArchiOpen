@@ -172,7 +172,12 @@ Expand a section for details.
   - `ArrayCrv`: copies along a curve, by number or by distance, turning with it (`Freeform`),
     upright about the construction plane's normal (`Roadlike`) or not at all;
   - `ProjectToCPlane`: flattens curves, points, meshes, texts and hatches onto the construction
-    plane.
+    plane;
+  - deformations: `Twist` (about an axis, by an angle), `Taper` (from one scale to another along an
+    axis), `Bend` (along a spine into an arc of the same length) and `Flow` (from along a base curve
+    to along a target curve, stretched to it or not). They work on curves, points, meshes,
+    surfaces and solids; surfaces and solids keep their NURBS form, refined and fitted so they
+    follow the deformation closely (a twisted or bent bar keeps its volume to within 1e-6).
 
   And tools to place objects relative to others (*Transform* menu):
   - `Orient`: moves a reference point onto a target point and, given a second pair, rotates the
