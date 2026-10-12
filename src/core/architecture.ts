@@ -28,6 +28,10 @@ export interface Opening {
   sill: number
   /** False for a bare opening, with no frame, glass or leaf. */
   frame?: boolean
+  /** A door's hinges: at the end of the opening nearer the path's start, or its end. */
+  hinge?: 'start' | 'end'
+  /** The side of the wall a door opens to (left or right of the path). */
+  swing?: 'left' | 'right'
 }
 
 export interface WallParams {

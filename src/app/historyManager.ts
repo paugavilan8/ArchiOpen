@@ -1,9 +1,10 @@
 import type { Document, HistoryRecord, StepChange } from '../core/document'
 import { isCurve } from '../core/geometry'
 import type { Settings } from '../core/settings'
-import type { BrepGeometry } from '../core/geometry'
+import type { BrepGeometry, Geometry } from '../core/geometry'
 import { kernelJob } from '../kernel/client'
-import { orphanedParts, planOpeningParts, withOpeningIds } from './openingParts'
+import { isOpeningPiece, orphanedParts, planOpeningParts, withOpeningIds } from './openingParts'
+import { symbolFromRecord } from '../core/planSymbols'
 import { ownInputOnly, withJoins } from './wallJoins'
 
 /**
@@ -87,11 +88,11 @@ export class HistoryManager {
     }
     rebuild = rebuild.filter((id) => {
       const record = doc.objects.get(id)!.history!
-      return !remakes.has(id) && !(record.command === 'OpeningPart' && remakes.has(Number(record.params?.wall)))
+      return !remakes.has(id) && !(isOpeningPiece(record) && remakes.has(Number(record.params?.wall)))
     })
     if (breaks.length === 0 && rebuild.length === 0 && remakes.size === 0) return
 
-    const results = new Map<number, BrepGeometry>()
+    const results = new Map<number, Geometry>()
     const applies: (() => void)[] = []
     const failed: number[] = []
     for (const id of rebuild) {
@@ -124,13 +125,17 @@ export class HistoryManager {
     if (failed.length > 0) this.log(`History could not update ${failed.length} object${failed.length === 1 ? '' : 's'}: the changed curves no longer make it (undo to go back)`)
   }
 
-  /** Builds the object a record describes, from its input curves as they are now. */
-  private build(record: HistoryRecord): Promise<BrepGeometry> {
+  /**
+   * Builds the object a record describes, from its input curves as they are now: in the kernel, or
+   * here for the few records that make curves (plan symbols).
+   */
+  private async build(record: HistoryRecord): Promise<Geometry> {
     const curves = record.inputs.map((id) => {
       const g = this.doc.objects.get(id)?.geometry
       if (!g || !isCurve(g)) throw new Error('A history input is no longer a curve')
       return g
     })
+    if (record.command === 'OpeningSymbol') return symbolFromRecord(curves[0], record.params ?? {})
     return kernelJob('rebuild', record.command, curves, record.params ?? {})
   }
 

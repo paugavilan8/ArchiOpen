@@ -1,7 +1,7 @@
 import { Matrix4, Vector3 } from 'three'
 import type { HistoryManager } from '../app/historyManager'
 import type { CommandRunner } from '../commands/runner'
-import { slabParams, wallParams, type Justification } from '../core/architecture'
+import { slabParams, wallParams, type Justification, type Opening } from '../core/architecture'
 import { columnParams, roofParams, stairParams, type RoofType } from '../core/buildingParts'
 import { railingParams, type RailingSides, type RailingStyle } from '../core/railings'
 import type { CadObject, Document } from '../core/document'
@@ -348,7 +348,28 @@ export class PropertiesPanel {
       remove.textContent = `${fmtSize(o.width)} × ${fmtSize(o.height)}  ✕`
       remove.title = `Remove this ${o.kind}`
       remove.addEventListener('click', () => update({ openings: p.openings.filter((_, j) => j !== i) }))
-      field(`${capitalize(o.kind)} ${i + 1}`, remove)
+      if (o.kind !== 'door') {
+        field(`${capitalize(o.kind)} ${i + 1}`, remove)
+        return
+      }
+      // Doors can be turned to open the other way, or hung on the other side.
+      const flip = (label: string, title: string, change: Partial<Opening>) => {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'opening-flip'
+        button.textContent = label
+        button.title = title
+        button.addEventListener('click', () => update({ openings: p.openings.map((x, j) => (j === i ? { ...x, ...change } : x)) }))
+        return button
+      }
+      const row = document.createElement('span')
+      row.className = 'opening-row'
+      row.append(
+        remove,
+        flip('⇅', 'Open to the other side of the wall', { swing: o.swing === 'right' ? 'left' : 'right' }),
+        flip('⇄', 'Hinges at the other end', { hinge: o.hinge === 'end' ? 'start' : 'end' }),
+      )
+      field(`Door ${i + 1}`, row)
     })
     return section
   }

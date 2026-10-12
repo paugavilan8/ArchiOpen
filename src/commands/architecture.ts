@@ -5,6 +5,7 @@ import {
   DEFAULT_SLAB,
   DEFAULT_WALL,
   lengthAtPoint,
+  paramAtLength,
   openingBox,
   wallOutline,
   wallParams,
@@ -16,7 +17,7 @@ import {
 } from '../core/architecture'
 import { formatValue, isOption, valueOption, yesNo } from './helpers'
 import { nextOpeningId } from '../app/openingParts'
-import { AnyCurve, isClosed, isCurve, tessellate } from '../core/geometry'
+import { AnyCurve, isClosed, isCurve, pointAt, tangentAt, tessellate } from '../core/geometry'
 import type { HistoryRecord } from '../core/document'
 import { kernelJob } from '../kernel/client'
 import { LINE_SPACING, textShape } from '../text/strokeFont'
@@ -40,6 +41,7 @@ const memory = {
   slab: DEFAULT_SLAB.thickness,
   openings: { window: { ...DEFAULT_OPENINGS.window }, door: { ...DEFAULT_OPENINGS.door } },
   frame: true,
+  hinge: 'start' as 'start' | 'end',
   roof: { ...DEFAULT_ROOF },
   stair: { width: DEFAULT_STAIR.width, risers: DEFAULT_STAIR.risers },
   column: { ...DEFAULT_COLUMN },
@@ -271,7 +273,7 @@ function openingCommand(kind: Opening['kind']): Command {
     async run(ctx) {
       const { doc, input, display, log } = ctx
       const sizes = memory.openings[kind]
-      const options = () => [valueOption('Width', sizes.width), valueOption('Height', sizes.height), ...(kind === 'window' ? [valueOption('Sill', sizes.sill)] : []), yesNo('Frame', memory.frame)]
+      const options = () => [valueOption('Width', sizes.width), valueOption('Height', sizes.height), ...(kind === 'window' ? [valueOption('Sill', sizes.sill)] : [`Hinge=${capital(memory.hinge)}`]), yesNo('Frame', memory.frame)]
       let placed = 0
       for (;;) {
         const pick = await input.getPick(`Click a wall where the ${kind} goes${placed ? '. Press Enter when done' : ''}`, options(), (id) => isWall(ctx, id))
@@ -279,6 +281,7 @@ function openingCommand(kind: Opening['kind']): Command {
           if (isOption(pick.option, 'Width')) sizes.width = await askPositive(ctx, `${capital(kind)} width`, sizes.width)
           else if (isOption(pick.option, 'Height')) sizes.height = await askPositive(ctx, `${capital(kind)} height`, sizes.height)
           else if (isOption(pick.option, 'Frame')) memory.frame = !memory.frame
+          else if (isOption(pick.option, 'Hinge')) memory.hinge = memory.hinge === 'start' ? 'end' : 'start'
           else if (isOption(pick.option, 'Sill')) {
             const v = await input.getNumber('Sill height', sizes.sill)
             if (typeof v === 'number' && v >= 0) sizes.sill = v
@@ -294,7 +297,19 @@ function openingCommand(kind: Opening['kind']): Command {
           continue
         }
         const params = wallParams(record.params)
-        const opening: Opening = { id: nextOpeningId(params.openings), kind, at: lengthAtPoint(path, pick.point), ...sizes, ...(memory.frame ? {} : { frame: false }) }
+        const at = lengthAtPoint(path, pick.point)
+        // A door opens to the side of the wall it was clicked on.
+        const t = paramAtLength(path, at)
+        const across = new Vector3(0, 0, 1).cross(tangentAt(path, t).setZ(0).normalize())
+        const swing = across.dot(pick.point.clone().sub(pointAt(path, t)).setZ(0)) >= 0 ? 'left' : 'right'
+        const opening: Opening = {
+          id: nextOpeningId(params.openings),
+          kind,
+          at,
+          ...sizes,
+          ...(memory.frame ? {} : { frame: false }),
+          ...(kind === 'door' ? { hinge: memory.hinge, swing } : {}),
+        }
         const problem = checkOpening(path, params, opening)
         if (problem) {
           log(problem)

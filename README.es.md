@@ -256,6 +256,11 @@ Despliega cada apartado para ver los detalles.
   puertas marco y hoja, cada pieza con su material en las capas *Windows*, *Glazing* y *Doors*
   (`Frame=No` deja el hueco vacío). Siguen al muro al mover su línea o cambiar sus parámetros, y
   desaparecen al quitar el hueco.
+- Los huecos también se dibujan en planta, en la capa *Plan Symbols* a la altura del suelo: la hoja
+  de la puerta abierta en perpendicular al muro con el arco de su barrido, y el marco y el vidrio
+  de las ventanas. La puerta abre hacia el lado del muro en el que se hizo clic, con las bisagras en
+  el extremo que indica `Hinge`; desde el panel de propiedades se invierte el sentido (⇅) o el lado
+  de las bisagras (⇄).
 - Muros y forjados conservan su línea (en la capa *Construction*): al moverla o editarla se rehacen.
   El espesor, la altura, la justificación y los huecos (y los parámetros de cubiertas, escaleras y
   pilares) se cambian en el panel de propiedades, en un solo paso de deshacer. Si se mueve el sólido directamente, pasa a ser un sólido normal, como con el
@@ -475,7 +480,8 @@ flowchart LR
 - [x] Barandillas en escaleras y bordes de forjado
 - [x] Cotas automáticas de muros y huecos en planta
 - [x] Rótulos de estancias con superficie
-- [ ] Abatimiento de puertas y símbolos de ventanas en planta
+- [x] Abatimiento de puertas y símbolos de ventanas en planta
+- [ ] Pavimentos y rodapiés a partir de los contornos de las estancias
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

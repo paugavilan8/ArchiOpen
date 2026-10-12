@@ -1300,3 +1300,12 @@ input:focus-visible {
   color: inherit;
   font: inherit;
 }
+
+/* Door rows in the Properties panel: remove, then flip side and hinge. */
+.properties .opening-row {
+  display: flex;
+  gap: 4px;
+}
+.properties .opening-flip {
+  padding: 0 6px;
+}

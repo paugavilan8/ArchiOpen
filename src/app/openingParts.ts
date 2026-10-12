@@ -1,6 +1,7 @@
 import { OPENING_PARTS, wallParams, type Opening, type OpeningPart } from '../core/architecture'
 import type { Document, HistoryRecord, Layer } from '../core/document'
-import type { BrepGeometry } from '../core/geometry'
+import type { Geometry } from '../core/geometry'
+import { OPENING_SYMBOLS, type SymbolPart } from '../core/planSymbols'
 import { MATERIAL_PRESETS, type Material } from '../core/materials'
 
 /**
@@ -29,27 +30,34 @@ export function withOpeningIds(record: HistoryRecord): HistoryRecord {
 /** The next free opening id of a wall. */
 export const nextOpeningId = (openings: Opening[]) => openings.reduce((max, o) => Math.max(max, o.id ?? 0), 0) + 1
 
-const isPartOf = (wallId: number) => (record: HistoryRecord | undefined) => record?.command === 'OpeningPart' && record.params?.wall === wallId
+/** The commands of the pieces that follow a wall's openings: solids, and plan symbols (curves). */
+export const isOpeningPiece = (record: HistoryRecord | undefined) => record?.command === 'OpeningPart' || record?.command === 'OpeningSymbol'
+
+const isPartOf = (wallId: number) => (record: HistoryRecord | undefined) => isOpeningPiece(record) && record!.params?.wall === wallId
 
 /** The records the pieces of a wall's openings should have. */
 function partRecords(wallId: number, wall: HistoryRecord): Map<string, HistoryRecord> {
   const p = wallParams(wall.params)
   const out = new Map<string, HistoryRecord>()
+  const params = (opening: Opening, part: string) => ({ wall: wallId, thickness: p.thickness, height: p.height, justification: p.justification, opening, part })
   for (const opening of p.openings) {
     if (opening.frame === false) continue
-    for (const part of OPENING_PARTS[opening.kind]) {
-      out.set(`${opening.id}:${part}`, {
-        command: 'OpeningPart',
-        inputs: [...wall.inputs],
-        params: { wall: wallId, thickness: p.thickness, height: p.height, justification: p.justification, opening, part },
-      })
-    }
+    for (const part of OPENING_PARTS[opening.kind]) out.set(`${opening.id}:${part}`, { command: 'OpeningPart', inputs: [...wall.inputs], params: params(opening, part) })
+    // Plan symbols follow the wall's own line only (they are flat on its floor).
+    for (const part of OPENING_SYMBOLS[opening.kind]) out.set(`${opening.id}:${part}`, { command: 'OpeningSymbol', inputs: [wall.inputs[0]], params: params(opening, part) })
   }
   return out
 }
 
 /** The layer a piece goes on, made (with its material) if missing. */
-function layerFor(doc: Document, part: OpeningPart, kind: Opening['kind']): Layer {
+function layerFor(doc: Document, part: OpeningPart | SymbolPart, kind: Opening['kind']): Layer {
+  if (part === 'swing' || part === 'planFrame' || part === 'planGlass') {
+    const symbols = doc.layers.find((l) => l.name === 'Plan Symbols')
+    if (symbols) return symbols
+    const layer = doc.addLayer()
+    doc.updateLayer(layer.id, { name: 'Plan Symbols', color: '#4a4a4a' })
+    return layer
+  }
   const spec = LAYERS[part === 'frame' && kind === 'door' ? 'doorFrame' : part]
   const existing = doc.layers.find((l) => l.name === spec.name)
   if (existing) return existing
@@ -64,7 +72,7 @@ function layerFor(doc: Document, part: OpeningPart, kind: Opening['kind']): Laye
  * Works out (building what is needed) how to bring the pieces of a wall's openings in line with its
  * record; the returned function then makes the changes, all at once.
  */
-export async function planOpeningParts(doc: Document, wallId: number, wall: HistoryRecord, build: (record: HistoryRecord) => Promise<BrepGeometry>): Promise<() => void> {
+export async function planOpeningParts(doc: Document, wallId: number, wall: HistoryRecord, build: (record: HistoryRecord) => Promise<Geometry>): Promise<() => void> {
   const wanted = partRecords(wallId, wall)
   const existing = new Map<string, number>()
   const extra: number[] = []
@@ -75,7 +83,7 @@ export async function planOpeningParts(doc: Document, wallId: number, wall: Hist
     if (wanted.has(key) && !existing.has(key)) existing.set(key, obj.id)
     else extra.push(obj.id)
   }
-  const made = new Map<string, BrepGeometry>()
+  const made = new Map<string, Geometry>()
   for (const [key, record] of wanted) {
     const id = existing.get(key)
     const same = id !== undefined && JSON.stringify(doc.objects.get(id)!.history) === JSON.stringify(record)
@@ -90,7 +98,7 @@ export async function planOpeningParts(doc: Document, wallId: number, wall: Hist
         doc.setHistory(id, record)
       } else {
         const opening = record.params!.opening as Opening
-        const added = doc.add(geometry, layerFor(doc, record.params!.part as OpeningPart, opening.kind).id)
+        const added = doc.add(geometry, layerFor(doc, record.params!.part as OpeningPart | SymbolPart, opening.kind).id)
         doc.setHistory(added.id, record)
       }
     }
@@ -102,8 +110,8 @@ export async function planOpeningParts(doc: Document, wallId: number, wall: Hist
 export function orphanedParts(doc: Document, gone: Set<number>): number[] {
   const out: number[] = []
   for (const obj of doc.objects.values()) {
-    if (obj.history?.command !== 'OpeningPart') continue
-    const wall = Number(obj.history.params?.wall)
+    if (!isOpeningPiece(obj.history)) continue
+    const wall = Number(obj.history!.params?.wall)
     if (gone.has(wall) || !doc.objects.has(wall)) out.push(obj.id)
   }
   return out

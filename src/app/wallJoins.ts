@@ -51,7 +51,7 @@ export function withJoins(doc: Document, wallId: number, record: HistoryRecord, 
 }
 
 /** Records whose own path (their first input) is all that ties them: walls and their pieces. */
-export const ownInputOnly = (record: HistoryRecord) => record.command === 'Wall' || record.command === 'OpeningPart'
+export const ownInputOnly = (record: HistoryRecord) => record.command === 'Wall' || record.command === 'OpeningPart' || record.command === 'OpeningSymbol'
 
 /** Is a wall's path under a roof outline (inside it, or within the wall's thickness of its edge)? */
 function under(path: AnyCurve, outline: AnyCurve & { type: 'polyline' }, reach: number): boolean {
