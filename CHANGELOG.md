@@ -3,6 +3,11 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- **Stairwells**: stairs cut their opening through the slab above (`Opening` option and
+  `StairOpening`), and are made again when their level's height changes.
+
 ## 0.5.0
 
 Drawing sets, schedules, IFC and autosave.

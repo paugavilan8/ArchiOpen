@@ -48,7 +48,12 @@ export function wallShape(path: AnyCurve, params: WallParams, joins: ResolvedJoi
 /** A slab: its outline taken down by its thickness, so its top is where the outline is. */
 export function slabShape(outline: AnyCurve, params: SlabParams): AnyShape {
   if (!(params.thickness > 0)) throw new Error('The slab thickness must be positive')
-  return prism(outline, -params.thickness)
+  const slab = prism(outline, -params.thickness)
+  if (!params.holes?.length) return slab
+  // Each opening as a prism through the whole slab, from just above its top.
+  const top = startPoint(outline).z
+  const cutters = params.holes.map((h) => prism({ type: 'polyline', points: h.points.map(([x, y]) => new Vector3(x, y, top + 1)), closed: true }, -(params.thickness + 2)))
+  return boolean('difference', slab, cutters)
 }
 
 /** A piece of an opening (frame, glass or door leaf). */

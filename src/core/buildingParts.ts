@@ -359,6 +359,28 @@ export function stairOutlines(plan: StairPlan): Vector3[][] {
   return [...plan.flights.map((f) => [...f.profile.points, f.profile.points[0]]), ...plan.landings.map(landing)]
 }
 
+/**
+ * A stair's footprint in plan: a rectangle for each flight and landing, as [x, y] corners, grown by
+ * `margin` all round (for the opening in the floor above).
+ */
+export function stairFootprint(plan: StairPlan, margin = 0): [number, number][][] {
+  const rect = (o: Vector3, u: Vector3, v: Vector3): [number, number][] => {
+    const du = u.clone().setZ(0).normalize().multiplyScalar(margin)
+    const dv = v.clone().setZ(0).normalize().multiplyScalar(margin)
+    const a = o.clone().sub(du).sub(dv)
+    const uu = u.clone().setZ(0).add(du.clone().multiplyScalar(2))
+    const vv = v.clone().setZ(0).add(dv.clone().multiplyScalar(2))
+    return [a, a.clone().add(uu), a.clone().add(uu).add(vv), a.clone().add(vv)].map((p) => [p.x, p.y])
+  }
+  return [
+    ...plan.flights.map((f) => {
+      const half = f.across.clone().multiplyScalar(0.5)
+      return rect(f.start.clone().sub(half), f.end.clone().sub(f.start).setZ(0), f.across)
+    }),
+    ...plan.landings.map((l) => rect(l.origin, l.u, l.v)),
+  ]
+}
+
 /** Is a step comfortable? (Two risers and a tread between 600 and 650, the usual rule.) */
 export const comfortable = (riser: number, tread: number) => 2 * riser + tread >= 600 && 2 * riser + tread <= 650
 

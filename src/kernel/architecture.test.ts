@@ -6,7 +6,7 @@ import { FRAME, findJoins, wallOutline, wallParams, type Opening } from '../core
 import type { AnyCurve } from '../core/geometry'
 import { columnShape, floorShape, openingPartShape, railingShape, roofShape, roomRegion, skirtingShape, slabShape, stairShape, wallShape } from './architecture'
 import { railingParams, railingPieces } from '../core/railings'
-import { columnOutline, roofParams, stairParams, stairPlan } from '../core/buildingParts'
+import { columnOutline, roofParams, stairFootprint, stairParams, stairPlan } from '../core/buildingParts'
 
 beforeAll(async () => {
   R.setOC(await opencascade())
@@ -50,6 +50,30 @@ describe('architectural solids', () => {
     const box = slab.boundingBox.bounds
     expect(box[1][2]).toBeCloseTo(3000, 6)
     expect(box[0][2]).toBeCloseTo(2750, 6)
+    // With a stairwell through it.
+    const holed = slabShape(lifted, { thickness: 250, holes: [{ points: [[500, 500], [1500, 500], [1500, 2500], [500, 2500]], stair: 7 }] })
+    expect(volume(holed)).toBeCloseTo((4000 * 3000 - 1000 * 2000) * 250, -3)
+  })
+
+  it('cuts the footprint of a stair, flights and landings, through the slab above', () => {
+    const line: AnyCurve = { type: 'polyline', points: [v(0, 0), v(3000, 0), v(3000, 2000)], closed: false }
+    const plan = stairPlan(line, stairParams({ width: 1000, height: 3000 }))
+    const footprint = stairFootprint(plan)
+    expect(footprint).toHaveLength(plan.flights.length + plan.landings.length)
+    const area = (pts: [number, number][]) => Math.abs(pts.reduce((s, p, i) => s + p[0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * p[1], 0)) / 2
+    // Each flight is as wide as the stair and as long as its run.
+    plan.flights.forEach((f, i) => expect(area(footprint[i])).toBeCloseTo(f.start.distanceTo(f.end) * 1000, 3))
+    // A margin grows every side.
+    const grown = stairFootprint(plan, 50)
+    plan.flights.forEach((f, i) => expect(area(grown[i])).toBeCloseTo((f.start.distanceTo(f.end) + 100) * 1100, 3))
+    // The stair lies within its footprint.
+    const xs = footprint.flat().map((p) => p[0])
+    const ys = footprint.flat().map((p) => p[1])
+    const b = stairShape(line, stairParams({ width: 1000, height: 3000 })).boundingBox.bounds
+    expect(b[0][0]).toBeGreaterThanOrEqual(Math.min(...xs) - 1e-6)
+    expect(b[1][0]).toBeLessThanOrEqual(Math.max(...xs) + 1e-6)
+    expect(b[0][1]).toBeGreaterThanOrEqual(Math.min(...ys) - 1e-6)
+    expect(b[1][1]).toBeLessThanOrEqual(Math.max(...ys) + 1e-6)
   })
 
   it('makes a window frame and its glass, in the middle of the wall', () => {
