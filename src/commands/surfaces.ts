@@ -401,4 +401,51 @@ const filletSrf: Command = {
   },
 }
 
-export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge, untrim, filletSrf]
+const CONTINUITIES = ['Position', 'Tangency', 'Curvature'] as const
+const matchSrfMemory = { continuity: 'Tangency' as (typeof CONTINUITIES)[number] }
+
+/**
+ * Changes a surface near one of its edges so that it meets an edge of another surface, with
+ * continuity of position, tangency or curvature.
+ */
+const matchSrf: Command = {
+  name: 'MatchSrf',
+  async run(ctx) {
+    const { doc, input, display, log } = ctx
+    await kernel(ctx)
+    const option = () => `Continuity=${matchSrfMemory.continuity}`
+    const pickWith = async (prompt: string) => {
+      for (;;) {
+        const pick = await input.getPick(prompt, [option()], (id) => !!brepOf(ctx, id))
+        if (pick.kind === 'option') {
+          if (isOption(pick.option, 'Continuity')) matchSrfMemory.continuity = CONTINUITIES[(CONTINUITIES.indexOf(matchSrfMemory.continuity) + 1) % CONTINUITIES.length]
+          continue
+        }
+        if (pick.kind !== 'pick') return null
+        const g = brepOf(ctx, pick.id)
+        if (!g) continue
+        const geometry = g.display.faceTriangles ? g : await readable(kernelJob('faces', shapeRef(g)), 'find the faces of that object')
+        return { id: pick.id, geometry, point: pick.point }
+      }
+    }
+    const changed = await pickWith('Select the edge of the surface to change')
+    if (!changed) return
+    const face = nearestFace(changed.geometry, changed.point)
+    if (face < 0) return
+    display.setPreview([...faceOutline(changed.geometry, face), [changed.point.clone(), changed.point.clone()]], true)
+    const target = await pickWith('Select the edge to match')
+    display.setPreview([])
+    if (!target) return
+    if (target.id === changed.id) throw new Error('Pick an edge of another object')
+    const edge = nearestEdge(target.geometry, target.point)
+    const result = await readable(
+      kernelJob('matchSurface', shapeRef(changed.geometry), face, changed.point, shapeRef(target.geometry), edge, matchSrfMemory.continuity.toLowerCase() as 'position' | 'tangency' | 'curvature'),
+      'match those surfaces',
+    )
+    doc.setGeometry(changed.id, result)
+    doc.select([changed.id])
+    log(`Surface matched (${matchSrfMemory.continuity.toLowerCase()})`)
+  },
+}
+
+export const surfaceCommands: Command[] = [cap, offsetSrf, extrudeSrf, project, pull, intersect, extractSrf, dupBorder, dupEdge, untrim, filletSrf, matchSrf]

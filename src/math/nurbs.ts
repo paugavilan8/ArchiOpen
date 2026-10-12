@@ -201,7 +201,7 @@ export function interpolate(points: Vector3[], degree = 3): BSpline {
 }
 
 /** Gaussian elimination with partial pivoting, for several right-hand sides at once. */
-function solve(A: number[][], B: number[][]): number[][] {
+export function solve(A: number[][], B: number[][]): number[][] {
   const n = A.length
   const M = A.map((row, i) => [...row, ...B[i]])
   const width = M[0].length
