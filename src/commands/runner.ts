@@ -33,6 +33,8 @@ export class CommandRunner {
   private readonly aliases = new Map<string, string>()
   private current: Promise<void> | null = null
   private lastMacro: string | null = null
+  /** The error the last command ended with, if any (for scripts). */
+  private lastError: string | null = null
 
   constructor(private readonly ctx: CommandContext) {
     ctx.input.onIdleEnter = () => this.repeat()
@@ -87,6 +89,28 @@ export class CommandRunner {
     await this.current
   }
 
+  /**
+   * Runs a command with its answers given one by one (an empty one is Enter), as scripts do: when
+   * they run out, the command is given Enter until it ends, so it never waits for the user.
+   */
+  async runWith(name: string, answers: string[]): Promise<void> {
+    const command = this.commands.get(name.trim().toLowerCase())
+    if (!command) throw new Error(`Unknown command: ${name}`)
+    if (this.current) {
+      this.cancel()
+      await this.current
+    }
+    this.ctx.input.unattended = 50
+    this.lastError = null
+    try {
+      this.current = this.execute(command, answers)
+      await this.current
+    } finally {
+      this.ctx.input.unattended = 0
+    }
+    if (this.lastError) throw new Error(this.lastError)
+  }
+
   /** Runs a command object that is not registered by name, such as an edit made with the gumball. */
   async runCommand(command: Command): Promise<void> {
     if (this.current) {
@@ -109,7 +133,8 @@ export class CommandRunner {
     } catch (error) {
       if (!(error instanceof CancelError)) {
         console.error(error)
-        log(`Error in ${command.name}: ${error instanceof Error ? error.message : String(error)}`)
+        this.lastError = `Error in ${command.name}: ${error instanceof Error ? error.message : String(error)}`
+        log(this.lastError)
       }
     } finally {
       // Work done before a cancel (e.g. the copies already placed) is kept as one undo step.

@@ -27,6 +27,7 @@ export const STL: FileType = { name: 'STL mesh', extension: 'stl', mime: 'model/
 export const PNG: FileType = { name: 'PNG image', extension: 'png', mime: 'image/png' }
 export const IMAGE: FileType = { name: 'Image', extension: 'jpg', extensions: ['jpg', 'jpeg', 'png', 'webp'], mime: 'image/*' }
 export const IFC: FileType = { name: 'IFC model', extension: 'ifc', mime: 'application/x-step' }
+export const SCRIPT: FileType = { name: 'JavaScript', extension: 'js', mime: 'text/javascript' }
 export const OBJ: FileType = { name: 'OBJ mesh', extension: 'obj', mime: 'model/obj' }
 const UNTITLED = 'Untitled'
 
@@ -379,6 +380,12 @@ export class FileManager {
     const parts = [`${shapes.length} solid${shapes.length === 1 ? '' : 's'} or surface${shapes.length === 1 ? '' : 's'}`]
     if (curves.length > 0) parts.push(`${curves.length} curve${curves.length === 1 ? '' : 's'}`)
     return { ids, message: `Imported ${file.fileName}: ${parts.join(' and ')}, in ${this.doc.units.toLowerCase()}` }
+  }
+
+  /** Asks for a script file. Resolves to its name and text, or null if cancelled. */
+  async pickScript(): Promise<{ name: string; text: string } | null> {
+    const file = await pickFile([SCRIPT])
+    return file ? { name: file.fileName, text: new TextDecoder().decode(await file.read()) } : null
   }
 
   /** Asks for a picture (JPEG, PNG or WebP). Resolves to its name and bytes, or null if cancelled. */

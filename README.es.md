@@ -469,6 +469,29 @@ Despliega cada apartado para ver los detalles.
 </details>
 
 <details>
+<summary><b>Scripts</b></summary>
+<br>
+
+`RunScript` (menú *File*) ejecuta un archivo JavaScript que maneja el modelador, para automatizar
+trabajo repetitivo; `Last` vuelve a ejecutar el último. Un script se ejecuta como el cuerpo de una
+función asíncrona, con `archi` y `Vector3` disponibles:
+
+| | |
+| --- | --- |
+| `await archi.command(nombre, ...respuestas)` | Ejecuta un comando con sus respuestas en orden (`''` es Enter; si se acaban, Enter hasta que termina). Devuelve los ids que deja seleccionados (lo que ha creado); un error del comando detiene el script. |
+| `archi.add(geometría, capa?)`, `archi.remove(ids)` | Añade geometría (una curva, malla o punto) a una capa por su nombre, o borra objetos. |
+| `archi.objects(filtro?)` | Los objetos: id, tipo, capa, y el comando y los parámetros de los que tienen historial. |
+| `archi.select(ids)` | Selecciona objetos, para los comandos que actúan sobre la selección. |
+| `archi.levels()`, `archi.setLevel(nombre)` | Los niveles, y el actual. |
+| `await archi.step(cambios)` | Varios cambios como un solo paso de deshacer. |
+| `archi.v(x, y, z)`, `archi.log(...)`, `archi.doc` | Un punto, una línea en el historial y el propio documento. |
+
+Hay ejemplos en [examples/scripts](examples/scripts): una retícula de pilares y una torre de varias
+plantas. Los scripts tienen el mismo acceso que la aplicación: ejecuta solo los que sean de fiar.
+
+</details>
+
+<details>
 <summary><b>Otros comandos y alias</b></summary>
 <br>
 
@@ -565,6 +588,7 @@ flowchart LR
 - [x] Terreno a partir de curvas de nivel y puntos topográficos
 - [x] Muros multicapa
 - [x] Muros cortina
+- [x] Scripts (`RunScript`)
 - [ ] Instaladores firmados y actualizaciones automáticas
 
 ## Preguntas frecuentes

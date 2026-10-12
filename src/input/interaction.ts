@@ -109,6 +109,8 @@ export class Interaction {
   private request: Request | null = null
   private drag: Drag | null = null
   private script: string[] = []
+  /** Enters still to give a command run from a script once its answers run out (0: wait for the user). */
+  unattended = 0
   /** Lines typed while the running command was busy (e.g. waiting for the kernel), for its next prompts. */
   private typeAhead: string[] = []
   private lastPoint = new Vector3()
@@ -212,6 +214,12 @@ export class Interaction {
       this.ui.setPrompt(opts.prompt, opts.options ?? [])
       const scripted = this.script.shift() ?? this.typeAhead.shift()
       if (scripted !== undefined) queueMicrotask(() => this.handleText(scripted))
+      else if (this.unattended > 0) {
+        // Run from a script with no answers left: Enter, as many times as it takes to finish
+        // (a command that keeps asking is cancelled).
+        this.unattended--
+        queueMicrotask(() => (this.unattended > 0 ? this.enter() : this.cancel()))
+      }
     })
   }
 
