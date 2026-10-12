@@ -86,8 +86,9 @@ Releases page (no GitHub account needed):
 
 What is new in each version is in the [changelog](CHANGELOG.md).
 
-Releases are built by GitHub Actions when a version tag starting with `v` is pushed
-(`git tag v0.4.0 && git push origin v0.4.0`), or created from the Releases page. Builds of the latest code can also be run by hand
+Releases are built and published by GitHub Actions on their own when a change to the version in
+`package.json` is merged into `master` (the tag `vX.Y.Z` is made then); pushing such a tag also
+publishes one. Builds of the latest code can also be run by hand
 from the [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
 workflow (**Run workflow**); they appear as artifacts of the run, which need a GitHub account.
 

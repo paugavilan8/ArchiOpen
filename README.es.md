@@ -86,8 +86,9 @@ página de *Releases* (no hace falta cuenta de GitHub):
 
 Las novedades de cada versión están en el [registro de cambios](CHANGELOG.md) (en inglés).
 
-Las versiones se generan en GitHub Actions al publicar una etiqueta de versión que empiece por `v`
-(`git tag v0.4.0 && git push origin v0.4.0`), o al crearla desde la página de *Releases*. También se puede compilar el código más reciente a mano
+Las versiones las compila y publica GitHub Actions por sí solo cuando se integra en `master` un
+cambio de la versión de `package.json` (entonces se crea la etiqueta `vX.Y.Z`); subir esa etiqueta
+también publica una. También se puede compilar el código más reciente a mano
 desde el flujo [**Desktop app**](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
 (**Run workflow**); el resultado aparece como artefacto de la ejecución, que sí requiere cuenta.
 
