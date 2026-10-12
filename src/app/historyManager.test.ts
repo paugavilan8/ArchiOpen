@@ -134,6 +134,11 @@ describe('construction history', () => {
     const wall = doc.add({ type: 'polyline', points: [v(0, 0), v(1, 0)], closed: false }).id
     const window = { id: 1, kind: 'window', at: 1500, width: 1200, height: 1200, sill: 900 }
     const door = { id: 2, kind: 'door', at: 3500, width: 900, height: 2100, sill: 0 }
+    const symbols = () =>
+      [...doc.objects.values()]
+        .filter((o) => o.history?.command === 'OpeningSymbol')
+        .map((o) => `${(o.history!.params!.opening as { id: number }).id}:${o.history!.params!.part}`)
+        .sort()
     const parts = () =>
       [...doc.objects.values()]
         .filter((o) => o.history?.command === 'OpeningPart')
@@ -144,6 +149,7 @@ describe('construction history', () => {
     doc.commit()
     await history.settled
     expect(parts()).toEqual(['1:frame@Windows', '1:glass@Glazing', '2:frame@Doors', '2:leaf@Doors'])
+    expect(symbols()).toEqual(['1:planFrame', '1:planGlass', '2:swing'])
     expect(doc.materials.map((m) => m.name).sort()).toEqual(['Glass', 'Window frame', 'Wood'])
     const glassOf = () => [...doc.objects.values()].find((o) => o.history?.params?.part === 'glass')!
     const glassY = () => {
@@ -155,6 +161,7 @@ describe('construction history', () => {
     await history.remakeStep(wall, { command: 'Wall', inputs: [path], params: { thickness: 200, height: 3000, justification: 'left', openings: [window] } })
     await history.settled
     expect(parts()).toEqual(['1:frame@Windows', '1:glass@Glazing'])
+    expect(symbols()).toEqual(['1:planFrame', '1:planGlass'])
     expect(glassY()).toBeCloseTo(100, 6)
     // Moving the line moves them all.
     doc.setGeometry(path, { type: 'polyline', points: [v(0, 1000), v(5000, 1000)], closed: false })
@@ -171,6 +178,7 @@ describe('construction history', () => {
     await history.settled
     expect(parts()).toHaveLength(0)
     expect([...doc.objects.values()].filter((o) => o.geometry.type === 'brep')).toHaveLength(4)
+    expect(symbols()).toHaveLength(0)
   })
 
   it('joins walls that meet, and keeps them joined as they change', async () => {

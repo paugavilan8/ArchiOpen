@@ -247,6 +247,10 @@ Expand a section for details.
   fill them: windows get a frame and glass, doors a frame and a leaf, each with its own material on
   the *Windows*, *Glazing* and *Doors* layers (`Frame=No` leaves a bare opening). They stay with
   their wall when its line moves or its parameters change, and go when the opening is removed.
+- Openings are also drawn in plan, on a *Plan Symbols* layer at the floor: a door's leaf open
+  square to the wall with the arc it sweeps, a window's frame and glass. A door opens to the side of
+  the wall it was clicked on, hinged at the end set by `Hinge`; the Properties panel turns it to
+  the other side (⇅) or hangs it on the other end (⇄).
 - Walls and slabs keep their line (on the *Construction* layer): moving or editing it makes them
   again. Thickness, height, justification and openings (and the parameters of roofs, stairs and
   columns) can be changed in the Properties panel, as one undo step. Moving the solid itself turns it into a plain solid, as with construction history.
@@ -462,7 +466,8 @@ flowchart LR
 - [x] Railings for stairs and slab edges
 - [x] Automatic plan dimensions for walls and openings
 - [x] Room labels with areas
-- [ ] Door swings and window symbols in plan
+- [x] Door swings and window symbols in plan
+- [ ] Floor finishes and skirting from room outlines
 - [ ] Signed installers and automatic updates
 
 ## FAQ
