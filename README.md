@@ -289,7 +289,11 @@ Expand a section for details.
 - `Schedule` draws the doors and windows table (one row per type, marked D1, D2, ... and W1,
   W2, ..., with width, height, sill, levels and count) and the rooms table (each labelled room with
   its level and floor area, the total of each level and of the building) on a Schedules layer,
-  ready for layout details. `UpdateDrawings` makes them again in place from the model.
+  ready for layout details. `UpdateDrawings` makes them again in place from the model. Its
+  `Quantities` option draws the quantities of the building's elements by level and material:
+  walls (length and the area of one face less openings), slabs (area less openings), roofs (plan
+  area), columns, stairs, railings (length), floor finishes, skirting, doors and windows, with
+  their volumes, in meters. `ExportQuantities` writes them to a CSV file for a spreadsheet.
 - `DrawingSet` lays the building's drawings out on A3 sheets in one go, each with its title block
   (project name, drawing title, number A-01, A-02, ..., scale and date): a plan of each level with
   something in it, cut 1.2 above its floor and without the levels under it (all at one scale, with
@@ -528,6 +532,7 @@ flowchart LR
 - [x] Several levels in the drawing set, with a plan for each
 - [x] IFC export and import
 - [x] Stairs that follow their level's height, with stairwells cut in the slab above
+- [x] Quantities by element, level and material, with CSV export
 - [ ] Signed installers and automatic updates
 
 ## FAQ

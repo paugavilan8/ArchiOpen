@@ -4,6 +4,8 @@ import type { AnyCurve } from '../core/geometry'
 import { domain, isCurve, isClosed, pointAt, wireframe } from '../core/geometry'
 import { areaInside, levelName, openingSchedule, openingTypes, roomSchedule, tableGeometry, type ScheduledOpening, type ScheduledRoom, type Table } from '../core/schedules'
 import { millimetersPer } from '../core/units'
+import { quantityTable, sumQuantities } from '../core/quantities'
+import { quantityItems } from './quantities'
 import { areaUnits } from './architecture'
 import { buildingGeometry, modelBox } from './buildingViews'
 import { layerNamed } from './drawing'
@@ -16,7 +18,7 @@ import type { Command, CommandContext } from './runner'
  * UpdateDrawings makes it again in place from the model as it is.
  */
 
-export type ScheduleKind = 'openings' | 'rooms'
+export type ScheduleKind = 'openings' | 'rooms' | 'quantities'
 
 /** The doors and windows in the model's walls, with their walls' levels. */
 function scheduledOpenings(ctx: CommandContext): ScheduledOpening[] {
@@ -57,6 +59,10 @@ export function scheduleTable(ctx: CommandContext, kind: ScheduleKind): Table | 
   if (kind === 'openings') {
     const openings = scheduledOpenings(ctx)
     return openings.length > 0 ? openingSchedule(openingTypes(openings, doc.levels), millimetersPer(doc.units)) : null
+  }
+  if (kind === 'quantities') {
+    const rows = sumQuantities(quantityItems(ctx), doc.levels.map((l) => l.name))
+    return rows.length > 0 ? quantityTable(rows) : null
   }
   const rooms = scheduledRooms(ctx)
   const units = areaUnits(doc.units)
@@ -131,14 +137,16 @@ const schedule: Command = {
   name: 'Schedule',
   async run(ctx) {
     const { input, log } = ctx
-    const option = await input.getOption('Schedule to draw', ['Openings', 'Rooms', 'Both'])
+    const option = await input.getOption('Schedule to draw', ['Openings', 'Rooms', 'Quantities', 'Both'])
     if (option === null) return
-    const kinds: ScheduleKind[] = isOption(option, 'Openings') ? ['openings'] : isOption(option, 'Rooms') ? ['rooms'] : ['openings', 'rooms']
-    for (const kind of kinds) if (!scheduleTable(ctx, kind)) log(kind === 'openings' ? 'There are no doors or windows in walls' : 'There are no rooms labelled with Room')
+    const kinds: ScheduleKind[] = isOption(option, 'Openings') ? ['openings'] : isOption(option, 'Rooms') ? ['rooms'] : isOption(option, 'Quantities') ? ['quantities'] : ['openings', 'rooms']
+    const missing: Record<ScheduleKind, string> = { openings: 'There are no doors or windows in walls', rooms: 'There are no rooms labelled with Room', quantities: 'There are no building elements to measure' }
+    for (const kind of kinds) if (!scheduleTable(ctx, kind)) log(missing[kind])
     if (!kinds.some((k) => scheduleTable(ctx, k))) return
     const r = await input.getPoint({ prompt: 'Top left corner of the schedule <over the model>' })
     const drawn = drawSchedules(ctx, kinds, r.kind === 'point' ? r.point : undefined)
-    log(`${drawn.map((k) => (k === 'openings' ? 'Doors and windows' : 'Rooms')).join(' and ')} schedule${drawn.length > 1 ? 's' : ''} drawn. UpdateDrawings makes them again from the model`)
+    const names: Record<ScheduleKind, string> = { openings: 'Doors and windows', rooms: 'Rooms', quantities: 'Quantities' }
+    log(`${drawn.map((k) => names[k]).join(' and ')} schedule${drawn.length > 1 ? 's' : ''} drawn. UpdateDrawings makes them again from the model`)
   },
 }
 
