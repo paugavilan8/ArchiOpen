@@ -1,8 +1,9 @@
 import { Box3, Vector3 } from 'three'
-import { wallParams } from '../core/architecture'
+import { openingBox, wallParams } from '../core/architecture'
+import { textShape } from '../text/strokeFont'
 import type { AnyCurve } from '../core/geometry'
 import { domain, isCurve, isClosed, pointAt, wireframe } from '../core/geometry'
-import { areaInside, levelName, openingSchedule, openingTypes, roomSchedule, tableGeometry, type ScheduledOpening, type ScheduledRoom, type Table } from '../core/schedules'
+import { areaInside, levelName, markOf, openingSchedule, openingTypes, roomSchedule, tableGeometry, type ScheduledOpening, type ScheduledRoom, type Table } from '../core/schedules'
 import { millimetersPer } from '../core/units'
 import { quantityTable, sumQuantities } from '../core/quantities'
 import { quantityItems } from './quantities'
@@ -116,10 +117,61 @@ export function drawSchedules(ctx: CommandContext, kinds: ScheduleKind[] = ['ope
   return tables.map((t) => t.kind)
 }
 
+/**
+ * Tags in plan: the mark of each door and window (D1, W1, ... as in the doors and windows
+ * schedule) beside it, off the wall's left face, on an Opening Tags layer. Made again in full each
+ * time, so they follow the walls. Returns how many.
+ */
+export function drawOpeningTags(ctx: CommandContext, height?: number): number {
+  const { doc } = ctx
+  const layer = layerNamed(ctx, 'Opening Tags', '#c0392b')
+  const old = [...doc.objects.values()].filter((o) => o.history?.command === 'OpeningTags')
+  const size = height ?? (old[0]?.history?.params?.height as number | undefined) ?? 250 / millimetersPer(doc.units)
+  for (const o of old) doc.remove(o.id)
+  const types = openingTypes(scheduledOpenings(ctx), doc.levels)
+  let made = 0
+  for (const obj of doc.objects.values()) {
+    if (obj.history?.command !== 'Wall') continue
+    const path = doc.objects.get(obj.history.inputs[0])?.geometry
+    if (!path || !isCurve(path)) continue
+    const params = wallParams(obj.history.params)
+    for (const opening of params.openings) {
+      const mark = markOf(types, opening)
+      if (!mark) continue
+      const b = openingBox(path, params, opening)
+      // Beside the opening's middle, off the wall's left face, on its floor.
+      const middle = b.origin.clone().addScaledVector(b.u, 0.5)
+      const left = b.v.clone().normalize()
+      const at = middle.addScaledVector(left, b.v.length() + size * 1.2).setZ(b.origin.z - opening.sill)
+      const width = Math.max(...textShape(mark).widths) * size
+      const id = doc.add(
+        { type: 'annotation', kind: 'text', points: [new Vector3(at.x - width / 2, at.y - size / 2, at.z)], xaxis: new Vector3(1, 0, 0), yaxis: new Vector3(0, 1, 0), text: mark, height: size, arrow: 'arrow', precision: 0 },
+        layer.id,
+      ).id
+      doc.setHistory(id, { command: 'OpeningTags', inputs: [], params: { height: size } })
+      made++
+    }
+  }
+  return made
+}
+
+const tags: Command = {
+  name: 'Tags',
+  async run(ctx) {
+    const made = drawOpeningTags(ctx)
+    ctx.log(made > 0 ? `${made} door and window tag${made === 1 ? '' : 's'} placed in plan, marked as in the schedule. UpdateDrawings places them again` : 'There are no doors or windows in walls to tag')
+  },
+}
+
 /** Makes every schedule again in its place from the model as it is; returns how many. */
 export function updateSchedules(ctx: CommandContext): number {
   const { doc } = ctx
   let made = 0
+  // The tags in plan too, if there are any.
+  if ([...doc.objects.values()].some((o) => o.history?.command === 'OpeningTags')) {
+    drawOpeningTags(ctx)
+    made++
+  }
   for (const title of [...doc.objects.values()].filter((o) => o.history?.command === 'ScheduleTable')) {
     const { kind, at, height } = title.history!.params as { kind: ScheduleKind; at: [number, number, number]; height: number }
     const group = title.groups?.[0]
@@ -150,5 +202,5 @@ const schedule: Command = {
   },
 }
 
-export const scheduleCommands: Command[] = [schedule]
+export const scheduleCommands: Command[] = [schedule, tags]
 

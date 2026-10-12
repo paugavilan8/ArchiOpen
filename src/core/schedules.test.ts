@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import type { Level, Opening } from './architecture'
-import { areaInside, levelName, openingSchedule, openingTypes, roomSchedule, tableGeometry } from './schedules'
+import { areaInside, levelName, markOf, openingSchedule, openingTypes, roomSchedule, tableGeometry } from './schedules'
 
 const levels: Level[] = [
   { name: 'Ground', elevation: 0, height: 3000 },
@@ -31,6 +31,10 @@ describe('schedules', () => {
       ['Ground', 2],
       ['First', 1],
     ])
+    // Each opening's mark is that of its type.
+    expect(markOf(types, window(1200))).toBe('W1')
+    expect(markOf(types, { ...door(900), frame: false })).toBe('D3')
+    expect(markOf(types, door(1234))).toBe('')
     const table = openingSchedule(types, 1)
     expect(table.header).toEqual(['Mark', 'Type', 'Width', 'Height', 'Sill', 'Levels', 'Count'])
     expect(table.rows[2]).toEqual(['D3', 'Door (opening)', '900', '2100', '0', 'First', '1'])

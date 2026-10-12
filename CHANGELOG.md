@@ -5,6 +5,11 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Door and window tags** (`Tags`): each opening's mark from the schedule beside it in plan, kept
+  up to date by `UpdateDrawings` and added by `DrawingSet`.
+- Plans of a drawing set show texts (room labels, tags, dimensions) on their own level only.
+- Commands run from scripts or an AI assistant stop with an error on an answer they do not take,
+  instead of waiting for someone to type.
 - **Editable elements from IFC**: straight walls (with their doors and windows) and flat slabs (with
   their holes) in IFC files come in as ArchiOpen walls and slabs, joined and editable; the rest as
   meshes.
