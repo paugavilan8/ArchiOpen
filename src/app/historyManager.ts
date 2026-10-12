@@ -3,6 +3,7 @@ import { isCurve } from '../core/geometry'
 import type { Settings } from '../core/settings'
 import type { BrepGeometry } from '../core/geometry'
 import { kernelJob } from '../kernel/client'
+import { orphanedParts, planOpeningParts, withOpeningIds } from './openingParts'
 
 /**
  * Construction history, as in Rhino: an object made from curves with history recorded is made again
@@ -57,6 +58,10 @@ export class HistoryManager {
       else if (record.inputs.some((id) => removed.has(id) || !doc.objects.has(id))) breaks.push(obj.id)
       else if (record.inputs.some((id) => changed.has(id))) rebuild.push(obj.id)
     }
+    // The frames and glass of a wall that is gone, or no longer made from its line, stay as they are.
+    const orphans = orphanedParts(doc, new Set([...breaks, ...removed]))
+    for (const id of orphans) if (!breaks.includes(id) && !removed.has(id)) breaks.push(id)
+    if (orphans.length > 0) rebuild.splice(0, rebuild.length, ...rebuild.filter((id) => !orphans.includes(id)))
     if (breaks.length === 0 && rebuild.length === 0) return
 
     const results = new Map<number, BrepGeometry>()
@@ -97,19 +102,31 @@ export class HistoryManager {
    * its geometry and record change together, and it keeps following its inputs.
    */
   async remake(id: number, record: HistoryRecord): Promise<void> {
-    const geometry = await this.build(record)
-    this.doc.setGeometry(id, geometry)
-    this.doc.setHistory(id, record)
+    ;(await this.prepare(id, record))()
   }
 
   /** Like remake(), as an undo step of its own (for edits made outside commands). */
   async remakeStep(id: number, record: HistoryRecord): Promise<void> {
-    const geometry = await this.build(record)
+    const apply = await this.prepare(id, record)
     if (!this.doc.objects.has(id)) return
     this.doc.begin()
-    this.doc.setGeometry(id, geometry)
-    this.doc.setHistory(id, record)
+    apply()
     this.doc.commit()
+  }
+
+  /**
+   * Builds what remaking an object needs (for a wall, also the frames and glass of its openings) and
+   * returns the function that makes the changes.
+   */
+  private async prepare(id: number, given: HistoryRecord): Promise<() => void> {
+    const record = given.command === 'Wall' ? withOpeningIds(given) : given
+    const geometry = await this.build(record)
+    const parts = record.command === 'Wall' ? await planOpeningParts(this.doc, id, record, (r) => this.build(r)) : () => {}
+    return () => {
+      this.doc.setGeometry(id, geometry)
+      this.doc.setHistory(id, record)
+      parts()
+    }
   }
 
   /** Remembers how an object was made, if history recording is on. */

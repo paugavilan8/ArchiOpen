@@ -126,4 +126,50 @@ describe('construction history', () => {
     expect(width()).toBeCloseTo(200, 6)
     expect(doc.objects.get(wall)!.history?.params?.thickness).toBe(200)
   })
+
+  it('keeps the frames and glass of a wall in line with it', async () => {
+    const doc = new Document()
+    const history = new HistoryManager(doc, new Settings(), vi.fn())
+    const path = doc.add({ type: 'polyline', points: [v(0, 0), v(5000, 0)], closed: false }).id
+    const wall = doc.add({ type: 'polyline', points: [v(0, 0), v(1, 0)], closed: false }).id
+    const window = { id: 1, kind: 'window', at: 1500, width: 1200, height: 1200, sill: 900 }
+    const door = { id: 2, kind: 'door', at: 3500, width: 900, height: 2100, sill: 0 }
+    const parts = () =>
+      [...doc.objects.values()]
+        .filter((o) => o.history?.command === 'OpeningPart')
+        .map((o) => `${(o.history!.params!.opening as { id: number }).id}:${o.history!.params!.part}@${doc.layerOf(o).name}`)
+        .sort()
+    doc.begin()
+    await history.remake(wall, { command: 'Wall', inputs: [path], params: { thickness: 200, height: 3000, openings: [window, door] } })
+    doc.commit()
+    await history.settled
+    expect(parts()).toEqual(['1:frame@Windows', '1:glass@Glazing', '2:frame@Doors', '2:leaf@Doors'])
+    expect(doc.materials.map((m) => m.name).sort()).toEqual(['Glass', 'Window frame', 'Wood'])
+    const glassOf = () => [...doc.objects.values()].find((o) => o.history?.params?.part === 'glass')!
+    const glassY = () => {
+      const b = shapeBounds(shapeOf(glassOf().geometry as BrepGeometry))
+      return (b.min.y + b.max.y) / 2
+    }
+    expect(glassY()).toBeCloseTo(0, 6)
+    // New parameters: the pieces move to the middle of the new wall; the door taken out goes.
+    await history.remakeStep(wall, { command: 'Wall', inputs: [path], params: { thickness: 200, height: 3000, justification: 'left', openings: [window] } })
+    await history.settled
+    expect(parts()).toEqual(['1:frame@Windows', '1:glass@Glazing'])
+    expect(glassY()).toBeCloseTo(100, 6)
+    // Moving the line moves them all.
+    doc.setGeometry(path, { type: 'polyline', points: [v(0, 1000), v(5000, 1000)], closed: false })
+    await history.settled
+    expect(glassY()).toBeCloseTo(1100, 6)
+    // One undo brings the door back.
+    doc.undo()
+    await history.settled
+    doc.undo()
+    await history.settled
+    expect(parts()).toHaveLength(4)
+    // Deleting the wall leaves its pieces as plain solids.
+    doc.remove(wall)
+    await history.settled
+    expect(parts()).toHaveLength(0)
+    expect([...doc.objects.values()].filter((o) => o.geometry.type === 'brep')).toHaveLength(4)
+  })
 })
