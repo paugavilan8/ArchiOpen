@@ -3,6 +3,15 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- **Drawing set** (`DrawingSet`): the plan of the current level, the elevations and the sections laid
+  out on A3 sheets in one go, each with its title block and the largest standard scale that fits.
+- **Update drawings** (`UpdateDrawings`): elevations and sections are drawn again from the model,
+  each in its place, so the sheets show the changes.
+- Clipping planes are no longer drawn on sheets.
+- Releases are published by themselves when a version bump is merged.
+
 ## 0.4.0
 
 Interiors and a full set of drawings.

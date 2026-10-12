@@ -284,7 +284,8 @@ Expand a section for details.
   (project name, drawing title, number A-01, A-02, ..., scale and date): the plan of the current
   level, cut 1.2 above its floor, the four elevations (drawn first if missing) and the sections.
   Each sheet picks the largest standard scale that fits, and the sheets are ordinary layouts, to
-  adjust or export to PDF.
+  adjust or export to PDF. `UpdateDrawings` draws the elevations and sections again from the model
+  as it is, each in its place, so the sheets show the changes.
 - `Level` adds, edits and removes levels (name, elevation and floor-to-floor height) and sets the
   current one, which moves the construction planes to its elevation. Levels are saved with the
   model.
@@ -494,7 +495,8 @@ flowchart LR
 - [x] Furniture and fittings library (blocks)
 - [x] Section and elevation views of the building, ready for layouts
 - [x] A drawing set: plans, sections and elevations placed on layout sheets in one go
-- [ ] Drawings that update when the model changes
+- [x] Drawings that update from the model (`UpdateDrawings`)
+- [ ] Several levels in the drawing set, with a plan for each
 - [ ] Signed installers and automatic updates
 
 ## FAQ

@@ -62,7 +62,20 @@ function title(text: string, at: Vector3, height: number): AnnotationGeometry {
  * Adds a drawing at an offset with its ground line (at the drawing's height of the model's lowest
  * level) and a title under it; returns the new objects' ids.
  */
-function place(ctx: CommandContext, drawing: Drawing2D, offset: Vector3, ground: number, name: string, layerName: string, textHeight: number): number[] {
+/** How a drawing was made, kept on its title so UpdateDrawings can make it again in place. */
+export interface DrawingRecord {
+  kind: 'elevation' | 'section'
+  name: string
+  /** The horizontal direction the view looks in. */
+  look: [number, number, number]
+  /** Where the drawing's coordinates are moved to on the model's ground plane. */
+  offset: [number, number, number]
+  /** A point on the cut (sections). */
+  origin?: [number, number, number]
+  textHeight: number
+}
+
+function place(ctx: CommandContext, drawing: Drawing2D, offset: Vector3, ground: number, name: string, layerName: string, textHeight: number, record?: DrawingRecord): number[] {
   const { doc } = ctx
   const m = new Matrix4().makeTranslation(offset.x, offset.y, offset.z)
   const lines = layerNamed(ctx, layerName, '#000000')
@@ -76,7 +89,10 @@ function place(ctx: CommandContext, drawing: Drawing2D, offset: Vector3, ground:
   const reach = (box.max.x - box.min.x) * 0.08
   const y = ground + offset.y
   ids.push(doc.add({ type: 'polyline', points: [new Vector3(box.min.x - reach + offset.x, y, 0), new Vector3(box.max.x + reach + offset.x, y, 0)], closed: false } as AnyCurve, cut?.id ?? lines.id).id)
-  ids.push(doc.add(title(name, new Vector3((box.min.x + box.max.x) / 2 + offset.x, y - textHeight * 3, 0), textHeight), lines.id).id)
+  const titleId = doc.add(title(name, new Vector3((box.min.x + box.max.x) / 2 + offset.x, y - textHeight * 3, 0), textHeight), lines.id).id
+  // No inputs: construction history never makes it again by itself; UpdateDrawings does.
+  if (record) doc.setHistory(titleId, { command: 'DrawingView', inputs: [], params: { ...record } })
+  ids.push(titleId)
   doc.group(ids)
   return ids
 }
@@ -110,7 +126,8 @@ export async function drawElevations(ctx: CommandContext): Promise<number[]> {
     const b = boxes[i]
     if (b.isEmpty()) return
     const offset = new Vector3(x - b.min.x, top - tallest, 0)
-    made.push(...place(ctx, d.drawing, offset, ground, d.name, 'Elevations', textHeight))
+    const record: DrawingRecord = { kind: 'elevation', name: d.name, look: d.look.toArray() as [number, number, number], offset: offset.toArray() as [number, number, number], textHeight }
+    made.push(...place(ctx, d.drawing, offset, ground, d.name, 'Elevations', textHeight, record))
     x += b.max.x - b.min.x + gap
   })
   return made
@@ -178,7 +195,9 @@ const section: Command = {
     const letter = nextLetter(ctx)
     // Beside the model, its ground line level with the model's floor.
     const offset = new Vector3(model.max.x + gap - box.min.x, model.min.y - box.min.y, 0)
-    const made = place(ctx, drawing, offset, model.min.z, `Section ${letter}-${letter}`, 'Sections', textHeight)
+    const name = `Section ${letter}-${letter}`
+    const record: DrawingRecord = { kind: 'section', name, look: look.toArray() as [number, number, number], offset: offset.toArray() as [number, number, number], origin: origin.toArray() as [number, number, number], textHeight }
+    const made = place(ctx, drawing, offset, model.min.z, name, 'Sections', textHeight, record)
     // The mark in plan: the cut line past the building, arrows to the look side and the letters.
     const marks = layerNamed(ctx, 'Section Marks', '#c0392b', 'Center')
     const z = model.min.z
@@ -197,4 +216,42 @@ const section: Command = {
   },
 }
 
-export const buildingViewCommands: Command[] = [elevations, section]
+/**
+ * Makes the elevations and sections again from the model as it is now, each in its place (its
+ * title keeps how it was made), so the details of sheets showing them show the changes.
+ */
+const updateDrawings: Command = {
+  name: 'UpdateDrawings',
+  async run(ctx) {
+    const { doc, log } = ctx
+    const titles = [...doc.objects.values()].filter((o) => o.history?.command === 'DrawingView')
+    if (titles.length === 0) {
+      log('There are no elevations or sections to update (draw them with Elevations or Section)')
+      return
+    }
+    const objects = buildingGeometry(ctx)
+    if (objects.length === 0) throw new Error('There is nothing to draw: the building is gone')
+    const ground = modelBox(objects).min.z
+    await kernel(ctx)
+    let updated = 0
+    for (const t of titles) {
+      const record = t.history!.params as unknown as DrawingRecord
+      const look = new Vector3(...record.look)
+      let clip: ClipPlane[] = []
+      if (record.kind === 'section' && record.origin) {
+        const origin = new Vector3(...record.origin)
+        clip = [{ normal: look.clone(), constant: -look.dot(origin), origin }]
+      }
+      const drawing = await draw(ctx, objects, lookingAlong(look), clip)
+      // The old drawing (its whole group) gives way to the new one, in the same place.
+      const group = t.groups?.[0]
+      const old = group === undefined ? [t.id] : [...doc.objects.values()].filter((o) => o.groups?.includes(group)).map((o) => o.id)
+      for (const id of old) doc.remove(id)
+      place(ctx, drawing, new Vector3(...record.offset), ground, record.name, record.kind === 'section' ? 'Sections' : 'Elevations', record.textHeight, record)
+      updated++
+    }
+    log(`${updated} drawing${updated === 1 ? '' : 's'} updated from the model`)
+  },
+}
+
+export const buildingViewCommands: Command[] = [elevations, section, updateDrawings]
