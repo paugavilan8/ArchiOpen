@@ -1,19 +1,62 @@
-# Builds the desktop installers. Run it by hand from the Actions tab to get them as downloadable
-# artifacts, or push a tag such as v0.2.0 to publish them as a GitHub release, which anyone can
-# download from the Releases page without signing in.
+# Builds the desktop installers and publishes them as GitHub releases, which anyone can download
+# from the Releases page without signing in.
+#
+# - Merging a change to the version in package.json (or to this workflow) into master publishes
+#   that version if it has no release yet: the tag
+#   (v<version>) and the release are made here.
+# - Pushing a tag such as v0.5.0 (on a commit with that version) publishes it too.
+# - Running it by hand from the Actions tab only builds, as downloadable artifacts.
 name: Desktop app
 
 on:
   workflow_dispatch:
   push:
+    branches: [master]
+    paths: [package.json, .github/workflows/desktop.yml]
     tags: ['v*']
 
 permissions:
   contents: write
 
 jobs:
+  # Works out whether this run publishes a release, and of which version.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v${version}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # A release must be built from the version it is named after.
+            if [ "${GITHUB_REF_NAME}" != "${tag}" ]; then
+              echo "::error::The tag ${GITHUB_REF_NAME} does not match the project version ${version}. Merge the version bump first, then tag that commit."
+              exit 1
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" > /dev/null 2>&1; then
+            echo "Release ${tag} already exists; nothing to publish."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version ${version} has no release yet: publishing ${tag}."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: ${{ matrix.name }}
+    needs: plan
+    # On master, only when there is a new version to publish.
+    if: github.event_name != 'push' || github.ref_type == 'tag' || needs.plan.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -45,17 +88,6 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      # A release must be built from the version it is named after (bump the version first).
-      - name: Check the tag matches the version
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          version=$(node -p "require('./package.json').version")
-          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
-            echo "::error::The tag ${GITHUB_REF_NAME} does not match the project version ${version}. Merge the version bump first, then tag that commit."
-            exit 1
-          fi
-
       - run: npm ci
 
       - name: Build
@@ -63,9 +95,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Only tag pushes publish a release; manual runs just build.
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: ArchiOpen ${{ github.ref_name }}
+          # Releases make their tag on this commit if it does not exist yet; manual runs just build.
+          tagName: ${{ needs.plan.outputs.release == 'true' && needs.plan.outputs.tag || '' }}
+          releaseName: ArchiOpen ${{ needs.plan.outputs.tag }}
+          releaseCommitish: ${{ github.sha }}
           releaseBody: Installers for Windows (.exe, .msi), macOS (.dmg) and Linux (.AppImage, .deb, .rpm). See the [changelog](https://github.com/paugavilan8/ArchiOpen/blob/master/CHANGELOG.md) for what is new.
           releaseDraft: false
 
