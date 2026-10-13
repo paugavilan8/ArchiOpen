@@ -13,7 +13,7 @@ interoperability, in a lightweight desktop application driven by a command line.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/ci.yml)
 [![Desktop build](https://img.shields.io/github/actions/workflow/status/paugavilan8/ArchiOpen/desktop.yml?style=flat-square&label=installers)](https://github.com/paugavilan8/ArchiOpen/actions/workflows/desktop.yml)
-![Version](https://img.shields.io/badge/version-0.8.0-2f81f7?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.8.1-2f81f7?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555?style=flat-square)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
 
@@ -85,6 +85,15 @@ Releases page (no GitHub account needed):
 | Linux | `ArchiOpen_x.y.z_amd64.AppImage` (or the `.deb` or `.rpm`) |
 
 What is new in each version is in the [changelog](CHANGELOG.md).
+
+**Updates.** From version 0.8.1 the desktop app updates itself: a little after start it looks for a
+newer release and offers to install it (Help > Check for Updates looks any time). Updates are
+signed, and the app checks the signature before installing.
+
+**First start.** The installers are not yet signed with a code-signing certificate, so Windows may
+show "Windows protected your PC" (choose *More info* > *Run anyway*), and macOS may refuse to open
+the app the first time (right-click it > *Open*, or allow it in System Settings > Privacy &
+Security).
 
 Releases are built and published by GitHub Actions on their own when a change to the version in
 `package.json` is merged into `master` (the tag `vX.Y.Z` is made then); pushing such a tag also

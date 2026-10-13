@@ -1,7 +1,7 @@
 {
   "name": "archiopen",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -17,6 +17,8 @@
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/plugin-dialog": "^2.8.1",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.3",
     "replicad": "^1.1.0",
     "replicad-opencascadejs": "^1.1.0",
     "rhino3dm": "^8.35.0",

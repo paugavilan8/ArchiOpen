@@ -378,6 +378,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
                 'Enter, Space or right click: repeat the last command. Double-click a viewport title: maximize.',
             ),
         },
+        item('Check for Updates', 'CheckForUpdates'),
         'separator',
         { label: 'About ArchiOpen', action: () => log(`ArchiOpen ${version} — open source NURBS and architecture modeler. github.com/paugavilan8/ArchiOpen`) },
       ],

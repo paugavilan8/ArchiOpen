@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ArchiOpen",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "identifier": "io.github.paugavilan8.archiopen",
   "build": {
     "frontendDist": "../dist",
@@ -29,15 +29,35 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Open source NURBS modeler",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "fileAssociations": [
       {
-        "ext": ["archi"],
+        "ext": [
+          "archi"
+        ],
         "name": "ArchiOpen model",
         "description": "ArchiOpen model",
         "role": "Editor",
         "mimeType": "application/json"
       }
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBM0YwRDA2MUM3MjdFNjMKUldSamZuSWNCZzAveXNuNFdyTlgrTEdxUnBvaW9WQ21YRTZFcHdwM0l1aUFEc1paamV2Q3diZDIK",
+      "endpoints": [
+        "https://github.com/paugavilan8/ArchiOpen/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
