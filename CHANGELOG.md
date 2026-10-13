@@ -3,13 +3,16 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.8.1
 
+Automatic updates, DWG drawings and CageEdit.
+
+- **Automatic updates** in the desktop app: a little after start it looks for a newer version and offers
+  to install it (signed, and checked against a key built into the app); Help > Check for Updates looks
+  any time. This version has to be installed by hand once; later ones arrive by themselves.
 - **DWG** in the desktop app: `Open` and `Import` read DWG drawings through the free ODA File
   Converter (installed apart), which turns them into DXF in the background.
-
 - `CageEdit`: objects held in a cage of points, reshaped smoothly as the points move.
-
 - **Linked files** (`Link`, `UpdateLinks`, `Unlink`): other models (.archi or .3dm) shown in this one
   as blocks tied to their files, read again when they change, to work on a project in parts.
 

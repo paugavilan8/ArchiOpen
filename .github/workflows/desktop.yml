@@ -94,6 +94,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updates (the app checks them with the public key in tauri.conf.json); the
+          # release then gets a latest.json the installed apps look for.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # Releases make their tag on this commit if it does not exist yet; manual runs just build.
           tagName: ${{ needs.plan.outputs.release == 'true' && needs.plan.outputs.tag || '' }}

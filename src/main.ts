@@ -1,3 +1,5 @@
+import { version } from '../package.json'
+import { checkForUpdates } from './app/updates'
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
 import { Autosaver, desktopFolder, setAutosaver } from './app/autosave'
@@ -255,7 +257,9 @@ document.addEventListener('click', (e) => {
   if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) commandLine.focus()
 })
 
-commandLine.log('ArchiOpen 0.1. Type a command name, or pick one from the menus or toolbars. Enter, Space or right click repeats the last command.')
+commandLine.log(`ArchiOpen ${version}. Type a command name, or pick one from the menus or toolbars. Enter, Space or right click repeats the last command.`)
+// A newer version of the desktop app is offered a little after start, quietly if there is none.
+setTimeout(() => void checkForUpdates((text) => commandLine.log(text), () => doc.modified, true), 5000)
 commandLine.focus()
 updateTitle()
 

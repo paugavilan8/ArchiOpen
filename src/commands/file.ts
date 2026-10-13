@@ -1,4 +1,5 @@
 import { IFC } from '../app/files'
+import { checkForUpdates } from '../app/updates'
 import { writeIfc } from '../io/ifc'
 import { ifcModel } from '../io/ifcModel'
 import { autosaver } from '../app/autosave'
@@ -188,4 +189,14 @@ const autosave: Command = {
   },
 }
 
-export const fileCommands: Command[] = [newFile, open, save, saveAs, autosave, exportIfc, importModel, exportRhino, importStep, exportStep]
+/** CheckForUpdates: installs a newer version of the desktop app, if there is one. */
+const checkUpdates: Command = {
+  name: 'CheckForUpdates',
+  history: false,
+  repeat: false,
+  async run({ doc, log }) {
+    await checkForUpdates(log, () => doc.modified)
+  },
+}
+
+export const fileCommands: Command[] = [newFile, open, save, saveAs, autosave, exportIfc, importModel, exportRhino, importStep, exportStep, checkUpdates]
