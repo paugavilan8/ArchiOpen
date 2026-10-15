@@ -12,6 +12,9 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 - Autosave copies go to the local application data (AppData\Local\ArchiOpen\Autosave on Windows)
   instead of Documents, which is often synced to OneDrive. A folder chosen in `Autosave` is kept.
+- **Worksessions**: `Link` takes several files at once; `EditLink` opens a linked file to change it and
+  `ReturnToHost` comes back with it updated (desktop app); the Blocks panel has buttons to link,
+  update and edit linked files.
 
 ## 0.8.1
 

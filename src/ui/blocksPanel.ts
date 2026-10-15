@@ -48,6 +48,8 @@ export class BlocksPanel {
     header.append(
       hint,
       iconButton('plus', 'Make a block from the selection  (Block)', () => void runner.run('Block')),
+      iconButton('insert', 'Link .archi or .3dm files, as a worksession  (Link)', () => void runner.run('Link')),
+      iconButton('redo', 'Read the linked files again  (UpdateLinks)', () => void runner.run('UpdateLinks')),
       iconButton('delete', 'Remove unused blocks  (Purge)', () => void runner.run('Purge')),
     )
     this.list.className = 'layer-list block-list'
@@ -94,6 +96,7 @@ export class BlocksPanel {
       thumbnail(definition),
       name,
       objects,
+      ...(definition.link ? [iconButton('open', `Open ${definition.link.fileName} to edit it  (EditLink; ReturnToHost comes back)`, () => void runner.run([...doc.blocks.values()].filter((b) => b.link).length > 1 ? `EditLink ${definition.name.replace(/\s+/g, '')}` : 'EditLink'))] : []),
       iconButton('plus', 'Insert', () => void runner.run(`Insert ${quoted}`)),
       iconButton('selectAll', 'Select its instances', () => doc.select(instances().filter((o) => doc.isSelectable(o)).map((o) => o.id))),
       iconButton('minus', 'Delete the block (only if it is not used)', () => {

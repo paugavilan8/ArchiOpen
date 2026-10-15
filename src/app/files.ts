@@ -200,6 +200,28 @@ async function pickFile(types: FileType[]): Promise<PickedFile | null> {
   return file ? { fileName: file.name, location: null, read: async () => new Uint8Array(await file.arrayBuffer()) } : null
 }
 
+/** Asks for several files at once (one where the platform only allows one). */
+async function pickFiles(types: FileType[]): Promise<PickedFile[]> {
+  if (isDesktop) {
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const chosen = await open({ multiple: true, directory: false, filters: dialogFilters(types), defaultPath: startFolder() })
+    const paths = Array.isArray(chosen) ? chosen : typeof chosen === 'string' ? [chosen] : []
+    if (paths.length > 0) rememberFolderOf(paths[0])
+    const { invoke } = await import('@tauri-apps/api/core')
+    return paths.map((path) => ({ fileName: fileNameOf(path), location: { kind: 'path', path }, read: async () => fromBase64(await invoke<string>('read_binary_file', { path })) }))
+  }
+  if (pickers.showOpenFilePicker) {
+    try {
+      const handles = await pickers.showOpenFilePicker({ types: pickerTypes(types), multiple: true } as never)
+      return handles.map((handle) => ({ fileName: handle.name, location: { kind: 'handle', handle }, read: async () => new Uint8Array(await (await handle.getFile()).arrayBuffer()) }))
+    } catch {
+      return []
+    }
+  }
+  const file = await pickFile(types)
+  return file ? [file] : []
+}
+
 /** Asks where to save. Null means cancelled; 'download' means the browser can only offer a download. */
 async function pickSaveLocation(suggestedName: string, type: FileType): Promise<Location | 'download' | null> {
   if (isDesktop) {
@@ -523,11 +545,30 @@ export class FileManager {
 
   /** Asks for a model to link (.archi or .3dm). Resolves to its name, where it is, and its content. */
   async pickLinkedFile(): Promise<{ fileName: string; source: string; model: RhinoImport } | null> {
-    const file = await pickFile([ARCHI, RHINO])
-    if (!file) return null
-    const source = file.location?.kind === 'path' ? file.location.path : file.fileName
-    this.linkReaders.set(source, file.read)
-    return { fileName: file.fileName, source, model: await this.linkedModel(file.fileName, await file.read()) }
+    return (await this.pickLinkedFiles())[0] ?? null
+  }
+
+  /** Asks for models to link, several at once. */
+  async pickLinkedFiles(): Promise<{ fileName: string; source: string; model: RhinoImport }[]> {
+    const out: { fileName: string; source: string; model: RhinoImport }[] = []
+    for (const file of await pickFiles([ARCHI, RHINO])) {
+      const source = file.location?.kind === 'path' ? file.location.path : file.fileName
+      this.linkReaders.set(source, file.read)
+      out.push({ fileName: file.fileName, source, model: await this.linkedModel(file.fileName, await file.read()) })
+    }
+    return out
+  }
+
+  /**
+   * Opens a model by its path (the desktop app), in place of this one after asking about unsaved
+   * changes. Resolves to the message, or null if not opened.
+   */
+  async openPath(path: string): Promise<string | null> {
+    if (!isDesktop) throw new Error('Files open by their path in the desktop app only')
+    if (!(await this.confirmDiscard())) return null
+    const { invoke } = await import('@tauri-apps/api/core')
+    const bytes = fromBase64(await invoke<string>('read_binary_file', { path }))
+    return this.openFile(fileNameOf(path), bytes, { kind: 'path', path })
   }
 
   /**

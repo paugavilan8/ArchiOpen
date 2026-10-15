@@ -438,9 +438,11 @@ Expand a section for details.
   instance counts. Instances are drawn with GPU instancing, so hundreds of copies cost about the
   same as one.
 - Linked files, to work on a project in parts (as worksessions or external references): `Link`
-  places another model (`.archi` or `.3dm`) in this one as a block tied to its file, with its
-  layers under the file's name; `UpdateLinks` reads the files again after they change; `Unlink`
-  makes them part of this model. Linked blocks cannot be edited here (change their file), and their
+  places other models (`.archi` or `.3dm`, several at once, all at one origin) in this one as blocks
+  tied to their files, with their layers under each file's name; `UpdateLinks` reads the files again
+  after they change; `Unlink` makes them part of this model. Linked blocks cannot be edited here:
+  `EditLink` opens a linked file to change it, and `ReturnToHost` comes back to this model with the
+  change shown (desktop app). The Blocks panel lists the linked files with buttons for these. Their
   content is saved too, so the model still shows them if a file goes missing. The desktop app reads
   linked files again by their path; in the browser, only during the session they were linked in.
 - Groups: `Group`, `Ungroup`, `AddToGroup` and `RemoveFromGroup`.

@@ -30,6 +30,8 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Import .3dm, .ifc, .dxf, .dwg, .stl or .obj…', 'Import'),
         item('Link .archi or .3dm…', 'Link'),
         item('Update Links', 'UpdateLinks'),
+        item('Edit Linked File', 'EditLink'),
+        item('Return to Host Model', 'ReturnToHost'),
         item('Export .3dm…', 'Export'),
         'separator',
         item('Import STEP…', 'ImportSTEP'),
