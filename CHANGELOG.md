@@ -3,6 +3,11 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- Autosave copies go to the local application data (AppData\Local\ArchiOpen\Autosave on Windows)
+  instead of Documents, which is often synced to OneDrive. A folder chosen in `Autosave` is kept.
+
 ## 0.8.1
 
 Automatic updates, DWG drawings and CageEdit.

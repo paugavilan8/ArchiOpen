@@ -23,15 +23,18 @@ fn write_binary_file(path: String, base64: String) -> Result<(), String> {
     fs::rename(&tmp, &path).map_err(|e| format!("Could not write {path}: {e}"))
 }
 
-/// The default folder for automatic copies of models (Documents/ArchiOpen/Autosave).
+/// The default folder for automatic copies of models: the user's local application data
+/// (AppData\Local\ArchiOpen\Autosave on Windows, ~/Library/Application Support/ArchiOpen/Autosave
+/// on macOS, ~/.local/share/ArchiOpen/Autosave on Linux). Not Documents, which is often synced to
+/// OneDrive or iCloud, nor the roaming profile, so the copies never fill a synced folder.
 #[tauri::command]
 fn default_autosave_folder(app: tauri::AppHandle) -> Result<String, String> {
-    let documents = app
+    let base = app
         .path()
-        .document_dir()
+        .local_data_dir()
         .or_else(|_| app.path().home_dir())
-        .map_err(|e| format!("Could not find the documents folder: {e}"))?;
-    let folder = documents.join("ArchiOpen").join("Autosave");
+        .map_err(|e| format!("Could not find the application data folder: {e}"))?;
+    let folder = base.join("ArchiOpen").join("Autosave");
     Ok(folder.to_string_lossy().into_owned())
 }
 

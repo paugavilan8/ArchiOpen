@@ -478,7 +478,10 @@ Despliega cada apartado para ver los detalles.
 - `.archi` (JSON) es el formato propio. La sesión se recupera sola si la aplicación se cierra de
   forma inesperada.
 - **Autoguardado en carpeta** (app de escritorio, `Autosave`, menú *File*): cada 5 minutos, mientras
-  haya cambios sin guardar, se guarda una copia del modelo en `Documentos/ArchiOpen/Autosave` como
+  haya cambios sin guardar, se guarda una copia del modelo en los datos locales de la aplicación, nunca
+  en una carpeta sincronizada como OneDrive (`AppData\Local\ArchiOpen\Autosave` en Windows,
+  `~/Library/Application Support/ArchiOpen/Autosave` en macOS, `~/.local/share/ArchiOpen/Autosave` en
+  Linux), como
   `<nombre> <fecha> <hora>.archi`. Se conservan las 10 copias más recientes de cada modelo. El
   intervalo, el número de copias y la carpeta son opciones; `SaveNow` guarda una copia al momento y
   `Recover` muestra las copias y abre una como modelo sin guardar.
