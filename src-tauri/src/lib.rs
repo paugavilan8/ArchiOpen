@@ -38,6 +38,18 @@ fn default_autosave_folder(app: tauri::AppHandle) -> Result<String, String> {
     Ok(folder.to_string_lossy().into_owned())
 }
 
+/// ArchiOpen's own folder in the local application data (never synced): templates, scripts and
+/// automatic copies live in it.
+#[tauri::command]
+fn app_data_folder(app: tauri::AppHandle) -> Result<String, String> {
+    let base = app
+        .path()
+        .local_data_dir()
+        .or_else(|_| app.path().home_dir())
+        .map_err(|e| format!("Could not find the application data folder: {e}"))?;
+    Ok(base.join("ArchiOpen").to_string_lossy().into_owned())
+}
+
 /// Makes a folder (and the folders it is in) if it does not exist.
 #[tauri::command]
 fn create_folder(path: String) -> Result<(), String> {
@@ -186,6 +198,7 @@ pub fn run() {
             read_binary_file,
             write_binary_file,
             default_autosave_folder,
+            app_data_folder,
             create_folder,
             list_files,
             remove_file,

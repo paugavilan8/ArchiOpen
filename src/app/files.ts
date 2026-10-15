@@ -5,6 +5,7 @@ import { describeSkipped, readRhinoFile, RhinoExportReport, RhinoImport, writeRh
 import { loadRhino } from '../io/loadRhino'
 import { loadIfc, readIfc, type IfcImport } from '../io/ifcRead'
 import { addNativeElements } from './ifcNative'
+import { joinPath, TEMPLATES, workspaceFolder } from './workspace'
 import { kernelJob } from '../kernel/client'
 import type { StepObject } from '../kernel/step'
 import { applyRhinoImport, archiAsImport, mergeRhinoImport } from './rhinoModel'
@@ -131,12 +132,55 @@ const extensionsOf = (t: FileType) => t.extensions ?? [t.extension]
 const dialogFilters = (types: FileType[]) => types.map((t) => ({ name: t.name, extensions: extensionsOf(t) }))
 const pickerTypes = (types: FileType[]) => types.map((t) => ({ description: t.name, accept: { [t.mime]: extensionsOf(t).map((e) => `.${e}`) } }))
 
+// --- Where dialogs open ---------------------------------------------------------------
+
+const PROJECT_FOLDER_KEY = 'archiopen.projectFolder'
+const LAST_FOLDER_KEY = 'archiopen.lastFolder'
+
+const stored = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+/** The folder chosen for projects (ProjectFolder), if any. */
+export const projectFolder = (): string | null => stored(PROJECT_FOLDER_KEY)
+
+/** Sets (or clears, with null) the folder that file dialogs open in. */
+export function setProjectFolder(folder: string | null): void {
+  try {
+    if (folder) {
+      localStorage.setItem(PROJECT_FOLDER_KEY, folder)
+      localStorage.setItem(LAST_FOLDER_KEY, folder)
+    } else localStorage.removeItem(PROJECT_FOLDER_KEY)
+  } catch {
+    // Not kept; dialogs open where the system chooses.
+  }
+}
+
+/** Where a dialog opens: the last folder used, else the project folder. */
+const startFolder = (): string | undefined => stored(LAST_FOLDER_KEY) ?? projectFolder() ?? undefined
+
+/** Remembers the folder of a file just opened or saved, for the next dialog. */
+function rememberFolderOf(path: string): void {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  if (cut <= 0) return
+  try {
+    localStorage.setItem(LAST_FOLDER_KEY, path.slice(0, cut))
+  } catch {
+    // Not kept.
+  }
+}
+
 async function pickFile(types: FileType[]): Promise<PickedFile | null> {
   if (isDesktop) {
     const { open } = await import('@tauri-apps/plugin-dialog')
     const filters = types.length > 1 ? [{ name: 'Models', extensions: types.flatMap(extensionsOf) }, ...dialogFilters(types)] : dialogFilters(types)
-    const path = await open({ multiple: false, directory: false, filters })
+    const path = await open({ multiple: false, directory: false, filters, defaultPath: startFolder() })
     if (typeof path !== 'string') return null
+    rememberFolderOf(path)
     const { invoke } = await import('@tauri-apps/api/core')
     return {
       fileName: fileNameOf(path),
@@ -160,7 +204,10 @@ async function pickFile(types: FileType[]): Promise<PickedFile | null> {
 async function pickSaveLocation(suggestedName: string, type: FileType): Promise<Location | 'download' | null> {
   if (isDesktop) {
     const { save } = await import('@tauri-apps/plugin-dialog')
-    const path = await save({ defaultPath: `${suggestedName}.${type.extension}`, filters: dialogFilters([type]) })
+    const name = `${suggestedName}.${type.extension}`
+    const folder = startFolder()
+    const path = await save({ defaultPath: folder ? joinPath(folder, name) : name, filters: dialogFilters([type]) })
+    if (path) rememberFolderOf(path)
     return path ? { kind: 'path', path: withExtension(path, type) } : null
   }
   if (pickers.showSaveFilePicker) {
@@ -267,6 +314,39 @@ export class FileManager {
    * Opens an .archi or .3dm file in place of the current document. Resolves to a message for the
    * command history, or null if nothing was opened.
    */
+  /** Starts a new model from a template (in ArchiOpen's Templates folder): untitled, unchanged. */
+  async newFromTemplate(name: string): Promise<boolean> {
+    if (!(await this.confirmDiscard())) return false
+    const root = await workspaceFolder()
+    if (!root) throw new Error('Templates are in the desktop app')
+    const { invoke } = await import('@tauri-apps/api/core')
+    const bytes = fromBase64(await invoke<string>('read_binary_file', { path: joinPath(joinPath(root, TEMPLATES), `${name}.archi`) }))
+    this.doc.load(JSON.parse(new TextDecoder().decode(bytes)))
+    this.setLocation(UNTITLED, null)
+    this.doc.modified = false
+    return true
+  }
+
+  /** Saves the model as a template, to start new projects from. Resolves to where it went. */
+  async saveAsTemplate(name: string): Promise<string> {
+    const root = await workspaceFolder()
+    if (!root) throw new Error('Templates are in the desktop app')
+    const path = joinPath(joinPath(root, TEMPLATES), `${name.replace(/[\\/:*?"<>|]/g, '_')}.archi`)
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('write_binary_file', { path, base64: toBase64(this.archiData()) })
+    return path
+  }
+
+  /** Asks for the folder projects are kept in (dialogs open there). Resolves to it, or null. */
+  async chooseProjectFolder(): Promise<string | null> {
+    if (!isDesktop) throw new Error('The project folder is for the desktop app; the browser chooses where files go')
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const folder = await open({ directory: true, multiple: false, defaultPath: startFolder() })
+    if (typeof folder !== 'string') return null
+    setProjectFolder(folder)
+    return folder
+  }
+
   async open(): Promise<string | null> {
     if (!(await this.confirmDiscard())) return null
     const file = await pickFile([ARCHI, RHINO, IFC, DXF, DWG, STL, OBJ])

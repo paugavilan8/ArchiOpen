@@ -15,10 +15,13 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
       'File',
       [
         item('New', 'New', `${mod}N`),
+        item('New from Template…', 'NewFromTemplate'),
         item('Open (.archi, .3dm, .ifc, .dxf, .dwg, .stl, .obj)…', 'Open', `${mod}O`),
         'separator',
         item('Save', 'Save', `${mod}S`),
         item('Save As…', 'SaveAs', `${mod}Shift+S`),
+        item('Save as Template…', 'SaveAsTemplate'),
+        item('Project Folder…', 'ProjectFolder'),
         item('Autosave and recover…', 'Autosave'),
         item('Run Script…', 'RunScript'),
         item('Parametric Script…', 'Parametric'),

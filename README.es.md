@@ -475,6 +475,16 @@ Despliega cada apartado para ver los detalles.
 <summary><b>Archivos</b></summary>
 <br>
 
+- **Carpeta de ArchiOpen** (aplicación de escritorio): en los datos locales de la aplicación, nunca
+  en una carpeta sincronizada (`AppData\Local\ArchiOpen` en Windows,
+  `~/Library/Application Support/ArchiOpen` en macOS, `~/.local/share/ArchiOpen` en Linux). Contiene
+  `Templates` (plantillas), `Scripts` (los scripts de ejemplo, para copiarlos y cambiarlos) y
+  `Autosave`.
+- **Plantillas:** `NewFromTemplate` empieza un modelo desde una (con la aplicación viene la plantilla
+  *Architecture*, con niveles y las capas habituales); `SaveAsTemplate` guarda el modelo, con sus
+  capas, niveles, materiales y láminas, como plantilla nueva.
+- **Carpeta de proyectos:** Open y Save empiezan en la última carpeta usada; `ProjectFolder` fija en
+  cuál empiezan (una carpeta local o de red).
 - `.archi` (JSON) es el formato propio. La sesión se recupera sola si la aplicación se cierra de
   forma inesperada.
 - **Autoguardado en carpeta** (app de escritorio, `Autosave`, menú *File*): cada 5 minutos, mientras

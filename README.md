@@ -459,6 +459,15 @@ Expand a section for details.
 <summary><b>Files</b></summary>
 <br>
 
+- **ArchiOpen's folder** (desktop app): in the local application data, never a synced folder
+  (`AppData\Local\ArchiOpen` on Windows, `~/Library/Application Support/ArchiOpen` on macOS,
+  `~/.local/share/ArchiOpen` on Linux). It holds `Templates`, `Scripts` (the example scripts, to copy
+  and change) and `Autosave`.
+- **Templates:** `NewFromTemplate` starts a model from one (an *Architecture* template with levels and
+  the usual layers comes with the app); `SaveAsTemplate` keeps the model, with its layers, levels,
+  materials and layouts, as a new one.
+- **Project folder:** Open and Save start in the folder last used; `ProjectFolder` sets the one they
+  start in (a local or network folder).
 - `.archi` (JSON) is the native format. The session is recovered automatically if the application
   closes unexpectedly.
 - **Autosave to a folder** (desktop app, `Autosave`, *File* menu): every 5 minutes, while there are
