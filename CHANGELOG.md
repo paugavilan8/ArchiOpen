@@ -3,13 +3,14 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.8.2
+
+ArchiOpen's own folder, templates and worksessions.
 
 - **ArchiOpen's folder** in the local application data, with `Templates` and `Scripts` (the example
   scripts) besides `Autosave`, made the first time the desktop app runs.
 - **Templates**: `NewFromTemplate` (an Architecture template comes with the app) and `SaveAsTemplate`.
 - Open and Save start in the folder last used; `ProjectFolder` sets the folder they start in.
-
 - Autosave copies go to the local application data (AppData\Local\ArchiOpen\Autosave on Windows)
   instead of Documents, which is often synced to OneDrive. A folder chosen in `Autosave` is kept.
 - **Worksessions**: `Link` takes several files at once; `EditLink` opens a linked file to change it and
