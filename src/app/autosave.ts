@@ -1,6 +1,6 @@
 /**
  * Autosave to a folder: every few minutes, while there are unsaved changes, a copy of the model is
- * written to a folder (Documents/ArchiOpen/Autosave by default) as `<name> <date> <time>.archi`.
+ * written to a folder (ArchiOpen/Autosave in the local application data by default, never a synced folder) as `<name> <date> <time>.archi`.
  * The newest copies of each model are kept and older ones deleted. Any copy opens again with
  * `Autosave` > `Recover`, as an unsaved model. This is apart from the session kept in browser
  * storage, which only brings back what was on screen.

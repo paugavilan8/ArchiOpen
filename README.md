@@ -462,7 +462,10 @@ Expand a section for details.
 - `.archi` (JSON) is the native format. The session is recovered automatically if the application
   closes unexpectedly.
 - **Autosave to a folder** (desktop app, `Autosave`, *File* menu): every 5 minutes, while there are
-  unsaved changes, a copy of the model goes to `Documents/ArchiOpen/Autosave` as
+  unsaved changes, a copy of the model goes to the local application data, never a synced
+  folder like OneDrive (`AppData\Local\ArchiOpen\Autosave` on Windows,
+  `~/Library/Application Support/ArchiOpen/Autosave` on macOS, `~/.local/share/ArchiOpen/Autosave` on
+  Linux), as
   `<name> <date> <time>.archi`. The newest 10 copies of each model are kept. The interval, the
   number of copies and the folder are options; `SaveNow` writes a copy at once and `Recover` lists
   the copies and opens one as an unsaved model.
