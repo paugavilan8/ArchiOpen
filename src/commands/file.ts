@@ -1,4 +1,5 @@
-import { IFC } from '../app/files'
+import { IFC, projectFolder, setProjectFolder } from '../app/files'
+import { templates } from '../app/workspace'
 import { checkForUpdates } from '../app/updates'
 import { writeIfc } from '../io/ifc'
 import { ifcModel } from '../io/ifcModel'
@@ -199,4 +200,51 @@ const checkUpdates: Command = {
   },
 }
 
-export const fileCommands: Command[] = [newFile, open, save, saveAs, autosave, exportIfc, importModel, exportRhino, importStep, exportStep, checkUpdates]
+/** NewFromTemplate: a new model from one of the templates (ArchiOpen's Templates folder). */
+const newFromTemplate: Command = {
+  name: 'NewFromTemplate',
+  history: false,
+  repeat: false,
+  async run({ files, display, input, log }) {
+    const names = await templates()
+    if (names.length === 0) throw new Error('Templates are in the desktop app (SaveAsTemplate makes one from a model)')
+    const option = names.length === 1 ? null : await input.getOption(`Template <${names[0]}>`, names.map((n) => n.replace(/\s+/g, '')))
+    const name = option === null ? names[0] : (names.find((n) => isOption(option, n.replace(/\s+/g, ''))) ?? names[0])
+    if (!(await files.newFromTemplate(name))) return
+    display.fit(display.viewports)
+    log(`New model from the template "${name}"`)
+  },
+}
+
+/** SaveAsTemplate: keeps the model (layers, levels, materials, layouts, ...) as a template. */
+const saveAsTemplate: Command = {
+  name: 'SaveAsTemplate',
+  history: false,
+  repeat: false,
+  async run({ files, input, log }) {
+    const name = (await input.getString(`Template name <${files.name}>`))?.trim() || files.name
+    const path = await files.saveAsTemplate(name)
+    log(`Saved as the template "${name}" (${path}). NewFromTemplate starts models from it`)
+  },
+}
+
+/** ProjectFolder: the folder Open and Save start in (a local or network folder, say). */
+const projectFolderCommand: Command = {
+  name: 'ProjectFolder',
+  history: false,
+  repeat: false,
+  async run({ files, input, log }) {
+    const current = projectFolder()
+    const option = await input.getOption(`Project folder <${current ?? 'the last one used'}>`, ['Choose', 'Clear'])
+    if (option === null) return
+    if (isOption(option, 'Clear')) {
+      setProjectFolder(null)
+      log('No project folder: Open and Save start where the last file was')
+      return
+    }
+    const folder = await files.chooseProjectFolder()
+    if (folder) log(`Project folder: ${folder}. Open and Save start there`)
+  },
+}
+
+export const fileCommands: Command[] = [newFile, open, save, saveAs, autosave, exportIfc, importModel, exportRhino, importStep, exportStep, checkUpdates, newFromTemplate, saveAsTemplate, projectFolderCommand]

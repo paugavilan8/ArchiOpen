@@ -5,6 +5,11 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **ArchiOpen's folder** in the local application data, with `Templates` and `Scripts` (the example
+  scripts) besides `Autosave`, made the first time the desktop app runs.
+- **Templates**: `NewFromTemplate` (an Architecture template comes with the app) and `SaveAsTemplate`.
+- Open and Save start in the folder last used; `ProjectFolder` sets the folder they start in.
+
 - Autosave copies go to the local application data (AppData\Local\ArchiOpen\Autosave on Windows)
   instead of Documents, which is often synced to OneDrive. A folder chosen in `Autosave` is kept.
 

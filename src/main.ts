@@ -1,3 +1,4 @@
+import { workspaceFolder } from './app/workspace'
 import { version } from '../package.json'
 import { checkForUpdates } from './app/updates'
 import './style.css'
@@ -258,6 +259,8 @@ document.addEventListener('click', (e) => {
 })
 
 commandLine.log(`ArchiOpen ${version}. Type a command name, or pick one from the menus or toolbars. Enter, Space or right click repeats the last command.`)
+// ArchiOpen's folder (templates, example scripts) is made the first time the desktop app runs.
+void workspaceFolder().catch((error) => console.warn('Could not make the ArchiOpen folder', error))
 // A newer version of the desktop app is offered a little after start, quietly if there is none.
 setTimeout(() => void checkForUpdates((text) => commandLine.log(text), () => doc.modified, true), 5000)
 commandLine.focus()
