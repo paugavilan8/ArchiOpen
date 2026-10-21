@@ -574,7 +574,10 @@ paso de deshacer, al estilo de las herramientas de programación visual. `Bake` 
 resultado como objetos normales y `Discard` lo quita.
 
 Hay ejemplos en [examples/scripts](examples/scripts): una retícula de pilares, una torre de varias
-plantas y una torre que gira, con deslizadores para sus plantas, tamaño y giro. Los scripts tienen el mismo acceso que la aplicación: ejecuta solo los que sean de fiar.
+plantas y una torre que gira, con deslizadores para sus plantas, tamaño y giro.
+[docs/scripting.md](docs/scripting.md) describe la API, las macros y las herramientas del asistente,
+y lo que se mantiene igual de una versión a otra. Los scripts tienen el mismo acceso que la
+aplicación: ejecuta solo los que sean de fiar.
 
 </details>
 
