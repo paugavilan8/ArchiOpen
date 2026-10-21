@@ -1,6 +1,6 @@
 [package]
 name = "archiopen"
-version = "0.8.2"
+version = "0.9.0"
 description = "Open source NURBS modeler"
 license = "MIT"
 edition = "2021"
