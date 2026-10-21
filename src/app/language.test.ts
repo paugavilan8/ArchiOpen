@@ -3,6 +3,11 @@ import { t } from './language'
 import { es } from './locales/es'
 
 const sources = import.meta.glob('../ui/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const messageSources = import.meta.glob(['../commands/*.ts', '../app/*.ts', '../ui/*.ts', '../io/*.ts', '../core/*.ts', '../main.ts', '!../**/*.test.ts'], {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
 const commandSources = import.meta.glob(['../commands/*.ts', '!../commands/*.test.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
 /** The texts the interface shows, as written in its code. */
@@ -77,5 +82,19 @@ describe('interface language', () => {
     const parts = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
     const wrong = Object.entries(es).filter(([from, to]) => parts(from).join() !== parts(to).join())
     expect(wrong).toEqual([])
+  })
+
+  it('has Spanish for every fixed message and error', () => {
+    // Answers to the AI assistant, which reads English, are left as they are.
+    const forAssistant = ['The open model has unsaved changes: save it first (export format "archi"), or pass discard_changes: true', 'None of those objects exist', 'The format must be archi, ifc, pdf, dxf, glb or csv']
+    const messages = new Set<string>()
+    for (const source of Object.values(messageSources)) {
+      for (const m of source.matchAll(/\b(?:log|ctx\.log|this\.log)\(\s*'([^']+)'\s*\)/g)) messages.add(m[1])
+      for (const m of source.matchAll(/throw new Error\(\s*'([^']+)'\s*\)/g)) messages.add(m[1])
+      // Either side of a choice: log(n === 0 ? 'Nothing is hidden' : ...).
+      for (const m of source.matchAll(/\blog\([^)\n]*\? '([A-Z][^']+)'/g)) messages.add(m[1])
+    }
+    expect(messages.size).toBeGreaterThan(150)
+    expect([...messages].filter((m) => !forAssistant.includes(m) && t(m, undefined, 'es') === m && !(m in es))).toEqual([])
   })
 })
