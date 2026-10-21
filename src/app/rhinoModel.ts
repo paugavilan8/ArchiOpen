@@ -106,6 +106,18 @@ export function adoptModel(doc: Document, model: RhinoImport, layerName = (name:
   return { objects, scaledFrom: factor === 1 ? null : model.units }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function readable<T>(list: any, read: (o: any) => T): T[] {
+  // Objects of a kind this version does not know (from a newer one) are left out.
+  return (Array.isArray(list) ? list : []).flatMap((o) => {
+    try {
+      return [read(o)]
+    } catch {
+      return []
+    }
+  })
+}
+
 /**
  * An .archi file's model as imported content: its visible objects and the blocks they use, with
  * layer ids turned into indices. (Drawings, layouts and history stay in that file.)
@@ -121,7 +133,7 @@ export function archiAsImport(json: any): RhinoImport {
   const lookup = (name: string) => blocks.get(name)
   for (const b of json?.blocks ?? []) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    blocks.get(b.name)!.objects.push(...(b.objects ?? []).map((o: any) => ({ layerId: layerOf(o.layerId), geometry: geometryFromJSON(o.geometry, lookup) })))
+    blocks.get(b.name)!.objects.push(...readable(b.objects, (o: any) => ({ layerId: layerOf(o.layerId), geometry: geometryFromJSON(o.geometry, lookup) })))
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hiddenLayers = new Set(fileLayers.filter((l) => l.visible === false).map((l: any) => Number(l.id)))
@@ -129,7 +141,7 @@ export function archiAsImport(json: any): RhinoImport {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .filter((o: any) => !o.hidden && !hiddenLayers.has(Number(o.layerId)))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((o: any) => ({ layer: layerOf(o.layerId), geometry: geometryFromJSON(o.geometry, lookup) }))
+    .flatMap((o: any) => readable([o], (x: any) => ({ layer: layerOf(x.layerId), geometry: geometryFromJSON(x.geometry, lookup) })))
   return {
     units: String(json?.units ?? 'Millimeters'),
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

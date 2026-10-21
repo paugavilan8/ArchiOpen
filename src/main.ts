@@ -1,6 +1,7 @@
 import { workspaceFolder } from './app/workspace'
 import { version } from '../package.json'
 import { checkForUpdates } from './app/updates'
+import { migrateArchi } from './core/archiFormat'
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
 import { Autosaver, desktopFolder, setAutosaver } from './app/autosave'
@@ -111,7 +112,7 @@ try {
   const saved = localStorage.getItem(STORAGE_KEY)
   if (saved) {
     const session: Session = JSON.parse(saved)
-    doc.load(session.document)
+    doc.load(migrateArchi(session.document).json)
     doc.modified = session.modified
     files.restore(session.name, session.path)
   }

@@ -3,6 +3,13 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- **A stable .archi format** ([described here](docs/archi-format.md)): files carry the version of the
+  format and of ArchiOpen that saved them; files from any earlier version keep opening (a file saved
+  by 0.8.2 is kept in the tests for this). A file from a newer version opens as far as this one
+  understands it, and says so, instead of failing; a file that is not an .archi says that too.
+
 ## 0.8.2
 
 ArchiOpen's own folder, templates and worksessions.

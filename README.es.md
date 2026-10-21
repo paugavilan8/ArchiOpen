@@ -487,8 +487,10 @@ Despliega cada apartado para ver los detalles.
   capas, niveles, materiales y láminas, como plantilla nueva.
 - **Carpeta de proyectos:** Open y Save empiezan en la última carpeta usada; `ProjectFolder` fija en
   cuál empiezan (una carpeta local o de red).
-- `.archi` (JSON) es el formato propio. La sesión se recupera sola si la aplicación se cierra de
-  forma inesperada.
+- `.archi` (JSON) es el formato propio ([descrito aquí](docs/archi-format.md)). Los archivos
+  guardados con cualquier versión se abren en todas las posteriores; uno de una versión más nueva se
+  abre hasta donde esta lo entiende, y lo avisa. La sesión se recupera sola si la aplicación se
+  cierra de forma inesperada.
 - **Autoguardado en carpeta** (app de escritorio, `Autosave`, menú *File*): cada 5 minutos, mientras
   haya cambios sin guardar, se guarda una copia del modelo en los datos locales de la aplicación, nunca
   en una carpeta sincronizada como OneDrive (`AppData\Local\ArchiOpen\Autosave` en Windows,

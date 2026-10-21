@@ -1,3 +1,5 @@
+import { version as appVersion } from '../../package.json'
+import { ARCHI_FORMAT, ARCHI_MARK } from './archiFormat'
 import { DEFAULT_LEVELS, type Level } from './architecture'
 import { DEFAULT_RENDER_SETTINGS, layerMaterial, Material, materialFromJSON, RenderSettings, renderSettingsFromJSON } from './materials'
 import { controlPoints } from './curves'
@@ -619,7 +621,9 @@ export class Document {
 
   toJSON(): unknown {
     return {
-      version: 1,
+      format: ARCHI_MARK,
+      version: ARCHI_FORMAT,
+      app: appVersion,
       units: this.units,
       layers: this.layers,
       currentLayerId: this.currentLayerId,
@@ -649,17 +653,35 @@ export class Document {
     }
   }
 
+  /**
+   * Replaces the document with one read from JSON (an .archi file, brought up to date by
+   * archiFormat). Objects of a kind this version does not know (from a newer one) are left out
+   * rather than failing the whole file; returns how many.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  load(json: any): void {
+  load(json: any): number {
+    let skipped = 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const readAll = <T>(list: any, read: (o: any) => T): T[] =>
+      (Array.isArray(list) ? list : []).flatMap((o) => {
+        try {
+          return [read(o)]
+        } catch {
+          skipped++
+          return []
+        }
+      })
     const layers: Layer[] = json.layers?.length ? json.layers : defaultLayers()
     // Definitions first, empty, so that blocks nested in blocks find each other in any order.
     const blocks = new Map<string, BlockDefinition>()
-    for (const b of json.blocks ?? []) blocks.set(b.name, { name: b.name, objects: [], ...(typeof b.link?.source === 'string' ? { link: { source: b.link.source, fileName: String(b.link.fileName ?? b.link.source) } } : {}) })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const blockList = (Array.isArray(json.blocks) ? json.blocks : []).filter((b: any) => typeof b?.name === 'string')
+    for (const b of blockList) blocks.set(b.name, { name: b.name, objects: [], ...(typeof b.link?.source === 'string' ? { link: { source: b.link.source, fileName: String(b.link.fileName ?? b.link.source) } } : {}) })
     const lookup = (name: string) => blocks.get(name)
-    for (const b of json.blocks ?? []) {
-      blocks.get(b.name)!.objects.push(...b.objects.map((o: any) => ({ layerId: o.layerId, geometry: geometryFromJSON(o.geometry, lookup) })))
+    for (const b of blockList) {
+      blocks.get(b.name)!.objects.push(...readAll(b.objects, (o) => ({ layerId: o.layerId, geometry: geometryFromJSON(o.geometry, lookup) })))
     }
-    const objects: CadObject[] = (json.objects ?? []).map((o: any) => ({
+    const objects: CadObject[] = readAll(json.objects, (o) => ({
       id: o.id,
       layerId: o.layerId,
       ...(o.groups?.length ? { groups: o.groups } : {}),
@@ -704,6 +726,7 @@ export class Document {
     this.emit('layers')
     this.emit('objects')
     this.modified = false
+    return skipped
   }
 
   /** Empties the document, as for a new file. */

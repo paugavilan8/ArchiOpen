@@ -470,8 +470,9 @@ Expand a section for details.
   materials and layouts, as a new one.
 - **Project folder:** Open and Save start in the folder last used; `ProjectFolder` sets the one they
   start in (a local or network folder).
-- `.archi` (JSON) is the native format. The session is recovered automatically if the application
-  closes unexpectedly.
+- `.archi` (JSON) is the native format ([described here](docs/archi-format.md)). Files saved by any
+  version open in every later one; a file from a newer version opens as far as this one understands
+  it, and says so. The session is recovered automatically if the application closes unexpectedly.
 - **Autosave to a folder** (desktop app, `Autosave`, *File* menu): every 5 minutes, while there are
   unsaved changes, a copy of the model goes to the local application data, never a synced
   folder like OneDrive (`AppData\Local\ArchiOpen\Autosave` on Windows,
