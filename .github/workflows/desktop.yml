@@ -112,7 +112,7 @@ jobs:
           tagName: ${{ needs.plan.outputs.release == 'true' && needs.plan.outputs.tag || '' }}
           releaseName: ArchiOpen ${{ needs.plan.outputs.tag }}
           releaseCommitish: ${{ github.sha }}
-          releaseBody: Installers for Windows (.exe, .msi), macOS (.dmg: aarch64 for Apple processors, x64 for Intel) and Linux (.AppImage, .deb, .rpm). See the [changelog](https://github.com/paugavilan8/ArchiOpen/blob/master/CHANGELOG.md) for what is new.
+          releaseBody: Installers for Windows (.exe, .msi), macOS (.dmg, aarch64 for Apple processors and x64 for Intel) and Linux (.AppImage, .deb, .rpm). See the [changelog](https://github.com/paugavilan8/ArchiOpen/blob/master/CHANGELOG.md) for what is new.
           releaseDraft: false
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
