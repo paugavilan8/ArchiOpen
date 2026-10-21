@@ -5,9 +5,10 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
-- **The interface in Spanish** (or English): menus, toolbars, panels, the status bar, dialogs and the
-  most common messages, from *Tools > Language / Idioma* (`Language`); the first time, the system's
-  language. Command names stay the same in both.
+- **The interface in Spanish** (or English): menus, toolbars, panels, the status bar, dialogs, what
+  commands ask and their most common messages and errors, from *Tools > Language / Idioma*
+  (`Language`); the first time, the system's language. Command names and options stay the same in
+  both.
 - **A stable .archi format** ([described here](docs/archi-format.md)): files carry the version of the
   format and of ArchiOpen that saved them; files from any earlier version keep opening (a file saved
   by 0.8.2 is kept in the tests for this). A file from a newer version opens as far as this one
