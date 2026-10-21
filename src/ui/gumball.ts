@@ -1,4 +1,4 @@
-import { Matrix4, Vector3 } from 'three'
+import { Box3, Matrix4, Vector3 } from 'three'
 import { rotationAbout, scaleAbout } from '../commands/helpers'
 import type { Command, CommandRunner } from '../commands/runner'
 import type { Document } from '../core/document'
@@ -51,6 +51,8 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
 export class Gumball {
   private readonly layers = new Map<Viewport, SVGSVGElement>()
   private drag: DragState | null = null
+  /** The selection's box, until the model or the selection changes. */
+  private box: Box3 | null = null
   private readonly a: ScreenPoint = { x: 0, y: 0 }
   private readonly b: ScreenPoint = { x: 0, y: 0 }
 
@@ -72,6 +74,7 @@ export class Gumball {
       this.layers.set(vp, layer)
     }
     display.overlays.push((vp) => this.draw(vp))
+    doc.on(() => (this.box = null))
     settings.onChange(() => display.requestRender())
   }
 
@@ -87,8 +90,11 @@ export class Gumball {
   private draw(vp: Viewport): void {
     const layer = this.layers.get(vp)!
     layer.replaceChildren()
-    const box = editBox(this.doc)
-    if (!this.visible || box.isEmpty()) return
+    if (!this.visible) return
+    // Measured once per change of the model or selection, not on every frame of every view.
+    if (!this.box) this.box = editBox(this.doc)
+    const box = this.box
+    if (box.isEmpty()) return
 
     const origin = box.getCenter(new Vector3())
     if (this.drag) origin.applyMatrix4(this.drag.matrix)

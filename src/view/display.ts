@@ -34,10 +34,43 @@ const WIRE_LAYER = 2
 /** Edges of surfaces and meshes, which rendered views leave out. */
 const EDGE_LAYER = 4
 
+/** Numbers in a typed array that grows as needed (large drawings have millions of them). */
+class FloatList {
+  data = new Float32Array(1024)
+  length = 0
+  push6(a: number, b: number, c: number, d: number, e: number, f: number): void {
+    if (this.length + 6 > this.data.length) this.grow()
+    const { data } = this
+    const n = this.length
+    data[n] = a
+    data[n + 1] = b
+    data[n + 2] = c
+    data[n + 3] = d
+    data[n + 4] = e
+    data[n + 5] = f
+    this.length = n + 6
+  }
+  push2(a: number, b: number): void {
+    if (this.length + 2 > this.data.length) this.grow()
+    this.data[this.length++] = a
+    this.data[this.length++] = b
+  }
+  private grow(): void {
+    const data = new Float32Array(this.data.length * 2)
+    data.set(this.data)
+    this.data = data
+  }
+  /** The numbers pushed, without copying them. */
+  get values(): Float32Array {
+    return this.data.subarray(0, this.length)
+  }
+}
+
 interface LineBatch {
   material: THREE.LineBasicMaterial | THREE.LineDashedMaterial
-  positions: number[]
-  distances: number[]
+  positions: FloatList
+  /** Distances along each line, for dashed linetypes only. */
+  distances: FloatList | null
   selected: boolean
   wireOnly: boolean
   edges: boolean
@@ -329,8 +362,8 @@ export class Display {
             key,
             (batch = {
               material: lineMaterial,
-              positions: [],
-              distances: [],
+              positions: new FloatList(),
+              distances: lineMaterial instanceof THREE.LineDashedMaterial ? new FloatList() : null,
               selected,
               wireOnly: key.startsWith('wire:'),
               edges: key.startsWith('edge:'),
@@ -439,9 +472,12 @@ export class Display {
     }
     for (const { material, ...batch } of batches.values()) {
       const geometry = new THREE.BufferGeometry()
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3))
-      if (material instanceof THREE.LineDashedMaterial) geometry.setAttribute('lineDistance', new THREE.Float32BufferAttribute(batch.distances, 1))
+      geometry.setAttribute('position', new THREE.BufferAttribute(batch.positions.values, 3))
+      if (batch.distances) geometry.setAttribute('lineDistance', new THREE.BufferAttribute(batch.distances.values, 1))
       const segments = new THREE.LineSegments(geometry, material)
+      // A batch spans the whole model: testing it against the view would cost more (a bounding
+      // sphere over every vertex, each time the scene is built) than it saves.
+      segments.frustumCulled = false
       segments.renderOrder = batch.selected ? 1 : 0
       if (batch.wireOnly) segments.layers.set(WIRE_LAYER)
       else if (batch.edges) segments.layers.set(EDGE_LAYER)
@@ -471,15 +507,18 @@ export class Display {
 
   /** Adds polylines to a batch of segments. Distances run along each one, so dashes flow around curves. */
   private addLines(batch: LineBatch, lines: THREE.Vector3[][]): void {
+    const { positions, distances } = batch
     for (const pts of lines) {
       let along = 0
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1]
         const b = pts[i]
-        const d = a.distanceTo(b)
-        batch.positions.push(a.x, a.y, a.z, b.x, b.y, b.z)
-        batch.distances.push(along, along + d)
-        along += d
+        positions.push6(a.x, a.y, a.z, b.x, b.y, b.z)
+        if (distances) {
+          const d = a.distanceTo(b)
+          distances.push2(along, along + d)
+          along += d
+        }
       }
     }
   }

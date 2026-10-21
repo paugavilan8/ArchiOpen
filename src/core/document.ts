@@ -418,7 +418,9 @@ export class Document {
       this.redoStack = []
       this.noteCreated([action])
     }
-    this.pruneSelection()
+    // Only the object changed can have left the selection (a whole check on every change of a
+    // large edit, as deleting thousands of objects, would take time growing with its square).
+    this.pruneSelection('id' in action ? [action.id] : 'obj' in action ? [action.obj.id] : undefined)
     this.emit('objects')
     if (!this.tx) this.finishStep(this.undoStack[this.undoStack.length - 1])
   }
@@ -501,16 +503,21 @@ export class Document {
     this.emit('selection')
   }
 
-  private pruneSelection(): void {
-    for (const id of this.selection) {
+  /** Takes out of the selection what can no longer be selected: all of it, or only the objects given. */
+  private pruneSelection(ids?: Iterable<number>): void {
+    const selected = ids ? [...ids].filter((id) => this.selection.has(id)) : this.selection
+    for (const id of selected) {
       const obj = this.objects.get(id)
       if (!obj || !this.isSelectable(obj)) this.selection.delete(id)
     }
-    for (const id of this.pointsOn) {
+    const withPoints = ids ? [...(ids as number[])].filter((id) => this.pointsOn.has(id)) : this.pointsOn
+    for (const id of withPoints) {
       const obj = this.objects.get(id)
       if (!obj || !this.isSelectable(obj) || !controlPoints(obj.geometry)) this.pointsOn.delete(id)
     }
-    for (const [id, indices] of this.pointSelection) {
+    const pointIds = ids ? [...(ids as number[])].filter((id) => this.pointSelection.has(id)) : [...this.pointSelection.keys()]
+    for (const id of pointIds) {
+      const indices = this.pointSelection.get(id)!
       const count = this.pointsOn.has(id) ? controlPoints(this.objects.get(id)!.geometry)!.length : 0
       for (const i of indices) if (i >= count) indices.delete(i)
       if (indices.size === 0) this.pointSelection.delete(id)
