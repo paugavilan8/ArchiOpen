@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 /** Path data for the 20×20 stroked interface icons. */
 export const ICONS = {
   new: 'M5 2.5h6.5L15 6v11.5H5ZM11.5 2.5V6H15',
@@ -108,7 +109,7 @@ export function iconButton(name: IconName, tip: string, onClick: () => void): HT
   button.type = 'button'
   button.className = 'icon-button'
   button.dataset.tip = tip
-  button.setAttribute('aria-label', tip)
+  button.setAttribute('aria-label', t(tip))
   button.appendChild(icon(name))
   button.addEventListener('click', (e) => {
     e.stopPropagation()

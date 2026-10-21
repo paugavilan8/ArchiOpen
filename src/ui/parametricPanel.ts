@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import type { ParametricSession } from '../app/parametric'
 
 /**
@@ -19,7 +20,7 @@ export function showParametricPanel(session: ParametricSession): void {
   const button = (text: string, primary: boolean, onClick: () => void) => {
     const b = document.createElement('button')
     b.type = 'button'
-    b.textContent = text
+    b.textContent = t(text)
     if (primary) b.className = 'primary'
     b.addEventListener('click', onClick)
     return b
@@ -39,7 +40,7 @@ export function showParametricPanel(session: ParametricSession): void {
       return
     }
     title.textContent = session.name
-    status.textContent = session.running ? 'Making it again…' : session.error ? `Error: ${session.error}` : `${session.output.length} object${session.output.length === 1 ? '' : 's'}`
+    status.textContent = session.running ? t('Making it again…') : session.error ? t('Error: {error}', { error: session.error }) : t(session.output.length === 1 ? '1 object' : '{n} objects', { n: session.output.length })
     status.classList.toggle('error', !!session.error && !session.running)
     // The sliders are made again only when the parameters change (not while one is moved).
     const key = JSON.stringify(session.defs)

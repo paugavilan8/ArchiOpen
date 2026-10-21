@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import { Box3, Vector3 } from 'three'
 import type { CommandRunner } from '../commands/runner'
 import { placeInstance, redefineBlock } from '../core/blocks'
@@ -44,7 +45,7 @@ export class BlocksPanel {
     header.className = 'panel-toolbar'
     const hint = document.createElement('span')
     hint.className = 'panel-hint'
-    hint.textContent = 'Double-click a name to rename'
+    hint.textContent = t('Double-click a name to rename')
     header.append(
       hint,
       iconButton('plus', 'Make a block from the selection  (Block)', () => void runner.run('Block')),
@@ -67,7 +68,7 @@ export class BlocksPanel {
     if (names.length === 0) {
       const empty = document.createElement('li')
       empty.className = 'panel-empty'
-      empty.textContent = 'No blocks yet. Select objects and run Block, or open a DXF with blocks.'
+      empty.textContent = t('No blocks yet. Select objects and run Block, or open a DXF with blocks.')
       this.list.replaceChildren(empty)
       return
     }
@@ -83,13 +84,13 @@ export class BlocksPanel {
     if (definition.link) {
       name.classList.add('linked')
       name.dataset.tip = `Linked from ${definition.link.source}. UpdateLinks reads it again`
-      name.textContent = `${definition.name} (linked)`
+      name.textContent = `${definition.name} ${t('(linked)')}`
     }
     name.addEventListener('dblclick', () => this.rename(definition, name))
     const objects = document.createElement('span')
     objects.className = 'layer-count'
     objects.textContent = String(count)
-    objects.dataset.tip = `${count} instance${count === 1 ? '' : 's'}`
+    objects.dataset.tip = count === 1 ? '1 instance' : `${count} instances`
     const quoted = `"${definition.name.replace(/"/g, '')}"`
     const instances = () => [...doc.objects.values()].filter((o) => o.geometry.type === 'instance' && o.geometry.definition.name === definition.name)
     row.append(

@@ -10,8 +10,10 @@ menús.
 
 Descarga el instalador para tu sistema en la página de
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) y ejecútalo. Al abrirlo verás cuatro
-vistas (Top, Perspective, Front, Right), la línea de comandos arriba, barras de herramientas a la
-izquierda y los paneles Properties, Layers, Materials, Blocks y Views a la derecha.
+vistas (Superior, Perspectiva, Frontal, Derecha), la línea de comandos arriba, barras de
+herramientas a la izquierda y los paneles Propiedades, Capas, Materiales, Bloques y Vistas a la
+derecha. La interfaz sale en el idioma del sistema; *Herramientas > Language / Idioma* la cambia.
+Los comandos se escriben siempre con su nombre en inglés (`Line`, `Wall`...), como en Rhino.
 
 Para ver enseguida lo que hace, elige **Help > Open Example House** (el comando `Example`): crea una
 casa de dos plantas con muros, puertas y ventanas, una escalera, una cubierta y estancias rotuladas.

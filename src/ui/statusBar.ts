@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import { unitAbbreviation } from '../core/units'
 import type { Document } from '../core/document'
 import type { Settings, SnapKind, ToggleKey } from '../core/settings'
@@ -41,7 +42,7 @@ export class StatusBar {
     const coordsGroup = this.group('status-coords')
     const cplane = document.createElement('span')
     cplane.className = 'status-label'
-    cplane.textContent = 'CPlane'
+    cplane.textContent = t('CPlane')
     this.coords.className = 'status-value'
     this.units.className = 'status-label'
     coordsGroup.append(cplane, this.coords, this.units)
@@ -60,7 +61,7 @@ export class StatusBar {
 
     this.kernel.className = 'status-kernel'
     this.kernel.hidden = true
-    this.kernel.textContent = 'Computing… Esc to stop'
+    this.kernel.textContent = t('Computing… Esc to stop')
 
     this.assistant.className = 'status-assistant'
     this.assistant.hidden = true
@@ -87,7 +88,7 @@ export class StatusBar {
   /** Shows whether an AI assistant is connected (or being waited for). */
   setAssistant(state: 'off' | 'waiting' | 'connected'): void {
     this.assistant.hidden = state === 'off'
-    this.assistant.textContent = state === 'connected' ? 'AI assistant connected' : 'Waiting for AI assistant'
+    this.assistant.textContent = t(state === 'connected' ? 'AI assistant connected' : 'Waiting for AI assistant')
     this.assistant.classList.toggle('connected', state === 'connected')
     this.assistant.dataset.tip = 'McpConnect to change'
   }
@@ -106,8 +107,8 @@ export class StatusBar {
     const chip = document.createElement('button')
     chip.type = 'button'
     chip.className = 'snap-chip'
-    chip.textContent = text
-    chip.dataset.tip = `${text} object snap`
+    chip.textContent = t(text)
+    chip.dataset.tip = t('{snap} object snap', { snap: t(text) })
     chip.setAttribute('aria-pressed', 'false')
     chip.addEventListener('click', () => this.settings.setSnap(kind, !this.settings.snaps[kind]))
     const sync = () => {
@@ -123,8 +124,8 @@ export class StatusBar {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'status-toggle'
-    button.textContent = text
-    button.dataset.tip = shortcut ? `${text}  (${shortcut})` : text
+    button.textContent = t(text)
+    button.dataset.tip = shortcut ? `${t(text)}  (${shortcut})` : t(text)
     button.addEventListener('click', () => this.settings.toggle(key))
     const sync = () => {
       button.classList.toggle('on', this.settings[key])
@@ -141,7 +142,7 @@ export class StatusBar {
     this.layerName.textContent = layer.name
     const n = this.doc.selection.size
     const points = this.doc.selectedPointCount
-    this.selection.textContent = points > 0 ? `${points} point${points === 1 ? '' : 's'} selected` : n === 0 ? '' : `${n} selected`
+    this.selection.textContent = points > 0 ? t(points === 1 ? '1 point selected' : '{n} points selected', { n: points }) : n === 0 ? '' : t(n === 1 ? '1 selected' : '{n} selected', { n })
     this.units.textContent = unitAbbreviation(this.doc.units)
   }
 }

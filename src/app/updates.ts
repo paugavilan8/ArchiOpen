@@ -1,3 +1,4 @@
+import { t } from './language'
 import { version } from '../../package.json'
 
 /**
@@ -25,12 +26,12 @@ export async function checkForUpdates(log: (text: string) => void, unsavedChange
       return
     }
     const { ask } = await import('@tauri-apps/plugin-dialog')
-    const unsaved = unsavedChanges() ? '\n\nThe model has unsaved changes: save it first, or choose Later.' : ''
-    const install = await ask(`ArchiOpen ${update.version} is available (this is ${update.currentVersion}). Install it now? ArchiOpen restarts to finish.${unsaved}`, {
-      title: 'Update available',
+    const unsaved = unsavedChanges() ? `\n\n${t('The model has unsaved changes: save it first, or choose Later.')}` : ''
+    const install = await ask(`${t('ArchiOpen {version} is available (this is {current}). Install it now? ArchiOpen restarts to finish.', { version: update.version, current: update.currentVersion })}${unsaved}`, {
+      title: t('Update available'),
       kind: 'info',
-      okLabel: 'Install',
-      cancelLabel: 'Later',
+      okLabel: t('Install'),
+      cancelLabel: t('Later'),
     })
     if (!install) {
       log(`ArchiOpen ${update.version} is available: Help > Check for Updates installs it`)

@@ -1,3 +1,5 @@
+import { language, LANGUAGES, setLanguage, type Language } from '../app/language'
+import { isOption } from './helpers'
 import type { Command } from './runner'
 
 const zoom: Command = {
@@ -56,4 +58,17 @@ const units: Command = {
   },
 }
 
-export const viewCommands: Command[] = [zoom, maxViewport, snap, ortho, osnap, units]
+/** Language: the language of menus, panels and messages. Command names stay the same in all. */
+const languageCommand: Command = {
+  name: 'Language',
+  history: false,
+  repeat: false,
+  async run({ input }) {
+    const names = Object.values(LANGUAGES).map((name) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+    const option = await input.getOption(`Language <${LANGUAGES[language()]}>`, names)
+    const chosen = (Object.keys(LANGUAGES) as Language[]).find((code, i) => option !== null && isOption(option, names[i]))
+    if (chosen) setLanguage(chosen)
+  },
+}
+
+export const viewCommands: Command[] = [zoom, maxViewport, snap, ortho, osnap, units, languageCommand]

@@ -1,3 +1,5 @@
+import { t } from '../app/language'
+
 const DELAY = 450
 
 /** Shows the `data-tip` text of whatever is under the pointer, after a short delay. */
@@ -23,7 +25,7 @@ export function installTooltips(): void {
     if (!el) return
     target = el
     timer = window.setTimeout(() => {
-      tip.textContent = el.dataset.tip ?? ''
+      tip.textContent = t(el.dataset.tip ?? '')
       tip.hidden = false
       const rect = el.getBoundingClientRect()
       // Tools in the vertical toolbar get their tip on the right; everything else below.

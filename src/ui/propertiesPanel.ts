@@ -1,4 +1,5 @@
 import { Matrix4, Vector3 } from 'three'
+import { t } from '../app/language'
 import type { HistoryManager } from '../app/historyManager'
 import type { CommandRunner } from '../commands/runner'
 import { slabParams, wallParams, type Justification, type Opening } from '../core/architecture'
@@ -136,7 +137,7 @@ export class PropertiesPanel {
     if (selected.length === 0) {
       const empty = document.createElement('p')
       empty.className = 'panel-empty'
-      empty.textContent = 'Nothing selected. Click an object, or drag a window to select several.'
+      empty.textContent = t('Nothing selected. Click an object, or drag a window to select several.')
       sections.push(empty, this.section('Document', [
         ['Objects', String(this.doc.objects.size)],
         ['Layers', String(this.doc.layers.length)],
@@ -148,13 +149,13 @@ export class PropertiesPanel {
         const type = typeName(obj.geometry)
         counts.set(type, (counts.get(type) ?? 0) + 1)
       }
-      const type = [...counts].map(([name, n]) => `${n} ${plural(name, n)}`).join(', ')
+      const type = [...counts].map(([name, n]) => `${n} ${t(plural(name, n))}`).join(', ')
       const groups = new Set(selected.flatMap((o) => o.groups ?? []))
       const object = this.section('Object', [
-        ['Type', selected.length === 1 ? capitalize(typeName(selected[0].geometry)) : type],
-        ...(groups.size > 0 ? ([['Grouped', groups.size === 1 ? 'Yes' : `In ${groups.size} groups`]] as Row[]) : []),
+        ['Type', selected.length === 1 ? capitalize(t(typeName(selected[0].geometry))) : type],
+        ...(groups.size > 0 ? ([['Grouped', groups.size === 1 ? 'Yes' : t('In {n} groups', { n: groups.size })]] as Row[]) : []),
         ...(selected.length === 1 && selected[0].history
-          ? ([['History', `${selected[0].history.command} of ${selected[0].history.inputs.length} ${plural('curve', selected[0].history.inputs.length)}`]] as Row[])
+          ? ([['History', `${selected[0].history.command}: ${selected[0].history.inputs.length} ${t(plural('input', selected[0].history.inputs.length))}`]] as Row[])
           : []),
       ])
       object.querySelector('dl')!.append(...this.layerField(selected), ...this.materialField(selected))
@@ -175,13 +176,13 @@ export class PropertiesPanel {
   private section(title: string, rows: Row[]): HTMLElement {
     const section = document.createElement('section')
     const heading = document.createElement('h3')
-    heading.textContent = title
+    heading.textContent = t(title)
     const list = document.createElement('dl')
     for (const [label, value] of rows) {
       const dt = document.createElement('dt')
-      dt.textContent = label
+      dt.textContent = t(label)
       const dd = document.createElement('dd')
-      dd.textContent = value
+      dd.textContent = t(value)
       list.append(dt, dd)
     }
     section.append(heading, list)
@@ -200,13 +201,13 @@ export class PropertiesPanel {
     }
     const field = (label: string, input: HTMLElement) => {
       const dt = document.createElement('dt')
-      dt.textContent = label
+      dt.textContent = t(label)
       const dd = document.createElement('dd')
       dd.appendChild(input)
       list.append(dt, dd)
     }
     const pattern = document.createElement('select')
-    for (const name of PATTERN_NAMES) pattern.add(new Option(name, name, false, g.pattern === name))
+    for (const name of PATTERN_NAMES) pattern.add(new Option(t(name), name, false, g.pattern === name))
     pattern.addEventListener('change', () => update({ pattern: pattern.value }))
     field('Pattern', pattern)
     const number = (value: number, apply: (v: number) => void) => {
@@ -231,13 +232,13 @@ export class PropertiesPanel {
     const list = section.querySelector('dl')!
     for (const view of ['Top', 'Front', 'Right', 'Perspective']) {
       const dt = document.createElement('dt')
-      dt.textContent = view
+      dt.textContent = t(view)
       const dd = document.createElement('dd')
       const box = document.createElement('input')
       box.type = 'checkbox'
       box.checked = g.views.includes(view)
       box.dataset.view = view
-      box.title = `Cut the ${view} view`
+      box.title = t('Cut the {view} view', { view: t(view) })
       box.addEventListener('change', () => {
         if (this.runner.busy) return
         this.doc.begin()
@@ -272,7 +273,7 @@ export class PropertiesPanel {
     }
     const field = (label: string, input: HTMLElement) => {
       const dt = document.createElement('dt')
-      dt.textContent = label
+      dt.textContent = t(label)
       const dd = document.createElement('dd')
       dd.appendChild(input)
       list.append(dt, dd)
@@ -312,7 +313,7 @@ export class PropertiesPanel {
       field('Width', number('width', p.width, (width) => update({ width })))
       field('Height', number('height', p.height, (height) => update({ height })))
       const risers = number('risers', p.risers, (risers) => update({ risers: Math.round(risers) }))
-      risers.title = '0 picks comfortable steps'
+      risers.title = t('0 picks comfortable steps')
       field('Risers', risers)
       field('Waist', number('waist', p.waist, (waist) => update({ waist })))
       return section
@@ -321,12 +322,12 @@ export class PropertiesPanel {
       const p = railingParams(record.params)
       field('Height', number('height', p.height, (height) => update({ height })))
       const style = document.createElement('select')
-      for (const st of ['bars', 'rails'] as RailingStyle[]) style.add(new Option(capitalize(st), st, false, p.style === st))
+      for (const st of ['bars', 'rails'] as RailingStyle[]) style.add(new Option(t(capitalize(st)), st, false, p.style === st))
       style.addEventListener('change', () => update({ style: style.value }))
       field('Style', style)
       if (record.params?.stair !== undefined) {
         const sides = document.createElement('select')
-        for (const sd of ['both', 'left', 'right'] as RailingSides[]) sides.add(new Option(capitalize(sd), sd, false, p.sides === sd))
+        for (const sd of ['both', 'left', 'right'] as RailingSides[]) sides.add(new Option(t(capitalize(sd)), sd, false, p.sides === sd))
         sides.addEventListener('change', () => update({ sides: sides.value }))
         field('Sides', sides)
       }
@@ -335,7 +336,7 @@ export class PropertiesPanel {
     if (record.command === 'Roof') {
       const p = roofParams(record.params)
       const type = document.createElement('select')
-      for (const t of ['hip', 'gable', 'shed'] as RoofType[]) type.add(new Option(capitalize(t), t, false, p.type === t))
+      for (const kind of ['hip', 'gable', 'shed'] as RoofType[]) type.add(new Option(t(capitalize(kind)), kind, false, p.type === kind))
       type.addEventListener('change', () => update({ type: type.value }))
       field('Type', type)
       field('Pitch', number('pitch', p.pitch, (pitch) => pitch < 80 && update({ pitch })))
@@ -347,7 +348,7 @@ export class PropertiesPanel {
     field('Thickness', number('thickness', p.thickness, (thickness) => update({ thickness })))
     field('Height', number('height', p.height, (height) => update({ height })))
     const justification = document.createElement('select')
-    for (const j of ['center', 'left', 'right'] as Justification[]) justification.add(new Option(capitalize(j), j, false, p.justification === j))
+    for (const j of ['center', 'left', 'right'] as Justification[]) justification.add(new Option(t(capitalize(j)), j, false, p.justification === j))
     justification.addEventListener('change', () => update({ justification: justification.value }))
     field('Justification', justification)
     p.openings.forEach((o, i) => {
@@ -355,10 +356,10 @@ export class PropertiesPanel {
       remove.type = 'button'
       remove.className = 'opening-remove'
       remove.textContent = `${fmtSize(o.width)} × ${fmtSize(o.height)}  ✕`
-      remove.title = `Remove this ${o.kind}`
+      remove.title = t(o.kind === 'door' ? 'Remove this door' : 'Remove this window')
       remove.addEventListener('click', () => update({ openings: p.openings.filter((_, j) => j !== i) }))
       if (o.kind !== 'door') {
-        field(`${capitalize(o.kind)} ${i + 1}`, remove)
+        field(t('Window {n}', { n: i + 1 }), remove)
         return
       }
       // Doors can be turned to open the other way, or hung on the other side.
@@ -367,7 +368,7 @@ export class PropertiesPanel {
         button.type = 'button'
         button.className = 'opening-flip'
         button.textContent = label
-        button.title = title
+        button.title = t(title)
         button.addEventListener('click', () => update({ openings: p.openings.map((x, j) => (j === i ? { ...x, ...change } : x)) }))
         return button
       }
@@ -378,7 +379,7 @@ export class PropertiesPanel {
         flip('⇅', 'Open to the other side of the wall', { swing: o.swing === 'right' ? 'left' : 'right' }),
         flip('⇄', 'Hinges at the other end', { hinge: o.hinge === 'end' ? 'start' : 'end' }),
       )
-      field(`Door ${i + 1}`, row)
+      field(t('Door {n}', { n: i + 1 }), row)
     })
     return section
   }
@@ -395,7 +396,7 @@ export class PropertiesPanel {
     }
     const field = (label: string, input: HTMLElement) => {
       const dt = document.createElement('dt')
-      dt.textContent = label
+      dt.textContent = t(label)
       const dd = document.createElement('dd')
       dd.appendChild(input)
       list.append(dt, dd)
@@ -404,8 +405,8 @@ export class PropertiesPanel {
     const text = document.createElement('textarea')
     text.rows = isDim ? 1 : 3
     text.value = g.text
-    text.placeholder = isDim ? '<> (measured value)' : ''
-    text.title = isDim ? '<> stands for the measured value' : ''
+    text.placeholder = isDim ? t('<> (measured value)') : ''
+    text.title = isDim ? t('<> stands for the measured value') : ''
     text.addEventListener('change', () => update({ text: text.value }))
     field(isDim ? 'Text' : 'Content', text)
     const height = document.createElement('input')
@@ -420,8 +421,8 @@ export class PropertiesPanel {
     field('Height', height)
     if (g.kind === 'text') return section
     const arrow = document.createElement('select')
-    arrow.add(new Option('Arrow', 'arrow', false, g.arrow === 'arrow'))
-    arrow.add(new Option('Tick', 'tick', false, g.arrow === 'tick'))
+    arrow.add(new Option(t('Arrow'), 'arrow', false, g.arrow === 'arrow'))
+    arrow.add(new Option(t('Tick'), 'tick', false, g.arrow === 'tick'))
     arrow.addEventListener('change', () => update({ arrow: arrow.value === 'tick' ? 'tick' : 'arrow' }))
     field('Arrowheads', arrow)
     if (!isDim) return section
@@ -434,11 +435,11 @@ export class PropertiesPanel {
 
   private layerField(selected: CadObject[]): HTMLElement[] {
     const dt = document.createElement('dt')
-    dt.textContent = 'Layer'
+    dt.textContent = t('Layer')
     const dd = document.createElement('dd')
     const select = document.createElement('select')
     const layerIds = new Set(selected.map((o) => this.doc.layerOf(o).id))
-    if (layerIds.size > 1) select.add(new Option('(varies)', '', true, true))
+    if (layerIds.size > 1) select.add(new Option(t('(varies)'), '', true, true))
     for (const layer of this.doc.layers) {
       const only = layerIds.size === 1 && layerIds.has(layer.id)
       select.add(new Option(layer.name, String(layer.id), only, only))
@@ -458,13 +459,13 @@ export class PropertiesPanel {
   /** The render material: by layer, or one of the document's materials. */
   private materialField(selected: CadObject[]): HTMLElement[] {
     const dt = document.createElement('dt')
-    dt.textContent = 'Material'
+    dt.textContent = t('Material')
     const dd = document.createElement('dd')
     const select = document.createElement('select')
     const names = new Set(selected.map((o) => o.material ?? ''))
-    if (names.size > 1) select.add(new Option('(varies)', '\u0000', true, true))
+    if (names.size > 1) select.add(new Option(t('(varies)'), '\u0000', true, true))
     const only = (name: string) => names.size === 1 && names.has(name)
-    select.add(new Option('By layer', '', only(''), only('')))
+    select.add(new Option(t('By layer'), '', only(''), only('')))
     for (const m of this.doc.materials) select.add(new Option(m.name, m.name, only(m.name), only(m.name)))
     select.addEventListener('change', () => {
       if (select.value === '\u0000' || this.runner.busy) return

@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import type { Document, Layer } from '../core/document'
 import { DEFAULT_PRINT_WIDTH, LINETYPE_NAMES, PRINT_WIDTHS } from '../core/linetypes'
 import { iconButton } from './icons'
@@ -17,7 +18,7 @@ export class LayersPanel {
     header.className = 'panel-toolbar'
     const hint = document.createElement('span')
     hint.className = 'panel-hint'
-    hint.textContent = 'Click to make current'
+    hint.textContent = t('Click to make current')
     header.append(
       hint,
       iconButton('plus', 'New layer', () => doc.addLayer()),
@@ -59,28 +60,28 @@ export class LayersPanel {
     const layer = doc.currentLayer
     const section = document.createElement('section')
     const heading = document.createElement('h3')
-    heading.textContent = `Layer ${layer.name}`
+    heading.textContent = t('Layer {name}', { name: layer.name })
     const list = document.createElement('dl')
     const field = (label: string, input: HTMLElement) => {
       const dt = document.createElement('dt')
-      dt.textContent = label
+      dt.textContent = t(label)
       const dd = document.createElement('dd')
       dd.appendChild(input)
       list.append(dt, dd)
     }
     const linetype = document.createElement('select')
-    for (const name of LINETYPE_NAMES) linetype.add(new Option(name, name, false, (layer.linetype ?? 'Continuous') === name))
+    for (const name of LINETYPE_NAMES) linetype.add(new Option(t(name), name, false, (layer.linetype ?? 'Continuous') === name))
     linetype.addEventListener('change', () => doc.updateLayer(layer.id, { linetype: linetype.value }))
     field('Linetype', linetype)
     const width = document.createElement('select')
     for (const w of PRINT_WIDTHS) {
-      const label = w === 0 ? `Default (${DEFAULT_PRINT_WIDTH} mm)` : `${w} mm`
+      const label = w === 0 ? t('Default ({width} mm)', { width: DEFAULT_PRINT_WIDTH }) : `${w} mm`
       width.add(new Option(label, String(w), false, (layer.printWidth ?? 0) === w))
     }
     width.addEventListener('change', () => doc.updateLayer(layer.id, { printWidth: Number(width.value) }))
     field('Print width', width)
     const material = document.createElement('select')
-    material.add(new Option('Layer color', '', false, !layer.material))
+    material.add(new Option(t('Layer color'), '', false, !layer.material))
     for (const m of doc.materials) material.add(new Option(m.name, m.name, false, layer.material === m.name))
     material.addEventListener('change', () => doc.updateLayer(layer.id, { material: material.value || undefined }))
     field('Material', material)

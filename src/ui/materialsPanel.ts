@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import type { CommandRunner } from '../commands/runner'
 import type { Document } from '../core/document'
 import type { FileManager } from '../app/files'
@@ -23,10 +24,10 @@ function swatch(m: Material): HTMLSpanElement {
 const previews = new Map<string, string>()
 
 /** A small picture of a texture (patterns are drawn once). */
-function texturePreview(t: MaterialTexture): string {
-  if (t.kind === 'Image') return t.image!
-  let url = previews.get(t.kind)
-  if (!url) previews.set(t.kind, (url = patternPreview(t.kind)))
+function texturePreview(texture: MaterialTexture): string {
+  if (texture.kind === 'Image') return texture.image!
+  let url = previews.get(texture.kind)
+  if (!url) previews.set(texture.kind, (url = patternPreview(texture.kind)))
   return url
 }
 
@@ -60,8 +61,8 @@ export class MaterialsPanel {
     header.className = 'panel-toolbar'
     const add = document.createElement('select')
     add.className = 'material-add'
-    add.add(new Option('Add a material…', '', true, true))
-    for (const p of MATERIAL_PRESETS) add.add(new Option(p.name, p.name))
+    add.add(new Option(t('Add a material…'), '', true, true))
+    for (const p of MATERIAL_PRESETS) add.add(new Option(t(p.name), p.name))
     add.addEventListener('change', () => {
       const preset = MATERIAL_PRESETS.find((p) => p.name === add.value)
       add.value = ''
@@ -79,8 +80,10 @@ export class MaterialsPanel {
 
   /** Adds a copy of a material under a free name, and edits it. */
   private addMaterial(source: Material): void {
-    let name = source.name
-    for (let n = 2; this.doc.materials.some((m) => m.name === name); n++) name = `${source.name} ${n}`
+    // Named in the interface's language: it is the user's from now on.
+    const base = t(source.name)
+    let name = base
+    for (let n = 2; this.doc.materials.some((m) => m.name === name); n++) name = `${base} ${n}`
     this.doc.setMaterials([...this.doc.materials, { ...source, name }])
     this.editing = name
     this.render()
@@ -93,7 +96,7 @@ export class MaterialsPanel {
     if (doc.materials.length === 0) {
       const empty = document.createElement('li')
       empty.className = 'panel-empty'
-      empty.textContent = 'No materials yet. Add one above, then give it to objects or layers; switch a view to Rendered to see it.'
+      empty.textContent = t('No materials yet. Add one above, then give it to objects or layers; switch a view to Rendered to see it.')
       this.list.replaceChildren(empty)
     } else this.list.replaceChildren(...doc.materials.map((m) => this.row(m)))
     // Not while one of its fields is in use: rebuilding it would cut a slider's drag short.
@@ -121,7 +124,7 @@ export class MaterialsPanel {
     count.className = 'layer-count'
     const used = this.usage(m.name)
     count.textContent = String(used)
-    count.dataset.tip = `${used} object${used === 1 ? '' : 's'}`
+    count.dataset.tip = used === 1 ? '1 object' : `${used} objects`
     row.append(
       swatch(m),
       name,
@@ -152,11 +155,11 @@ export class MaterialsPanel {
     }
     const section = document.createElement('section')
     const heading = document.createElement('h3')
-    heading.textContent = `Material ${m.name}`
+    heading.textContent = t('Material {name}', { name: m.name })
     const list = document.createElement('dl')
     const field = (label: string, input: HTMLElement) => {
       const dt = document.createElement('dt')
-      dt.textContent = label
+      dt.textContent = t(label)
       const dd = document.createElement('dd')
       dd.appendChild(input)
       list.append(dt, dd)
@@ -191,7 +194,7 @@ export class MaterialsPanel {
     slider('Transparency', 'transparency', 'Opaque (left) to clear glass (right)')
     this.textureFields(m, field, update)
     const layer = document.createElement('select')
-    layer.add(new Option('Give it to a layer…', '', true, true))
+    layer.add(new Option(t('Give it to a layer…'), '', true, true))
     for (const l of doc.layers) layer.add(new Option(`${l.name}${l.material === m.name ? ' ✓' : ''}`, String(l.id)))
     layer.addEventListener('change', () => {
       if (layer.value) doc.updateLayer(Number(layer.value), { material: m.name })
@@ -204,8 +207,8 @@ export class MaterialsPanel {
   /** Pattern or picture, its real size, turn and relief. */
   private textureFields(m: Material, field: (label: string, input: HTMLElement) => void, update: (patch: Partial<Material>) => void): void {
     const kind = document.createElement('select')
-    kind.add(new Option('None', '', false, !m.texture))
-    for (const k of TEXTURE_KINDS) kind.add(new Option(k === 'Image' ? 'Picture from a file…' : k, k, false, m.texture?.kind === k))
+    kind.add(new Option(t('None'), '', false, !m.texture))
+    for (const k of TEXTURE_KINDS) kind.add(new Option(t(k === 'Image' ? 'Picture from a file…' : k), k, false, m.texture?.kind === k))
     const choosePicture = async () => {
       const file = await this.files.pickImage()
       if (!file) return this.render()
@@ -227,8 +230,8 @@ export class MaterialsPanel {
       else update({ color: '#ffffff', texture: { kind: k, rotation: 0, ...TEXTURE_DEFAULTS[k] } })
     })
     field('Texture', kind)
-    const t = m.texture
-    if (!t) return
+    const tex = m.texture
+    if (!tex) return
     const number = (value: number, step: string, onChange: (n: number) => void) => {
       const input = document.createElement('input')
       input.type = 'number'
@@ -241,22 +244,22 @@ export class MaterialsPanel {
       })
       return input
     }
-    field('Size (m)', number(t.size, '0.05', (n) => n > 0 && update({ texture: { ...t, size: n } })))
-    field('Rotation (°)', number(t.rotation, '15', (n) => update({ texture: { ...t, rotation: n } })))
+    field('Size (m)', number(tex.size, '0.05', (n) => n > 0 && update({ texture: { ...tex, size: n } })))
+    field('Rotation (°)', number(tex.rotation, '15', (n) => update({ texture: { ...tex, rotation: n } })))
     const bump = document.createElement('input')
     bump.type = 'range'
     bump.min = '0'
     bump.max = '1'
     bump.step = '0.05'
-    bump.value = String(t.bump)
+    bump.value = String(tex.bump)
     bump.dataset.tip = 'Flat (left) to deep relief (right)'
-    bump.addEventListener('input', () => update({ texture: { ...t, bump: Number(bump.value) } }))
+    bump.addEventListener('input', () => update({ texture: { ...tex, bump: Number(bump.value) } }))
     field('Relief', bump)
-    if (t.kind === 'Image') {
+    if (tex.kind === 'Image') {
       const change = document.createElement('button')
       change.type = 'button'
       change.className = 'material-picture'
-      change.textContent = 'Change picture…'
+      change.textContent = t('Change picture…')
       change.addEventListener('click', () => void choosePicture())
       field('', change)
     }

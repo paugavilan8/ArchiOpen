@@ -109,6 +109,9 @@ Expand a section for details.
 <summary><b>Interface and viewports</b></summary>
 <br>
 
+- **English or Spanish**: menus, toolbars, panels and messages in either (*Tools > Language /
+  Idioma*, or `Language`); the first time, the system's language. Command names stay the same in
+  both, so typed commands, macros and scripts work in any language.
 - Four viewports (Top, Front, Right, Perspective) with grid, axis gizmo and a per-viewport menu.
 - Orbit (right mouse button in Perspective), pan (Shift + right button, or middle button) and
   wheel zoom.

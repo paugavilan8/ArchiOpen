@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import { PNG } from '../app/files'
 import { MATERIAL_PRESETS } from '../core/materials'
 import { canvasToPng, showRenderWindow } from '../ui/renderWindow'
@@ -43,7 +44,7 @@ const render: Command = {
     // Large images are sharp enough without drawing them twice the size, which would take long.
     const image = display.captureImage(display.active, width, height, { mode: 'rendered', supersample: Math.max(width, height) > 2000 ? 1 : 2, occlusion: true })
     log(`Rendered in ${((performance.now() - started) / 1000).toFixed(1)} s`)
-    await showRenderWindow(image, `Render — ${display.active.kind}, ${width} × ${height}`, () => saveImage(ctx, image))
+    await showRenderWindow(image, `Render — ${t(display.active.kind)}, ${width} × ${height}`, () => saveImage(ctx, image))
   },
 }
 

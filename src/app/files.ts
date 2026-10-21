@@ -1,3 +1,4 @@
+import { t } from './language'
 import type { Document } from '../core/document'
 import { archiNotes, parseArchi } from '../core/archiFormat'
 import { readDxf } from '../io/dxfRead'
@@ -130,8 +131,8 @@ async function dwgToDxf(bytes: Uint8Array): Promise<Uint8Array> {
 }
 
 const extensionsOf = (t: FileType) => t.extensions ?? [t.extension]
-const dialogFilters = (types: FileType[]) => types.map((t) => ({ name: t.name, extensions: extensionsOf(t) }))
-const pickerTypes = (types: FileType[]) => types.map((t) => ({ description: t.name, accept: { [t.mime]: extensionsOf(t).map((e) => `.${e}`) } }))
+const dialogFilters = (types: FileType[]) => types.map((type) => ({ name: t(type.name), extensions: extensionsOf(type) }))
+const pickerTypes = (types: FileType[]) => types.map((type) => ({ description: t(type.name), accept: { [type.mime]: extensionsOf(type).map((e) => `.${e}`) } }))
 
 // --- Where dialogs open ---------------------------------------------------------------
 
@@ -178,7 +179,7 @@ function rememberFolderOf(path: string): void {
 async function pickFile(types: FileType[]): Promise<PickedFile | null> {
   if (isDesktop) {
     const { open } = await import('@tauri-apps/plugin-dialog')
-    const filters = types.length > 1 ? [{ name: 'Models', extensions: types.flatMap(extensionsOf) }, ...dialogFilters(types)] : dialogFilters(types)
+    const filters = types.length > 1 ? [{ name: t('Models'), extensions: types.flatMap(extensionsOf) }, ...dialogFilters(types)] : dialogFilters(types)
     const path = await open({ multiple: false, directory: false, filters, defaultPath: startFolder() })
     if (typeof path !== 'string') return null
     rememberFolderOf(path)
@@ -318,10 +319,10 @@ export class FileManager {
   /** Asks before throwing away unsaved changes. Resolves to true if it is fine to continue. */
   async confirmDiscard(): Promise<boolean> {
     if (!this.doc.modified) return true
-    const message = `Discard the unsaved changes to "${this.name}"?`
+    const message = t('Discard the unsaved changes to "{name}"?', { name: this.name })
     if (isDesktop) {
       const { ask } = await import('@tauri-apps/plugin-dialog')
-      return ask(message, { title: 'ArchiOpen', kind: 'warning', okLabel: 'Discard', cancelLabel: 'Cancel' })
+      return ask(message, { title: 'ArchiOpen', kind: 'warning', okLabel: t('Discard'), cancelLabel: t('Cancel') })
     }
     return window.confirm(message)
   }

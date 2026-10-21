@@ -1,4 +1,5 @@
 import { version } from '../../package.json'
+import { t } from '../app/language'
 import type { CommandContext, CommandRunner } from '../commands/runner'
 import { closeMenu, isMenuOpen, menuAnchor, MenuEntry, openMenu } from './menu'
 
@@ -366,6 +367,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
         item('Forget History', 'HistoryPurge'),
         'separator',
         item('Model Units…', 'Units'),
+        { label: 'Language / Idioma', action: run('Language') },
       ],
     ],
     [
@@ -394,7 +396,7 @@ export function buildMenuBar(container: HTMLElement, runner: CommandRunner, ctx:
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'menubar-item'
-    button.textContent = title
+    button.textContent = t(title)
     const show = () => {
       openMenu(button, entries, { onClose: () => button.classList.remove('open') })
       button.classList.add('open')

@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import * as THREE from 'three'
 import type { Plane } from '../core/geometry'
 
@@ -89,7 +90,7 @@ export class Viewport {
     this.el.dataset.view = kind
     this.titleEl = document.createElement('span')
     this.titleEl.className = 'viewport-title'
-    this.titleEl.textContent = kind
+    this.titleEl.textContent = t(kind)
     this.el.append(this.titleEl, this.buildGizmo())
   }
 

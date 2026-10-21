@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 /**
  * Shows a rendered image over the app, with buttons to save it or close. Resolves when closed;
  * `save` runs when the user asks to save (and may be called more than once).
@@ -11,11 +12,11 @@ export function showRenderWindow(image: HTMLCanvasElement, title: string, save: 
     const header = document.createElement('div')
     header.className = 'render-header'
     const label = document.createElement('span')
-    label.textContent = title
+    label.textContent = t(title)
     const button = (text: string, primary: boolean, onClick: () => void) => {
       const b = document.createElement('button')
       b.type = 'button'
-      b.textContent = text
+      b.textContent = t(text)
       if (primary) b.className = 'primary'
       b.addEventListener('click', onClick)
       return b
