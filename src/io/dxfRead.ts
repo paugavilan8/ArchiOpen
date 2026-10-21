@@ -420,6 +420,8 @@ const SKIPPED_NAMES: Record<string, [string, string]> = {
 
 export function readDxf(bytes: Uint8Array, fallbackUnits: string): RhinoImport {
   const pairs = readPairs(decode(bytes))
+  // A drawing has sections; anything else (a damaged or empty file, another format) is not one.
+  if (!pairs.some((p) => p[0] === 0 && p[1].trim() === 'SECTION')) throw new Error('This is not a valid DXF file')
   const header = new Map<string, string>()
   const layers: Omit<Layer, 'id'>[] = []
   const layerIndex = new Map<string, number>()

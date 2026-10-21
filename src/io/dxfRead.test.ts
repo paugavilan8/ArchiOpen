@@ -173,3 +173,11 @@ describe('DXF reading details', () => {
     expect(() => readDxf(new TextEncoder().encode('AutoCAD Binary DXF\r\n\x1a\x00'), 'Millimeters')).toThrow(/ASCII/)
   })
 })
+
+describe('files that are not DXF drawings', () => {
+  it('are refused instead of opening as an empty drawing', () => {
+    const bytes = (text: string) => new TextEncoder().encode(text)
+    expect(() => readDxf(bytes(''), 'Millimeters')).toThrow('This is not a valid DXF file')
+    expect(() => readDxf(bytes('PK\u0003\u0004 not a drawing\n0\nLINE\n'), 'Millimeters')).toThrow('This is not a valid DXF file')
+  })
+})

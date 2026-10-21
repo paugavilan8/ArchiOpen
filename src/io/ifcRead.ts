@@ -92,6 +92,9 @@ export interface IfcImport extends RhinoImport {
 
 /** Reads an IFC file's elements as meshes. */
 export function readIfc(api: IfcAPI, bytes: Uint8Array, options: { native?: boolean } = {}): IfcImport {
+  // IFC files are STEP files (ISO 10303-21) with an IFC schema; the reader fails obscurely on others.
+  const head = new TextDecoder().decode(bytes.subarray(0, 65536))
+  if (!/ISO-10303-21/.test(head) || !/FILE_SCHEMA\s*\(\s*\(\s*'IFC/i.test(head)) throw new Error('This is not a valid IFC file')
   const model = api.OpenModel(bytes)
   if (model < 0) throw new Error('This is not a valid IFC file')
   try {

@@ -128,17 +128,21 @@ export class CommandRunner {
     this.onStart()
     input.setScript(script)
     if (tracked) doc.begin()
+    let failed = false
     try {
       await command.run(this.ctx)
     } catch (error) {
       if (!(error instanceof CancelError)) {
         console.error(error)
+        failed = true
         this.lastError = `Error in ${command.name}: ${error instanceof Error ? error.message : String(error)}`
         log(this.lastError)
       }
     } finally {
-      // Work done before a cancel (e.g. the copies already placed) is kept as one undo step.
-      if (tracked) doc.commit()
+      // A command that fails leaves the model as it found it; work done before a cancel (e.g. the
+      // copies already placed) is kept as one undo step.
+      if (tracked && failed && doc.rollback()) log('The changes it had made were taken back')
+      else if (tracked) doc.commit()
       input.setScript([])
       this.current = null
       this.onIdle()

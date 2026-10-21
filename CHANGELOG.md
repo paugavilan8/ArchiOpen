@@ -5,6 +5,10 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Sturdier**: a command that fails halfway leaves the model as it was (cancelling still keeps what
+  was done); damaged or empty DXF files and files that are not IFC are refused with a clear message
+  instead of opening empty or failing obscurely; the session kept for recovery after a crash goes
+  to the browser's IndexedDB, so large models are recovered too (localStorage held about 5 MB).
 - **Faster with large models**: deleting or changing thousands of objects at once no longer slows
   down with their square (20 000 objects deleted in 0.3 s instead of 6 s); selecting and drawing large
   drawings does less work (line work in typed buffers, the gumball's box kept between frames).

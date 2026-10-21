@@ -380,6 +380,22 @@ export class Document {
     this.finishStep(tx)
   }
 
+  /**
+   * Takes back everything changed since begin(), as if it had not happened (for a command that
+   * failed halfway). Inside a group (a script's step) it does nothing: the group goes on.
+   */
+  rollback(): boolean {
+    if (this.groupDepth > 0) return false
+    const tx = this.tx
+    this.tx = null
+    this.amending = null
+    if (!tx || tx.length === 0) return false
+    for (let i = tx.length - 1; i >= 0; i--) this.apply(tx[i], true)
+    this.pruneSelection()
+    this.emit('objects')
+    return true
+  }
+
   private finishStep(step: Action[]): void {
     for (const listener of this.stepListeners) listener(step)
   }

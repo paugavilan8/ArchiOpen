@@ -3,6 +3,7 @@ import { version } from '../package.json'
 import { checkForUpdates } from './app/updates'
 import { migrateArchi } from './core/archiFormat'
 import { onLanguageChange } from './app/language'
+import { loadSession, storeSession } from './app/sessionStore'
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
 import { Autosaver, desktopFolder, setAutosaver } from './app/autosave'
@@ -35,7 +36,6 @@ import { installTooltips } from './ui/tooltip'
 import { installViewportMenus } from './ui/viewportMenus'
 import { Display } from './view/display'
 
-const STORAGE_KEY = 'archiopen:session'
 const SAVE_DELAY = 300
 
 const doc = new Document()
@@ -109,30 +109,33 @@ interface Session {
   document: unknown
 }
 
-try {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved) {
+// Restored as soon as it is read (unless something was opened or drawn first).
+let restoring = true
+void loadSession()
+  .then((saved) => {
+    if (!saved || doc.objects.size > 0 || doc.modified) return
     const session: Session = JSON.parse(saved)
     doc.load(migrateArchi(session.document).json)
     doc.modified = session.modified
     files.restore(session.name, session.path)
-  }
-} catch (error) {
-  console.warn('Could not restore the previous session', error)
-}
+    display.fit(display.viewports)
+  })
+  .catch((error) => console.warn('Could not restore the previous session', error))
+  .finally(() => (restoring = false))
 
 let saveTimer = 0
-function saveSession(): void {
+/** How long the last save took: large models are kept less often, so it never weighs on work. */
+let saveCost = 0
+async function saveSession(): Promise<void> {
+  const started = performance.now()
   const session: Session = { name: files.name, path: files.path, modified: doc.modified, document: doc.toJSON() }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-  } catch (error) {
-    console.warn('Could not store the session', error)
-  }
+  await storeSession(JSON.stringify(session))
+  saveCost = performance.now() - started
 }
 function scheduleSessionSave(): void {
+  if (restoring) return
   window.clearTimeout(saveTimer)
-  saveTimer = window.setTimeout(saveSession, SAVE_DELAY)
+  saveTimer = window.setTimeout(() => void saveSession(), Math.max(SAVE_DELAY, saveCost * 20))
 }
 doc.on((kind) => {
   if (kind !== 'selection') scheduleSessionSave()
@@ -170,9 +173,10 @@ if (isDesktop) {
 let reloading = false
 onLanguageChange(() => {
   window.clearTimeout(saveTimer)
-  saveSession()
-  reloading = true
-  window.location.reload()
+  void saveSession().finally(() => {
+    reloading = true
+    window.location.reload()
+  })
 })
 
 // --- Keyboard --------------------------------------------------------------------
