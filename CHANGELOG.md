@@ -3,7 +3,9 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.9.0
+
+Spanish interface, a stable .archi format and installers for Intel Macs.
 
 - **The interface in Spanish** (or English): menus, toolbars, panels, the status bar, dialogs, what
   commands ask and their most common messages and errors, from *Tools > Language / Idioma*
