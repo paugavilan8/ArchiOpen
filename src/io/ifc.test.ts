@@ -119,3 +119,12 @@ describe('IFC', () => {
     expect(layerName('IFCFLOWTERMINAL')).toBe('Flowterminal')
   })
 })
+
+describe('files that are not IFC models', () => {
+  it('are refused with a clear message', () => {
+    const bytes = (text: string) => new TextEncoder().encode(text)
+    // (Refused before the IFC reader is asked, so none is needed.)
+    expect(() => readIfc({} as never, bytes('PK\u0003\u0004 garbage'))).toThrow('This is not a valid IFC file')
+    expect(() => readIfc({} as never, bytes("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('AP214'));\nENDSEC;"))).toThrow('This is not a valid IFC file')
+  })
+})

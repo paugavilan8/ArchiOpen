@@ -1,6 +1,7 @@
 /** Spanish for what commands report in the command history, and for their errors. */
 export const esMessages: Record<string, string> = {
   'Error in {command}: {message}': 'Error en {command}: {message}',
+  'The changes it had made were taken back': 'Se han deshecho los cambios que había hecho',
 
   // General
   'Nothing selected': 'No hay nada seleccionado',
