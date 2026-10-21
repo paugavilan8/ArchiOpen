@@ -13,6 +13,7 @@ What changed in each version of ArchiOpen. Installers for every version are on t
   format and of ArchiOpen that saved them; files from any earlier version keep opening (a file saved
   by 0.8.2 is kept in the tests for this). A file from a newer version opens as far as this one
   understands it, and says so, instead of failing; a file that is not an .archi says that too.
+- Installers for **Macs with an Intel processor** (`_x64.dmg`), besides those with an Apple one.
 
 ## 0.8.2
 

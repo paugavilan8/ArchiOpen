@@ -81,7 +81,8 @@ página de *Releases* (no hace falta cuenta de GitHub):
 | Sistema | Archivo |
 | --- | --- |
 | Windows | `ArchiOpen_x.y.z_x64-setup.exe` (o el `.msi`) |
-| macOS | `ArchiOpen_x.y.z_aarch64.dmg` |
+| macOS (procesador Apple: M1 y posteriores) | `ArchiOpen_x.y.z_aarch64.dmg` |
+| macOS (procesador Intel) | `ArchiOpen_x.y.z_x64.dmg` |
 | Linux | `ArchiOpen_x.y.z_amd64.AppImage` (o el `.deb` o el `.rpm`) |
 
 Las novedades de cada versión están en el [registro de cambios](CHANGELOG.md) (en inglés).
