@@ -3,6 +3,7 @@ import { t } from './language'
 import { es } from './locales/es'
 
 const sources = import.meta.glob('../ui/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const commandSources = import.meta.glob(['../commands/*.ts', '!../commands/*.test.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
 /** The texts the interface shows, as written in its code. */
 function interfaceTexts(): string[] {
@@ -37,8 +38,33 @@ describe('interface language', () => {
     expect(t('12 objects copied to the clipboard', undefined, 'es')).toBe('12 objetos copiados al portapapeles')
   })
 
-  it('leaves what has no translation in English', () => {
+  it('leaves what has no translation in English, rather than half translated', () => {
     expect(t('Something new', undefined, 'es')).toBe('Something new')
+    expect(t('Nothing selected', undefined, 'es')).toBe('No hay nada seleccionado')
+    expect(t('3 curves selected', undefined, 'es')).toBe('3 curves selected')
+  })
+
+  it('translates what commands ask', () => {
+    expect(t('Start of wall', undefined, 'es')).toBe('Inicio del muro')
+    expect(t('Height <2800>', undefined, 'es')).toBe('Altura <2800>')
+    expect(t('Click a wall where the door goes. Press Enter when done', undefined, 'es')).toBe('Haz clic en el muro donde va la puerta. Intro para terminar')
+  })
+
+  it('translates errors, with their message', () => {
+    expect(t('Error in Open: This is not an ArchiOpen file, or it is damaged', undefined, 'es')).toBe('Error en Open: Esto no es un archivo de ArchiOpen, o está dañado')
+    expect(t('Error in Foo: something unexpected', undefined, 'es')).toBe('Error en Foo: something unexpected')
+  })
+
+  it('has Spanish for every fixed prompt of the commands', () => {
+    const prompts = new Set<string>()
+    for (const source of Object.values(commandSources)) {
+      // (Escapes as the source writes them, such as a backslash before n, become what the prompt shows.)
+      const add = (text: string) => prompts.add(text.replace(/\\\\/g, '\\'))
+      for (const m of source.matchAll(/\bprompt: '([^']+)'/g)) add(m[1])
+      for (const m of source.matchAll(/\bget(?:Objects|Number|Option|Pick|String|Point)\(\s*'([^']+)'/g)) add(m[1])
+    }
+    expect(prompts.size).toBeGreaterThan(150)
+    expect([...prompts].filter((p) => t(p, undefined, 'es') === p && !(p in es))).toEqual([])
   })
 
   it('has Spanish for every text of the menus, toolbars and panels', () => {

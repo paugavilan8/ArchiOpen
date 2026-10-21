@@ -2,7 +2,10 @@
  * Spanish. Keys are the English texts of the interface; `{name}` parts are filled in (or matched,
  * for texts made elsewhere). Terms follow the Spanish edition of Rhino where it has one.
  */
-export const es: Record<string, string> = {
+import { esCommands } from './es-commands'
+import { esMessages } from './es-messages'
+
+const ui: Record<string, string> = {
   // --- Menu bar ------------------------------------------------------------------------
   File: 'Archivo',
   Edit: 'Edición',
@@ -693,3 +696,5 @@ export const es: Record<string, string> = {
   'Nothing selected': 'No hay nada seleccionado',
   'Select objects first': 'Selecciona objetos primero',
 }
+
+export const es: Record<string, string> = { ...ui, ...esCommands, ...esMessages }

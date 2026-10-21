@@ -50,6 +50,9 @@ export function setLanguage(next: Language): void {
   for (const listener of listeners) listener(next)
 }
 
+/** Parts that stand for a number. */
+const COUNTS = new Set(['n', 'faces', 'triangles', 'quads'])
+
 /** Texts with `{name}` parts, as patterns that match the text with anything in those parts. */
 const patterns = new Map<Record<string, string>, { re: RegExp; names: string[]; to: string }[]>()
 function patternsOf(dictionary: Record<string, string>) {
@@ -65,7 +68,8 @@ function patternsOf(dictionary: Record<string, string>) {
             const m = /^\{(\w+)\}$/.exec(part)
             if (!m) return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
             names.push(m[1])
-            return '(.+?)'
+            // Counts match only numbers, so "Nothing selected" is not "{n} selected".
+            return COUNTS.has(m[1]) ? '(\\d[\\d.,]*)' : '(.+?)'
           })
           .join('')
         return { re: new RegExp(`^${source}$`), names, to }
@@ -80,7 +84,14 @@ function lookup(dictionary: Record<string, string>, text: string): string | unde
   if (exact !== undefined) return exact
   for (const { re, names, to } of patternsOf(dictionary)) {
     const m = re.exec(text)
-    if (m) return to.replace(/\{(\w+)\}/g, (whole, name: string) => (names.includes(name) ? m[names.indexOf(name) + 1] : whole))
+    if (m) {
+      return to.replace(/\{(\w+)\}/g, (whole, name: string) => {
+        if (!names.includes(name)) return whole
+        const part = m[names.indexOf(name) + 1]
+        // A message inside a message (an error's) is translated too.
+        return name === 'message' ? (lookup(dictionary, part) ?? part) : part
+      })
+    }
   }
   // A shortcut after the text ("Move  (M)") stays as it is.
   const shortcut = /^(.+?)(\s{2}\(.+\))$/.exec(text)
