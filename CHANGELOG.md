@@ -5,6 +5,9 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **Faster with large models**: deleting or changing thousands of objects at once no longer slows
+  down with their square (20 000 objects deleted in 0.3 s instead of 6 s); selecting and drawing large
+  drawings does less work (line work in typed buffers, the gumball's box kept between frames).
 - **A stable API for scripts, macros and the AI assistant** ([docs/scripting.md](docs/scripting.md)):
   command names, aliases, the `archi` script functions and the assistant's tools stay the same from
   1.0 on (a test holds them); scripts can read `archi.apiVersion`.
