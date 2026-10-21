@@ -5,6 +5,8 @@ What changed in each version of ArchiOpen. Installers for every version are on t
 
 ## Unreleased
 
+- **All of the interface in Spanish**: the remaining messages and errors of commands (walls, roofs,
+  stairs, blocks, files, ...); a test makes sure no fixed message is left in English.
 - **Sturdier**: a command that fails halfway leaves the model as it was (cancelling still keeps what
   was done); damaged or empty DXF files and files that are not IFC are refused with a clear message
   instead of opening empty or failing obscurely; the session kept for recovery after a crash goes
