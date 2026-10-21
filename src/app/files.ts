@@ -1,4 +1,5 @@
 import type { Document } from '../core/document'
+import { archiNotes, parseArchi } from '../core/archiFormat'
 import { readDxf } from '../io/dxfRead'
 import { readObj, readStl } from '../io/meshFiles'
 import { describeSkipped, readRhinoFile, RhinoExportReport, RhinoImport, writeRhinoFile } from '../io/rhino3dm'
@@ -343,7 +344,7 @@ export class FileManager {
     if (!root) throw new Error('Templates are in the desktop app')
     const { invoke } = await import('@tauri-apps/api/core')
     const bytes = fromBase64(await invoke<string>('read_binary_file', { path: joinPath(joinPath(root, TEMPLATES), `${name}.archi`) }))
-    this.doc.load(JSON.parse(new TextDecoder().decode(bytes)))
+    this.loadArchi(bytes)
     this.setLocation(UNTITLED, null)
     this.doc.modified = false
     return true
@@ -415,9 +416,15 @@ export class FileManager {
       this.setLocation(baseName(file.fileName), null)
       return `Opened ${file.fileName}: ${this.rhinoSummary(result)}. Save stores it as an .archi file; use Export to write a .3dm`
     }
-    this.doc.load(JSON.parse(new TextDecoder().decode(bytes)))
+    const notes = this.loadArchi(bytes)
     this.setLocation(baseName(file.fileName), file.location)
-    return `Opened ${file.fileName}`
+    return `Opened ${file.fileName}${notes}`
+  }
+
+  /** Puts an .archi file's content in place of the document; returns what to tell about it. */
+  private loadArchi(bytes: Uint8Array): string {
+    const file = parseArchi(new TextDecoder().decode(bytes))
+    return archiNotes(file, this.doc.load(file.json))
   }
 
   /**
@@ -426,7 +433,7 @@ export class FileManager {
    */
   async openCopy(name: string, bytes: Uint8Array): Promise<boolean> {
     if (!(await this.confirmDiscard())) return false
-    this.doc.load(JSON.parse(new TextDecoder().decode(bytes)))
+    this.loadArchi(bytes)
     this.doc.modified = true
     this.setLocation(name, null)
     return true
@@ -585,7 +592,7 @@ export class FileManager {
   }
 
   private async linkedModel(fileName: string, bytes: Uint8Array): Promise<RhinoImport> {
-    if (extensionOf(fileName) === ARCHI.extension) return archiAsImport(JSON.parse(new TextDecoder().decode(bytes)))
+    if (extensionOf(fileName) === ARCHI.extension) return archiAsImport(parseArchi(new TextDecoder().decode(bytes)).json)
     return this.readRhino(bytes)
   }
 
