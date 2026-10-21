@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import { Vector3 } from 'three'
 import type { CommandRunner } from '../commands/runner'
 import type { Document } from '../core/document'
@@ -77,7 +78,7 @@ export class LayoutEditor {
     const button = (text: string, tip: string, action: () => void) => {
       const b = document.createElement('button')
       b.type = 'button'
-      b.textContent = text
+      b.textContent = t(text)
       b.dataset.tip = tip
       b.addEventListener('click', action)
       return b
@@ -284,7 +285,7 @@ export class LayoutEditor {
       }
       if (usesHiddenLines(detail) && !hidden) {
         const note = svg('text', { x: x + 2, y: height - y - h + 5, class: 'detail-note' })
-        note.textContent = 'Removing hidden lines…'
+        note.textContent = t('Removing hidden lines…')
         content.append(note)
       }
       g.append(content)
@@ -335,7 +336,7 @@ export class LayoutEditor {
     const add = tab('+', false, () => void this.runner.run('Layout'))
     add.dataset.tip = 'New layout'
     this.tabs.replaceChildren(
-      tab('Model', active === null, () => this.display.showLayout(null)),
+      tab(t('Model'), active === null, () => this.display.showLayout(null)),
       ...this.doc.layouts.map((l) =>
         tab(l.name, l.id === active, () => this.display.showLayout(l.id), (el) => this.rename(l, el)),
       ),
@@ -375,21 +376,21 @@ export class LayoutEditor {
     const section = (title: string) => {
       const s = document.createElement('section')
       const h = document.createElement('h3')
-      h.textContent = title
+      h.textContent = t(title)
       const dl = document.createElement('dl')
       s.append(h, dl)
       return { s, dl }
     }
     const field = (dl: HTMLElement, label: string, input: HTMLElement) => {
       const dt = document.createElement('dt')
-      dt.textContent = label
+      dt.textContent = t(label)
       const dd = document.createElement('dd')
       dd.append(input)
       dl.append(dt, dd)
     }
     const select = (options: [string, string][], value: string, change: (v: string) => void) => {
       const el = document.createElement('select')
-      for (const [v, label] of options) el.add(new Option(label, v, false, v === value))
+      for (const [v, label] of options) el.add(new Option(t(label), v, false, v === value))
       el.addEventListener('change', () => change(el.value))
       return el
     }
@@ -425,7 +426,7 @@ export class LayoutEditor {
       field(dl, 'Caption', text(detail.title, (v) => this.patchDetail(id, (d) => ({ ...d, title: v }))))
       const hint = document.createElement('p')
       hint.className = 'panel-hint layout-hint'
-      hint.textContent = 'Drag to move, drag a corner to resize, Shift+drag to pan the view.'
+      hint.textContent = t('Drag to move, drag a corner to resize, Shift+drag to pan the view.')
       s.append(hint)
       parts.push(s)
     }

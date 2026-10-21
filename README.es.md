@@ -110,7 +110,11 @@ Despliega cada apartado para ver los detalles.
 <summary><b>Interfaz y vistas</b></summary>
 <br>
 
-- Cuatro vistas (Top, Front, Right, Perspective) con rejilla, ejes y menú propio.
+- **En español o en inglés**: menús, barras de herramientas, paneles y mensajes en cualquiera de
+  los dos (*Herramientas > Language / Idioma*, o `Language`); la primera vez, el idioma del
+  sistema. Los nombres de los comandos son los mismos en ambos, así que los comandos escritos, las
+  macros y los scripts funcionan en cualquier idioma.
+- Cuatro vistas (Superior, Frontal, Derecha, Perspectiva) con rejilla, ejes y menú propio.
 - Órbita (botón derecho en Perspective), encuadre (Mayús + botón derecho o botón central) y zoom
   con la rueda.
 - Modos de visualización por vista: `Wireframe`, `Shaded`, `Ghosted` (superficies translúcidas),

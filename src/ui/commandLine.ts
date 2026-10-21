@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import type { CommandRunner } from '../commands/runner'
 import type { Interaction } from '../input/interaction'
 
@@ -5,7 +6,10 @@ const IDLE_PROMPT = 'Command'
 const MAX_SUGGESTIONS = 8
 const MAX_HISTORY_LINES = 200
 
-/** Command history, prompt and input field, with autocompletion of command names. */
+/**
+ * Command history, prompt and input field, with autocompletion of command names. Messages and
+ * prompts are shown in the interface's language; command names and options stay as typed.
+ */
 export class CommandLine {
   private readonly history = document.getElementById('cmd-history') as HTMLDivElement
   private readonly prompt = document.getElementById('cmd-prompt') as HTMLSpanElement
@@ -26,14 +30,14 @@ export class CommandLine {
 
   log(text: string): void {
     const line = document.createElement('div')
-    line.textContent = text
+    line.textContent = t(text)
     this.history.appendChild(line)
     while (this.history.childElementCount > MAX_HISTORY_LINES) this.history.firstElementChild!.remove()
     this.history.scrollTop = this.history.scrollHeight
   }
 
   setPrompt(text: string, options: string[]): void {
-    this.prompt.replaceChildren(text)
+    this.prompt.replaceChildren(t(text))
     if (options.length > 0) {
       this.prompt.append(' ( ')
       for (const option of options) {

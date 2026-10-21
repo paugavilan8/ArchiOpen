@@ -1,3 +1,5 @@
+import { t } from '../app/language'
+
 /** A tab strip over a stack of panes; returns the pane element for each tab, in order. */
 export function buildTabs(container: HTMLElement, titles: string[]): HTMLElement[] {
   const strip = document.createElement('div')
@@ -14,7 +16,7 @@ export function buildTabs(container: HTMLElement, titles: string[]): HTMLElement
     tab.type = 'button'
     tab.className = 'tab'
     tab.setAttribute('role', 'tab')
-    tab.textContent = title
+    tab.textContent = t(title)
     tab.addEventListener('click', () => select(i))
     return tab
   })

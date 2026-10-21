@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import type { CommandRunner } from '../commands/runner'
 import type { Display } from '../view/display'
 import type { DisplayMode } from '../view/viewport'

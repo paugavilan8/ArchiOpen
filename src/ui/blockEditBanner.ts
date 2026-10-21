@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import type { CommandRunner } from '../commands/runner'
 import type { Document } from '../core/document'
 
@@ -10,7 +11,7 @@ export function installBlockEditBanner(container: HTMLElement, doc: Document, ru
   const button = (text: string, macro: string, primary = false) => {
     const b = document.createElement('button')
     b.type = 'button'
-    b.textContent = text
+    b.textContent = t(text)
     if (primary) b.className = 'primary'
     b.addEventListener('click', () => void runner.run(macro))
     return b
@@ -20,7 +21,7 @@ export function installBlockEditBanner(container: HTMLElement, doc: Document, ru
   const update = () => {
     const edit = doc.blockEdit
     bar.hidden = !edit
-    if (edit) label.textContent = `Editing block “${edit.block}”`
+    if (edit) label.textContent = t('Editing block “{name}”', { name: edit.block })
   }
   doc.on(update)
   update()

@@ -2,6 +2,7 @@ import { workspaceFolder } from './app/workspace'
 import { version } from '../package.json'
 import { checkForUpdates } from './app/updates'
 import { migrateArchi } from './core/archiFormat'
+import { onLanguageChange } from './app/language'
 import './style.css'
 import { FileManager, isDesktop } from './app/files'
 import { Autosaver, desktopFolder, setAutosaver } from './app/autosave'
@@ -121,16 +122,17 @@ try {
 }
 
 let saveTimer = 0
+function saveSession(): void {
+  const session: Session = { name: files.name, path: files.path, modified: doc.modified, document: doc.toJSON() }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+  } catch (error) {
+    console.warn('Could not store the session', error)
+  }
+}
 function scheduleSessionSave(): void {
   window.clearTimeout(saveTimer)
-  saveTimer = window.setTimeout(() => {
-    const session: Session = { name: files.name, path: files.path, modified: doc.modified, document: doc.toJSON() }
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-    } catch (error) {
-      console.warn('Could not store the session', error)
-    }
-  }, SAVE_DELAY)
+  saveTimer = window.setTimeout(saveSession, SAVE_DELAY)
 }
 doc.on((kind) => {
   if (kind !== 'selection') scheduleSessionSave()
@@ -158,9 +160,20 @@ if (isDesktop) {
   )
 } else {
   window.addEventListener('beforeunload', (e) => {
-    if (doc.modified) e.preventDefault()
+    if (doc.modified && !reloading) e.preventDefault()
   })
 }
+
+// --- Language -----------------------------------------------------------------------
+// The interface is built again in the new language: the model goes with it, as after a crash.
+
+let reloading = false
+onLanguageChange(() => {
+  window.clearTimeout(saveTimer)
+  saveSession()
+  reloading = true
+  window.location.reload()
+})
 
 // --- Keyboard --------------------------------------------------------------------
 

@@ -1,3 +1,4 @@
+import { t } from '../app/language'
 import { applyCPlane, restoreView } from '../commands/viewSetup'
 import type { CommandRunner } from '../commands/runner'
 import type { Document } from '../core/document'
@@ -21,7 +22,7 @@ export class ViewsPanel {
       header.className = 'panel-toolbar'
       const label = document.createElement('span')
       label.className = 'panel-hint'
-      label.textContent = title
+      label.textContent = t(title)
       header.append(label, iconButton('plus', tip, () => void runner.run(macro)))
       list.className = 'layer-list named-list'
       return [header, list]
@@ -59,7 +60,7 @@ export class ViewsPanel {
     if (names.length === 0) {
       const empty = document.createElement('li')
       empty.className = 'panel-empty'
-      empty.textContent = emptyText
+      empty.textContent = t(emptyText)
       list.replaceChildren(empty)
       return
     }

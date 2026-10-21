@@ -1,3 +1,5 @@
+import { t } from '../app/language'
+
 export interface MenuItem {
   label: string
   shortcut?: string
@@ -49,7 +51,7 @@ export function openMenu(anchor: HTMLElement, entries: MenuEntry[], options: { o
     check.className = 'menu-check'
     check.textContent = entry.checked?.() ? '✓' : ''
     const label = document.createElement('span')
-    label.textContent = entry.label
+    label.textContent = t(entry.label)
     const shortcut = document.createElement('kbd')
     shortcut.textContent = entry.shortcut ?? ''
     item.append(check, label, shortcut)
