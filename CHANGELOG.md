@@ -3,7 +3,9 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
-## Unreleased
+## 0.9.1
+
+Faster with large models, sturdier, a stable API and all of the interface in Spanish.
 
 - **All of the interface in Spanish**: the remaining messages and errors of commands (walls, roofs,
   stairs, blocks, files, ...); a test makes sure no fixed message is left in English.
