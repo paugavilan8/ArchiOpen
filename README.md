@@ -553,7 +553,8 @@ spirit of visual programming tools. `Bake` keeps the result as ordinary objects 
 it away.
 
 Examples are in [examples/scripts](examples/scripts): a grid of columns, a tower of several levels
-and a twisting tower with sliders for its floors, size and twist. Scripts have the same access as the application: run only those you trust.
+and a twisting tower with sliders for its floors, size and twist. [docs/scripting.md](docs/scripting.md) describes
+the API, macros and the assistant's tools, and what stays the same from version to version. Scripts have the same access as the application: run only those you trust.
 
 </details>
 

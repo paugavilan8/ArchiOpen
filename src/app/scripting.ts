@@ -19,7 +19,15 @@ export interface ObjectInfo {
   params?: Record<string, unknown>
 }
 
+/**
+ * The version of the script API. Scripts written for one version keep working in later ones:
+ * functions are added, never removed or changed (see docs/scripting.md).
+ */
+export const SCRIPT_API_VERSION = 1
+
 export interface ScriptApi {
+  /** The version of this API (SCRIPT_API_VERSION), for scripts that use something added later. */
+  apiVersion: number
   /** Runs a command with its answers in order ('' is Enter); resolves to the ids selected after it (what it made). */
   command(name: string, ...answers: (string | number)[]): Promise<number[]>
   /** A point. */
@@ -95,6 +103,7 @@ export function scriptApi(ctx: CommandContext, runner: CommandRunner, param: Scr
     return layer.id
   }
   return {
+    apiVersion: SCRIPT_API_VERSION,
     async command(name, ...answers) {
       await runner.runWith(name, answers.map(String))
       return [...doc.selection]

@@ -3,6 +3,12 @@
 What changed in each version of ArchiOpen. Installers for every version are on the
 [Releases](https://github.com/paugavilan8/ArchiOpen/releases) page.
 
+## Unreleased
+
+- **A stable API for scripts, macros and the AI assistant** ([docs/scripting.md](docs/scripting.md)):
+  command names, aliases, the `archi` script functions and the assistant's tools stay the same from
+  1.0 on (a test holds them); scripts can read `archi.apiVersion`.
+
 ## 0.9.0
 
 Spanish interface, a stable .archi format and installers for Intel Macs.
